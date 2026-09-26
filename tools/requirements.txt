@@ -1,0 +1,3 @@
+# Dev-only. The Godot game does not import these.
+pillow>=10
+numpy>=1.26

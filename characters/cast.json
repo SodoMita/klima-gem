@@ -1,0 +1,85 @@
+{
+  "base": "bikini",
+  "layers": ["bikini", "clothes", "face"],
+  "note": "Bikini is the base body. Clothes are a layer on top. Empty fields are unanswered.",
+  "expressions": ["neutral", "happy", "sad", "surprised", "blush"],
+  "characters": [
+    {
+      "id": "ren",
+      "name": "Ren",
+      "L0": "dark column, cyan eyes",
+      "L1": "shadow, black school blazer",
+      "L2": "",
+      "L3": "",
+      "L4": "",
+      "clothes": "",
+      "ask": "height? is the blazer the clothes layer?"
+    },
+    {
+      "id": "aurora",
+      "name": "Aurora",
+      "L0": "pale column, cyan, hologram",
+      "L1": "blue holographic costume that shifts",
+      "L2": "",
+      "L3": "",
+      "L4": "",
+      "clothes": "",
+      "ask": "what is the clothes layer when the costume shifts?"
+    },
+    {
+      "id": "kira",
+      "name": "Kira",
+      "L0": "compact, cat ears, tail",
+      "L1": "athletic, tactical gear",
+      "L2": "",
+      "L3": "",
+      "L4": "",
+      "clothes": "",
+      "ask": "which clothes layer? height?"
+    },
+    {
+      "id": "elara",
+      "name": "Elara",
+      "L0": "wide pale bell, elf ears",
+      "L1": "white-and-green robes",
+      "L2": "",
+      "L3": "",
+      "L4": "",
+      "clothes": "",
+      "ask": "robe construction? height?"
+    },
+    {
+      "id": "selene",
+      "name": "Selene",
+      "L0": "tall dark triangle, staff",
+      "L1": "dark indigo robes",
+      "L2": "",
+      "L3": "",
+      "L4": "",
+      "clothes": "",
+      "ask": "robe construction? staff a separate layer?"
+    },
+    {
+      "id": "aria",
+      "name": "Aria",
+      "L0": "wide wings, white and gold",
+      "L1": "feathered, soft gaze",
+      "L2": "",
+      "L3": "",
+      "L4": "",
+      "clothes": "",
+      "ask": "wings a separate layer? height?"
+    },
+    {
+      "id": "nova",
+      "name": "Nova",
+      "L0": "boxy jacket, small pane",
+      "L1": "oversized jacket, reserved",
+      "L2": "",
+      "L3": "",
+      "L4": "",
+      "clothes": "",
+      "ask": "jacket the only clothes layer? height?"
+    }
+  ]
+}

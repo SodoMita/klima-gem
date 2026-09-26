@@ -25,3 +25,7 @@ credentials/
 /.chrono-nexus-incoming-backup-*/
 
 *__pycache__
+
+# Sprite pipeline. Rejected generations are local. The matte venv is dev-only.
+characters/**/_wip/
+.venv/
