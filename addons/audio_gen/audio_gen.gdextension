@@ -1,0 +1,18 @@
+[configuration]
+entry_symbol = "audio_gen_library_init"
+compatibility_minimum = "4.7"
+reloadable = false
+
+[libraries]
+linux.debug.x86_64.single = "res://addons/audio_gen/bin/libaudio_gen.linux.x86_64.so"
+linux.release.x86_64.single = "res://addons/audio_gen/bin/libaudio_gen.linux.x86_64.so"
+linux.editor.x86_64.single = "res://addons/audio_gen/bin/libaudio_gen.linux.x86_64.so"
+windows.debug.x86_64.single = "res://addons/audio_gen/bin/audio_gen.windows.x86_64.dll"
+windows.release.x86_64.single = "res://addons/audio_gen/bin/audio_gen.windows.x86_64.dll"
+windows.editor.x86_64.single = "res://addons/audio_gen/bin/audio_gen.windows.x86_64.dll"
+macos.debug.x86_64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.x86_64.dylib"
+macos.release.x86_64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.x86_64.dylib"
+macos.editor.x86_64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.x86_64.dylib"
+macos.debug.arm64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.arm64.dylib"
+macos.release.arm64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.arm64.dylib"
+macos.editor.arm64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.arm64.dylib"
