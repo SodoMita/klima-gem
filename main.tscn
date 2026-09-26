@@ -85,6 +85,14 @@ corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
+[sub_resource type="BoxMesh" id="BoxMesh_je1nv"]
+
+[sub_resource type="Sky" id="Sky_rrh6l"]
+
+[sub_resource type="Environment" id="Environment_je1nv"]
+background_mode = 2
+sky = SubResource("Sky_rrh6l")
+
 [node name="Main" type="Node" unique_id=182449774]
 script = ExtResource("1_main")
 
@@ -92,6 +100,7 @@ script = ExtResource("1_main")
 layer = 20
 
 [node name="TitleArt" type="TextureRect" parent="TitleLayer" unique_id=744191579]
+visible = false
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -103,6 +112,7 @@ expand_mode = 1
 stretch_mode = 6
 
 [node name="Scrim" type="ColorRect" parent="TitleLayer" unique_id=76956351]
+visible = false
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -176,5 +186,21 @@ theme_override_font_sizes/font_size = 14
 text = "Enter, интервал: дальше. Ctrl: перемотка. H: история. Esc: пауза. Backspace: назад."
 horizontal_alignment = 1
 autowrap_mode = 2
+
+[node name="3d" type="Node" parent="." unique_id=895882631]
+
+[node name="Camera3D" type="Camera3D" parent="3d" unique_id=935417269]
+transform = Transform3D(0.9988484, 0.003346788, -0.047861278, 0, 0.9975641, 0.06975651, 0.047978148, -0.069676176, 0.99641526, 0.042844802, 0.15171345, 2.5510657)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="3d" unique_id=1332674332]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
+mesh = SubResource("BoxMesh_je1nv")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="3d" unique_id=1149244819]
+environment = SubResource("Environment_je1nv")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="3d" unique_id=2042085964]
+transform = Transform3D(-0.55279803, -0.6959537, -0.45832598, -0.22461036, -0.40520793, 0.8862035, -0.80247396, 0.5928364, 0.067679726, 0, 0, 0)
+directional_shadow_mode = 0
 
 [connection signal="pressed" from="TitleLayer/Center/Card/VBox/BeginButton" to="." method="_on_begin_pressed"]
