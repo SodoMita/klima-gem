@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://khhvog3adkhh"
-path.s3tc="res://.godot/imported/Mushrooms.webp-782b01e033c609b4303c8d63da42c8bd.s3tc.ctex"
+uid="uid://24ceac8pkk3y"
+path.s3tc="res://.godot/imported/grasstile.png-e18a7f2996e5f0c63769e85211583783.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/models/nature/textures/Mushrooms.webp"
-dest_files=["res://.godot/imported/Mushrooms.webp-782b01e033c609b4303c8d63da42c8bd.s3tc.ctex"]
+source_file="res://assets/models/grasstile.png"
+dest_files=["res://.godot/imported/grasstile.png-e18a7f2996e5f0c63769e85211583783.s3tc.ctex"]
 
 [params]
 
