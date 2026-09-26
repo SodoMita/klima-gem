@@ -1,0 +1,203 @@
+{
+  "source": "Quaternius Stylized Nature MEGAKIT Standard-1.0 (free Standard edition)",
+  "license": "CC0 1.0 Universal",
+  "textures_max_bytes": 512000,
+  "models_max_combined_bytes": 524288,
+  "models": {
+    "CommonTree_3": {
+      "gltf_bytes": 5022,
+      "geometry_bytes": 296984,
+      "combined_bytes": 302006
+    },
+    "Pine_5": {
+      "gltf_bytes": 4973,
+      "geometry_bytes": 120996,
+      "combined_bytes": 125969
+    },
+    "Bush_Common": {
+      "gltf_bytes": 2741,
+      "geometry_bytes": 91800,
+      "combined_bytes": 94541
+    },
+    "Bush_Common_Flowers": {
+      "gltf_bytes": 4719,
+      "geometry_bytes": 128928,
+      "combined_bytes": 133647
+    },
+    "Fern_1": {
+      "gltf_bytes": 2702,
+      "geometry_bytes": 11448,
+      "combined_bytes": 14150
+    },
+    "Flower_3_Group": {
+      "gltf_bytes": 4702,
+      "geometry_bytes": 27772,
+      "combined_bytes": 32474
+    },
+    "Grass_Common_Tall": {
+      "gltf_bytes": 2661,
+      "geometry_bytes": 14076,
+      "combined_bytes": 16737
+    },
+    "Mushroom_Common": {
+      "gltf_bytes": 2407,
+      "geometry_bytes": 23040,
+      "combined_bytes": 25447
+    },
+    "Rock_Medium_1": {
+      "gltf_bytes": 2416,
+      "geometry_bytes": 13284,
+      "combined_bytes": 15700
+    },
+    "RockPath_Round_Wide": {
+      "gltf_bytes": 2453,
+      "geometry_bytes": 247688,
+      "combined_bytes": 250141
+    }
+  },
+  "textures": {
+    "Bark_NormalTree.png": {
+      "path": "textures/Bark_NormalTree.webp",
+      "source_bytes": 3894788,
+      "bytes": 361900,
+      "source_dimensions": [
+        2048,
+        2048
+      ],
+      "dimensions": [
+        768,
+        768
+      ]
+    },
+    "Bark_NormalTree_Normal.png": {
+      "path": "textures/Bark_NormalTree_Normal.webp",
+      "source_bytes": 4384496,
+      "bytes": 461674,
+      "source_dimensions": [
+        2048,
+        2048
+      ],
+      "dimensions": [
+        768,
+        768
+      ]
+    },
+    "Flowers.png": {
+      "path": "textures/Flowers.webp",
+      "source_bytes": 444609,
+      "bytes": 287858,
+      "source_dimensions": [
+        1008,
+        981
+      ],
+      "dimensions": [
+        1008,
+        981
+      ]
+    },
+    "Grass.png": {
+      "path": "textures/Grass.webp",
+      "source_bytes": 33605,
+      "bytes": 17362,
+      "source_dimensions": [
+        512,
+        512
+      ],
+      "dimensions": [
+        512,
+        512
+      ]
+    },
+    "Leaf_Pine_C.png": {
+      "path": "textures/Leaf_Pine_C.webp",
+      "source_bytes": 70055,
+      "bytes": 20424,
+      "source_dimensions": [
+        2048,
+        2048
+      ],
+      "dimensions": [
+        1024,
+        1024
+      ]
+    },
+    "Leaves.png": {
+      "path": "textures/Leaves.webp",
+      "source_bytes": 2586432,
+      "bytes": 316308,
+      "source_dimensions": [
+        2048,
+        2048
+      ],
+      "dimensions": [
+        768,
+        768
+      ]
+    },
+    "Leaves_NormalTree_C.png": {
+      "path": "textures/Leaves_NormalTree_C.webp",
+      "source_bytes": 158796,
+      "bytes": 77446,
+      "source_dimensions": [
+        1024,
+        1024
+      ],
+      "dimensions": [
+        1024,
+        1024
+      ]
+    },
+    "Leaves_TwistedTree_C.png": {
+      "path": "textures/Leaves_TwistedTree_C.webp",
+      "source_bytes": 70353,
+      "bytes": 31300,
+      "source_dimensions": [
+        1024,
+        1024
+      ],
+      "dimensions": [
+        1024,
+        1024
+      ]
+    },
+    "Mushrooms.png": {
+      "path": "textures/Mushrooms.webp",
+      "source_bytes": 1208660,
+      "bytes": 103234,
+      "source_dimensions": [
+        1024,
+        1024
+      ],
+      "dimensions": [
+        1024,
+        1024
+      ]
+    },
+    "PathRocks_Diffuse.png": {
+      "path": "textures/PathRocks_Diffuse.webp",
+      "source_bytes": 811732,
+      "bytes": 55432,
+      "source_dimensions": [
+        1024,
+        1024
+      ],
+      "dimensions": [
+        1024,
+        1024
+      ]
+    },
+    "Rocks_Diffuse.png": {
+      "path": "textures/Rocks_Diffuse.webp",
+      "source_bytes": 2517398,
+      "bytes": 60868,
+      "source_dimensions": [
+        2048,
+        2048
+      ],
+      "dimensions": [
+        1024,
+        1024
+      ]
+    }
+  }
+}

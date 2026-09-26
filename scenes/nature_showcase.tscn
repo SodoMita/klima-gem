@@ -1,0 +1,151 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/nature/CommonTree_3.gltf" id="1_common_tree"]
+[ext_resource type="PackedScene" path="res://assets/models/nature/Pine_5.gltf" id="2_pine"]
+[ext_resource type="PackedScene" path="res://assets/models/nature/Bush_Common.gltf" id="3_bush"]
+[ext_resource type="PackedScene" path="res://assets/models/nature/Bush_Common_Flowers.gltf" id="4_flowering_bush"]
+[ext_resource type="PackedScene" path="res://assets/models/nature/Fern_1.gltf" id="5_fern"]
+[ext_resource type="PackedScene" path="res://assets/models/nature/Flower_3_Group.gltf" id="6_flowers"]
+[ext_resource type="PackedScene" path="res://assets/models/nature/Grass_Common_Tall.gltf" id="7_grass"]
+[ext_resource type="PackedScene" path="res://assets/models/nature/Mushroom_Common.gltf" id="8_mushrooms"]
+[ext_resource type="PackedScene" path="res://assets/models/nature/Rock_Medium_1.gltf" id="9_rock"]
+[ext_resource type="PackedScene" path="res://assets/models/nature/RockPath_Round_Wide.gltf" id="10_path_rocks"]
+
+[sub_resource type="Environment" id="Environment_grove"]
+background_mode = 1
+background_color = Color(0.018, 0.03, 0.075, 1)
+ambient_light_color = Color(0.35, 0.48, 0.58, 1)
+ambient_light_energy = 0.8
+fog_enabled = true
+fog_light_color = Color(0.17, 0.28, 0.34, 1)
+fog_density = 0.012
+
+[sub_resource type="PlaneMesh" id="Plane_grove"]
+size = Vector2(48, 48)
+
+[sub_resource type="StandardMaterial3D" id="Material_ground"]
+albedo_color = Color(0.035, 0.105, 0.085, 1)
+roughness = 1.0
+
+[node name="NatureShowcase" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_grove")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-48, -32, 0)
+light_color = Color(0.78, 0.88, 1, 1)
+light_energy = 1.25
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(0, 9, 25)
+rotation_degrees = Vector3(13, 0, 0)
+current = true
+fov = 42.0
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.12, 0)
+mesh = SubResource("Plane_grove")
+material_override = SubResource("Material_ground")
+
+[node name="BackdropTrees" type="Node3D" parent="."]
+
+[node name="Deciduous_Left" parent="BackdropTrees" instance=ExtResource("1_common_tree")]
+position = Vector3(-6.4, 0, -5)
+scale = Vector3(0.92, 0.92, 0.92)
+
+[node name="Deciduous_Center" parent="BackdropTrees" instance=ExtResource("1_common_tree")]
+position = Vector3(-1.4, 0, -7)
+rotation_degrees = Vector3(0, 38, 0)
+scale = Vector3(0.76, 0.84, 0.76)
+
+[node name="Pine_CenterRight" parent="BackdropTrees" instance=ExtResource("2_pine")]
+position = Vector3(3.1, 0, -7)
+rotation_degrees = Vector3(0, -22, 0)
+scale = Vector3(0.92, 0.92, 0.92)
+
+[node name="Pine_Right" parent="BackdropTrees" instance=ExtResource("2_pine")]
+position = Vector3(7.1, 0, -4.8)
+rotation_degrees = Vector3(0, 26, 0)
+scale = Vector3(0.72, 0.86, 0.72)
+
+[node name="RockTrail" type="Node3D" parent="."]
+
+[node name="Trail_01" parent="RockTrail" instance=ExtResource("10_path_rocks")]
+position = Vector3(0, 0.015, 2)
+rotation_degrees = Vector3(0, 9, 0)
+
+[node name="Trail_02" parent="RockTrail" instance=ExtResource("10_path_rocks")]
+position = Vector3(0.15, 0.015, 4.05)
+rotation_degrees = Vector3(0, -13, 0)
+
+[node name="Trail_03" parent="RockTrail" instance=ExtResource("10_path_rocks")]
+position = Vector3(-0.08, 0.015, 6.1)
+rotation_degrees = Vector3(0, 7, 0)
+
+[node name="Understory" type="Node3D" parent="."]
+
+[node name="Fern_Left" parent="Understory" instance=ExtResource("5_fern")]
+position = Vector3(-5.5, 0, 2.3)
+scale = Vector3(0.25, 0.25, 0.25)
+
+[node name="Fern_Right" parent="Understory" instance=ExtResource("5_fern")]
+position = Vector3(5.6, 0, 1.8)
+rotation_degrees = Vector3(0, 68, 0)
+scale = Vector3(0.23, 0.23, 0.23)
+
+[node name="Bush_Left" parent="Understory" instance=ExtResource("3_bush")]
+position = Vector3(-3.5, 0, 0.6)
+rotation_degrees = Vector3(0, -24, 0)
+scale = Vector3(0.66, 0.66, 0.66)
+
+[node name="FloweringBush_Right" parent="Understory" instance=ExtResource("4_flowering_bush")]
+position = Vector3(4.1, 0, 0.8)
+rotation_degrees = Vector3(0, 32, 0)
+scale = Vector3(0.62, 0.62, 0.62)
+
+[node name="FlowerBed_Left" parent="Understory" instance=ExtResource("6_flowers")]
+position = Vector3(-2.1, 0, 3.1)
+rotation_degrees = Vector3(0, -18, 0)
+scale = Vector3(0.48, 0.48, 0.48)
+
+[node name="FlowerBed_Right" parent="Understory" instance=ExtResource("6_flowers")]
+position = Vector3(2.3, 0, 3.4)
+rotation_degrees = Vector3(0, 23, 0)
+scale = Vector3(0.52, 0.52, 0.52)
+
+[node name="Grass_Left" parent="Understory" instance=ExtResource("7_grass")]
+position = Vector3(-3.8, 0, 3.1)
+rotation_degrees = Vector3(0, 40, 0)
+
+[node name="Grass_Right" parent="Understory" instance=ExtResource("7_grass")]
+position = Vector3(3.6, 0, 3)
+rotation_degrees = Vector3(0, -28, 0)
+
+[node name="Rock_Left" parent="Understory" instance=ExtResource("9_rock")]
+position = Vector3(-7.6, 0, 1.2)
+rotation_degrees = Vector3(0, 28, 0)
+scale = Vector3(0.72, 0.72, 0.72)
+
+[node name="Rock_Right" parent="Understory" instance=ExtResource("9_rock")]
+position = Vector3(7.1, 0, 1.6)
+rotation_degrees = Vector3(0, -35, 0)
+scale = Vector3(0.64, 0.64, 0.64)
+
+[node name="MushroomCluster" parent="Understory" instance=ExtResource("8_mushrooms")]
+position = Vector3(1.05, 0, 4.1)
+rotation_degrees = Vector3(0, 25, 0)
+scale = Vector3(1.7, 1.7, 1.7)
+
+[node name="Overlay" type="CanvasLayer" parent="."]
+layer = 5
+
+[node name="Title" type="Label" parent="Overlay"]
+offset_left = 28.0
+offset_top = 22.0
+offset_right = 850.0
+offset_bottom = 66.0
+theme_override_colors/font_color = Color(0.78, 0.91, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "WHISPERING GROVE  ·  NATURE KIT PREVIEW"

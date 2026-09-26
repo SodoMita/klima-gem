@@ -42,6 +42,7 @@ Save, load, settings, auto, and the story map live on the bottom system row.
 - `autoloads/game_state.gd` — trust, insight, power, bonds. Choices mutate these; rollback restores them.
 - `Sprites/` — original portraits. `assets/characters/` — the same art, trimmed so it fits the left/right slots.
 - `bgs/` — backgrounds, including the nexus still behind the title card.
+- `scenes/nature_showcase.tscn` — optional 3D preview of a compact, CC0 Stylized Nature MEGAKIT slice; it is not wired into the VN flow. See `assets/models/nature/README.md`.
 - `addons/scene_score/` — live SceneScore mixer (C GDExtension). Source is in `native/scene_score/`.
 - `addons/dialogue_manager/` — Dialogue Manager 4.1.0.
 
