@@ -1,4 +1,4 @@
-# Chrono Nexus (suxen-sonorhc)
+# Klima gem
 
 A Godot **4.7** visual novel. The dialogue UI is the classical balloon from [vn_dialogue_demo](https://github.com/SodoMita/vn_dialogue_demo) (Nathan Hoad's Dialogue Manager), restyled for Chrono Nexus: translucent glass panels, cyan edges, per-speaker name colors, a stat strip, and a title card over the nexus still. Dialogic is not used.
 
@@ -11,7 +11,7 @@ Music is generated live, one score per background, by the SceneScore C extension
 1. Open this folder in **Godot 4.7**.
 2. Press **F5**.
 
-The title card sits on the nexus still. **Step through the rift** starts the short opening. **The long night** is the longer classroom prologue. **A flicker in the lab** is the Russian lab branch.
+Main menu appears.
 
 ### Controls
 
@@ -38,7 +38,7 @@ Save, load, settings, auto, and the story map live on the bottom system row.
 - `scenes/vn_balloon.tscn` — authored UI. Edit it in the Godot editor; the script does not build the chrome.
 - `scenes/panic_screen.tscn` — the panic page, its own scene (`scenes/panic_screen.gd`), restyled here as a black lecture sheet; it can be redesigned without touching the balloon.
 - `scenes/display_scale.gd` — shared window layout: the design canvas stays at the authored 1280×720 and larger windows render it with more pixels (never a window bigger than the screen).
-- `dialogue/chrono_nexus.dialogue` — the story. Stage tags: `#bg=`, `#sprite=key:left|right`, `#focus=`, `#music=`, `#sfx=`.
+- `dialogue/klima_gem_prologue.dialogue` — the story. Stage tags: `#bg=`, `#sprite=key:left|right`, `#focus=`, `#music=`, `#sfx=`.
 - `autoloads/game_state.gd` — trust, insight, power, bonds. Choices mutate these; rollback restores them.
 - `Sprites/` — original portraits. `assets/characters/` — the same art, trimmed so it fits the left/right slots.
 - `bgs/` — backgrounds, including the nexus still behind the title card.
