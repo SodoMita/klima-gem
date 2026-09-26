@@ -33,12 +33,27 @@ Save, load, settings, auto, and the story map live on the bottom system row.
 - In a portrait view the sprites are larger and set apart, and the speaking portrait stands in front of the other while staying behind the dialogue UI. A line that changes the speaker's expression brings their portrait forward even without a `#focus=` tag.
 - Menus close with a press-and-hold on their empty space; the ring fills at your finger even when the UI is scaled or the view is rotated.
 
+## Stage motion
+
+Beyond `#bg=`/`#sprite=`/`#focus=`, the balloon carries a **StageDirector**
+(`scenes/motion/stage_director.gd`): dialogue tags can tween any 2D/3D object
+in the scene (`#tween=`, `#set=`), shake the stage (`#shake=`), and run
+NLA-style animation tracks — crossfaded clips, loops and frame ranges on any
+`AnimationPlayer`, state-machine travel on any `AnimationTree` (`#nla=`,
+`#nla_track=`, `#nla_stop=`). Aurora floats on a `#tween=...?yoyo&loops=0`
+hover and the rift yanks the screen with `#shake=stage`. Motion tags are
+snapshotted into the backlog, so rollback and save slots put tweened objects
+exactly where the story left them. Full tag grammar:
+[docs/motion_director.md](docs/motion_director.md); headless suite:
+`bash tests/motion_director_test.sh`.
+
 ## Layout
 
 - `scenes/vn_balloon.tscn` — authored UI. Edit it in the Godot editor; the script does not build the chrome.
 - `scenes/panic_screen.tscn` — the panic page, its own scene (`scenes/panic_screen.gd`), restyled here as a black lecture sheet; it can be redesigned without touching the balloon.
 - `scenes/display_scale.gd` — shared window layout: the design canvas stays at the authored 1280×720 and larger windows render it with more pixels (never a window bigger than the screen).
-- `dialogue/chrono_nexus.dialogue` — the story. Stage tags: `#bg=`, `#sprite=key:left|right`, `#focus=`, `#music=`, `#sfx=`.
+- `dialogue/chrono_nexus.dialogue` — the story. Stage tags: `#bg=`, `#sprite=key:left|right`, `#focus=`, `#music=`, `#sfx=`, plus the motion tags (`#tween=`, `#set=`, `#shake=`, `#nla=`, `#target=`, `#nla_track=`) in docs/motion_director.md.
+- `scenes/motion/stage_director.gd` — the StageDirector: tweens, shakes and NLA tracks for any 2D/3D scene object, authored as the `MotionDirector` node in the balloon.
 - `autoloads/game_state.gd` — trust, insight, power, bonds. Choices mutate these; rollback restores them.
 - `Sprites/` — original portraits. `assets/characters/` — the same art, trimmed so it fits the left/right slots.
 - `bgs/` — backgrounds, including the nexus still behind the title card.
