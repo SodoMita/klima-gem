@@ -71,6 +71,27 @@ A new tween on the same target+property replaces the old one; tweens on
 different properties coexist. `#tween_stop=<target>` kills everything running
 on that target.
 
+### Making slow motion read as smooth
+
+Tweens step once per rendered frame with real deltas, so the curve itself is
+frame-exact — but motion slower than roughly **0.25 px per frame** (≈15 px/s
+at 60 fps) stops reading as movement and starts reading as shimmer: the
+sprite blends between two pixel rows instead of sliding. For ambient loops
+(hovers, breathing, drifting) keep the peak speed above that floor:
+
+* amplitude ≥ ~12 px and/or half-period ≤ ~1.2 s — Aurora's hover is
+  `position=0 -16:1.0:sine:in_out?relative&yoyo&loops=0` (peak ≈ 25 px/s);
+* `sine:in_out` is the right shape for yoyo loops — it reaches zero velocity
+  at both ends, so the turnaround has no kink;
+* for effects that must stay sub-pixel-subtle, animate colour instead of
+  position (`self_modulate`, `alpha`) — blending is per-pixel and always
+  smooth;
+* if even a large, fast tween stutters, it's frame pacing, not the tween:
+  check the debugger's FPS/graphs (live SceneScore music and the typewriter
+  both cost main-thread time), and leave `rendering/2d/snap_*` off — the
+  project's `canvas_items` stretch + linear filtering already give smooth
+  sub-pixel placement.
+
 ## `#set=` — instant, no curve
 
 ```

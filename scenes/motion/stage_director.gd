@@ -486,29 +486,31 @@ func _shake_rotation(node: Node) -> float:
 
 
 func _process(delta: float) -> void:
-	for iid: int in _shakes.keys():
-		var shake: Dictionary = _shakes[iid]
-		var node: Node = shake.node
-		if not is_instance_valid(node):
-			_shakes.erase(iid)
-			continue
-		shake.elapsed += delta
-		var t: float = clampf(shake.elapsed / shake.duration, 0.0, 1.0)
-		if t >= 1.0:
-			node.position = shake.base_position
-			_set_shake_rotation(node, shake.base_rotation)
-			_shakes.erase(iid)
-			continue
-		# Decaying noise: strong at the start, exactly home at the end.
-		var amp: float = shake.strength * (1.0 - t) * (1.0 - t)
-		var offset := Vector2(randf_range(-amp, amp), randf_range(-amp, amp))
-		if node is Node3D:
-			node.position = shake.base_position + Vector3(offset.x, offset.y, 0.0)
-		else:
-			node.position = shake.base_position + offset
-		if bool(shake.rot):
-			_set_shake_rotation(node, shake.base_rotation + randf_range(-amp, amp) * 0.15)
-	_process_ranged(delta)
+	if not _shakes.is_empty():
+		for iid: int in _shakes.keys():
+			var shake: Dictionary = _shakes[iid]
+			var node: Node = shake.node
+			if not is_instance_valid(node):
+				_shakes.erase(iid)
+				continue
+			shake.elapsed += delta
+			var t: float = clampf(shake.elapsed / shake.duration, 0.0, 1.0)
+			if t >= 1.0:
+				node.position = shake.base_position
+				_set_shake_rotation(node, shake.base_rotation)
+				_shakes.erase(iid)
+				continue
+			# Decaying noise: strong at the start, exactly home at the end.
+			var amp: float = shake.strength * (1.0 - t) * (1.0 - t)
+			var offset := Vector2(randf_range(-amp, amp), randf_range(-amp, amp))
+			if node is Node3D:
+				node.position = shake.base_position + Vector3(offset.x, offset.y, 0.0)
+			else:
+				node.position = shake.base_position + offset
+			if bool(shake.rot):
+				_set_shake_rotation(node, shake.base_rotation + randf_range(-amp, amp) * 0.15)
+	if not _ranged.is_empty():
+		_process_ranged(delta)
 	if _shakes.is_empty() and _ranged.is_empty():
 		set_process(false)
 
