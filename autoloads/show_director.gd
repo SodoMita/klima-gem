@@ -175,10 +175,41 @@ func edge_for(round_no: int) -> int:
 	# a body keeps what the gems gave it.
 	var total := 0
 	var mods := body_mods()
+	var stacks := mod_stacks()
 	for part in mods:
 		total += int((PART_EDGE.get(str(part), [0, 0, 0]) as Array)[idx])
-		total += int((MOD_EDGE.get(str(mods[part]), [0, 0, 0]) as Array)[idx])
+		var mod := str(mods[part])
+		var e := int((MOD_EDGE.get(mod, [0, 0, 0]) as Array)[idx])
+		var n := int(stacks.get(mod, 1))
+		# The same shift landing again compounds: a second copy doubles its
+		# effect; from the third copy on the body has adapted to it and the
+		# shift is always an advantage, whatever the trial.
+		if n >= 3:
+			e = maxi(absi(e), 1)
+		elif n == 2:
+			e *= 2
+		total += e
 	return total
+
+
+## How many body parts carry each shift right now: {"GIANT": 2, ...}.
+func mod_stacks() -> Dictionary:
+	var stacks := {}
+	var mods := body_mods()
+	for part in mods:
+		var mod := str(mods[part])
+		stacks[mod] = int(stacks.get(mod, 0)) + 1
+	return stacks
+
+
+## Human-readable stack note for the balloon: "" until a shift repeats.
+func stack_word(mod: String) -> String:
+	var n := int(mod_stacks().get(mod, 0))
+	if n >= 3:
+		return "x%d — mastered" % n
+	if n == 2:
+		return "x2 — doubled"
+	return ""
 
 
 ## Kept modifications plus the current pair (one mod per body part).

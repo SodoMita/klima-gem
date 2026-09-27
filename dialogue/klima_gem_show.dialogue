@@ -74,6 +74,12 @@ do apply_mods()
 %2 A ripple runs the length of the glowstick wave. Even the painted stars on the cloth seem to lean in.
 do set_aurora_expression("surprised")
 Aurora: I can FEEL it. That is... aggressively my {{show_part}} now.
+if stack_word(show_mod) == "x2 — doubled":
+	Ren: And that's {{show_mod}} TWICE on one guest! The shift compounds — double the effect, wherever it cuts.
+	Aurora: Two of the same? My body is starting to take it personally.
+elif stack_word(show_mod) != "":
+	Ren: {{show_mod}} again — that's three or more! The body ADAPTS, folks\: from here on that shift only ever works in her favour.
+	Aurora: Fine. FINE. If I'm going to be this much {{show_mod}}, I'm going to be good at it.
 if show_part == "VOICE" and show_mod == "STICKY":
 	Aurora: When I try to speak, words come out... attached to things. This is going to be a legal situation.
 if show_part == "EYES" and show_mod == "GLOWING":
