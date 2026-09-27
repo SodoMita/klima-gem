@@ -87,27 +87,38 @@ func _test_facet_words_are_welded() -> void:
 	for i in gem.face_labels.size():
 		var label := gem.face_labels[i]
 		var corners := _facet_triangle(gem, i)
-		var centroid: Vector3 = (corners[0] + corners[1] + corners[2]) / 3.0
+		var centre: Vector3 = ((corners[0] + corners[1]) * 0.5).lerp(corners[2], 0.19)
 		var normal := gem._face_normal(i)
-		# (a) the label sits ON the facet plane, at the facet's centre
-		var off_plane: float = absf((label.position - centroid).dot(normal))
-		var to_centroid: float = (label.position - centroid).length()
-		if off_plane <= 0.02 and to_centroid <= 0.02:
+		var geometric: Vector3 = (corners[1] - corners[0]).cross(corners[2] - corners[0]).normalized()
+		check(normal.dot(geometric) > 0.999, "face %d label uses the actual facet normal" % i)
+		var off_plane: float = absf((label.position - corners[0]).dot(geometric))
+		var from_centre: float = (label.position - centre).length()
+		if off_plane <= 0.005 and from_centre <= 0.005:
 			worn += 1
 		else:
-			printerr("      face %d: off-plane %.4f, %.4f from the centroid" % [i, off_plane, to_centroid])
-		# (b) the label's +Z axis (the side Label3D draws its glyphs on)
-		# points out through the facet, so the word is read from outside
+			printerr("      face %d: off-plane %.4f, %.4f from the ink centre" % [i, off_plane, from_centre])
 		var facing: float = label.transform.basis.z.normalized().dot(normal)
-		if facing < 0.999:
-			printerr("      face %d: label faces %.3f along the facet normal" % [i, facing])
-			failures += 1
-		# (c) the word fits inside the triangle it names
+		check(facing > 0.999, "face %d label points OUT of its own facet" % i)
 		var text_px := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.font_size)
-		var width := text_px.x * label.pixel_size
-		var height := text_px.y * label.pixel_size
-		check(width <= facet_base * 0.9, "face %d '%s' fits the facet width (%.3f <= %.3f)" % [i, label.text, width, facet_base * 0.9])
-		check(height <= gem.pavilion_height * 0.75, "face %d '%s' fits the facet depth" % [i, label.text])
+		var half_w := (text_px.x + 2.0 * label.outline_size) * label.pixel_size * 0.5
+		var half_h := (text_px.y + 2.0 * label.outline_size) * label.pixel_size * 0.5
+		var inside := true
+		for dx in [-1.0, 1.0]:
+			for dy in [-1.0, 1.0]:
+				var pt: Vector3 = label.position + label.basis.x * (dx * half_w) + label.basis.y * (dy * half_h)
+				var v0: Vector3 = corners[1] - corners[0]
+				var v1: Vector3 = corners[2] - corners[0]
+				var v2: Vector3 = pt - corners[0]
+				var d00 := v0.dot(v0)
+				var d01 := v0.dot(v1)
+				var d11 := v1.dot(v1)
+				var d20 := v2.dot(v0)
+				var d21 := v2.dot(v1)
+				var denom := d00 * d11 - d01 * d01
+				var v := (d11 * d20 - d01 * d21) / denom
+				var w := (d00 * d21 - d01 * d20) / denom
+				inside = inside and v >= -0.0001 and w >= -0.0001 and v + w <= 1.0001
+		check(inside, "face %d '%s' entire ink and outline fit within its triangle" % [i, label.text])
 	check(worn == 8, "all eight words sit on their own facet")
 
 	# The facing fade must pick the face the gem was told to show. This is the
@@ -214,6 +225,7 @@ func _test_gem_throw_is_physics() -> void:
 
 	# A full ceremonial throw is physics-random: no faces are requested, the
 	# stones decide, and both still come home to their marks.
+	gem.queue_free()  # the isolated physics probe was not in stage._gems
 	stage.clear_gems()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4242
@@ -236,6 +248,21 @@ func _test_gem_throw_is_physics() -> void:
 	stage.clear_gems()
 	await stage.throw_gems_fixed(1, 7)
 	check(stage._gems.size() == 2, "the fixed staging throw brings two gems")
+	# Interrupt a physical flight with a rewind. A stale throw must never
+	# resume after the restore and create a third gem or word plaque.
+	var rng_rewind := RandomNumberGenerator.new()
+	rng_rewind.seed = 777
+	stage.throw_gems(rng_rewind)
+	await get_tree().create_timer(0.2).timeout
+	stage.place_gems_settled("HANDS", 0, "GIANT", 0)
+	await get_tree().create_timer(0.9).timeout
+	check(stage._gems.size() == 2 and stage._gems[0].word_at(0) == "HANDS",
+		"rewind mid-flight cancels the old throw without replacing the new gems")
+	var live_gems := 0
+	for child in stage.get_children():
+		if child is FlatTopGem and child.build_words:
+			live_gems += 1
+	check(live_gems == 2, "rewind mid-flight leaves no abandoned gem visible")
 	stage.queue_free()
 	await get_tree().process_frame
 
@@ -277,5 +304,67 @@ func _test_portrait_on_stage() -> void:
 	var cam: Camera3D = stage.camera()
 	var p: Vector2 = cam.unproject_position(stage.aurora_quad.global_position + Vector3(0, 0.9, 0))
 	check(p.x > 0.0 and p.x < 1280.0 and p.y > 0.0 and p.y < 720.0, "the guest lands inside the camera frame")
+	# Rewind the REAL dialogue balloon across arrival and a settled gem round.
+	# These used to delete the restored quad after GameState spawned it, or
+	# leave queued old quads/gems in the scene until the next render frame.
+	var gs := get_node("/root/GameState")
+	gs.show_aurora_key = "aurora_serious"
+	gs.show_part = "EYES"
+	gs.show_mod = "GLOWING"
+	gs.show_part_face = 1
+	gs.show_mod_face = 7
+	gs.show_props_round = 1
+	var with_guest: Dictionary = gs.snapshot()
+	var idx: int = balloon.history_cursor
+	check(idx >= 0, "a dialogue history line exists for rewind")
+	if idx >= 0:
+		for n in 3:
+			balloon.history[idx]["state"] = with_guest.duplicate(true)
+			await balloon.rollback_to(idx)
+			check(held.get_child_count() == 1 and stage.aurora_quad.get_parent() == held,
+				"rewind %d leaves exactly one live on-stage guest" % n)
+			check(stage._gems.size() == 2 and stage._chip != null and stage._props.get_child_count() > 0,
+				"rewind %d rebuilds gems, chip and trial" % n)
+			var visible_gems := 0
+			var visible_chips := 0
+			var visible_props := 0
+			for child in stage.get_children():
+				if child is FlatTopGem and child.build_words:
+					visible_gems += 1
+				if child.name == "ModChip":
+					visible_chips += 1
+				if child.name == "Props":
+					visible_props += 1
+			check(visible_gems == 2 and visible_chips == 1 and visible_props == 1,
+				"rewind %d has no overlapping old show furniture" % n)
+		gs.show_aurora_key = ""
+		gs.show_part = ""
+		gs.show_mod = ""
+		gs.show_part_face = -1
+		gs.show_mod_face = -1
+		gs.show_props_round = 0
+		balloon.history[idx]["state"] = gs.snapshot()
+		await balloon.rollback_to(idx)
+		check(held.get_child_count() == 0 and stage.aurora_quad == null,
+			"rewinding before arrival removes the guest")
+		check(stage._gems.is_empty() and stage._chip == null,
+			"rewinding before the gem round removes the gems and chip")
+	balloon._restore_panic_place({"state": with_guest.duplicate(true), "bg": "none", "left": "none", "right": "none", "focus": ""})
+	check(held.get_child_count() == 1 and stage._gems.size() == 2,
+		"panic-place restore keeps guest and gems after motion replay")
+
+	# Held skip must not relatch after release at a choice (or after toolbar
+	# toggles it off); the next selected line may NOT re-enable skip itself.
+	balloon._set_skip_active(true)
+	balloon._resume_skip_after_choice = true
+	balloon._set_skip_active(false)
+	check(not balloon.skip_mode and not balloon._resume_skip_after_choice,
+		"releasing held skip at a choice clears its resume intent")
+	balloon._set_skip_active(true)
+	balloon._resume_skip_after_choice = true
+	balloon._toggle_skip()
+	check(not balloon.skip_mode and not balloon._resume_skip_after_choice,
+		"turning skip off in toolbar cannot resume after the choice")
+
 	main.queue_free()
 	await get_tree().process_frame

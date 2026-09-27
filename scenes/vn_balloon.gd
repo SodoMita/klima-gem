@@ -1075,13 +1075,19 @@ func rollback_to(index: int) -> void:
 
 	var entry: Dictionary = history[index]
 	history_cursor = index
+	_line_token += 1  # invalidate typing/timed continuations from the abandoned line
 	auto_timer.stop()
+	skip_timer.stop()
+	_resume_skip_after_choice = false
 	close_history()
 
 	var game_state: Node = get_tree().root.get_node_or_null("GameState")
+	# Reset/replay motion BEFORE restoring GameState: ShowDirector's restore
+	# spawns Aurora via the same StageDirector. Resetting motion afterwards
+	# deletes the newly restored guest on every rewind/load.
+	_restore_stage(entry)
 	if is_instance_valid(game_state) and game_state.has_method("restore") and entry.has("state"):
 		game_state.restore(entry.state)
-	_restore_stage(entry)
 
 	_restoring = true
 	var line: DialogueLine = await dialogue_resource.get_next_dialogue_line(entry.id, temporary_game_states)
@@ -2648,6 +2654,11 @@ func _restore_panic_place(place: Dictionary) -> void:
 		"right": str(place.get("right", "")),
 		"focus": str(place.get("focus", "")),
 	})
+	# This legacy panic route restores GameState BEFORE motion. Motion.reset_all
+	# clears 3D portraits, so re-dress the show once the replay is finished.
+	var show_director := get_tree().root.get_node_or_null("ShowDirector")
+	if is_instance_valid(show_director):
+		show_director.sync_from_state()
 
 
 func _resume_from_panic(place: Dictionary) -> void:
@@ -2679,6 +2690,11 @@ func _resume_from_panic(place: Dictionary) -> void:
 		"right": str(place.get("right", "")),
 		"focus": str(place.get("focus", "")),
 	})
+	# This legacy panic route restores GameState BEFORE motion. Motion.reset_all
+	# clears 3D portraits, so re-dress the show once the replay is finished.
+	var show_director := get_tree().root.get_node_or_null("ShowDirector")
+	if is_instance_valid(show_director):
+		show_director.sync_from_state()
 	if bool(place.get("paused", false)):
 		open_pause()
 	else:
@@ -2721,6 +2737,8 @@ func _toggle_auto() -> void:
 
 
 func _set_skip_active(on: bool) -> void:
+	if not on:
+		_resume_skip_after_choice = false
 	skip_mode = on
 	skip_button.modulate = MODE_TINT if on else Color.WHITE
 	auto_timer.stop()
@@ -2749,6 +2767,7 @@ func _toggle_skip() -> void:
 
 
 func _toggle_skip_off_at_unseen() -> void:
+	_resume_skip_after_choice = false
 	skip_mode = false
 	skip_button.modulate = Color.WHITE
 	skip_timer.stop()

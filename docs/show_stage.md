@@ -45,12 +45,14 @@ a tween. Now:
 - `ShowStage._arc_velocity()` solves the ballistic problem for a given flight
   time, and `throw_gems(rng)` launches each gem with `throw_with_velocity()` —
   an impulse, gravity, spin from `angular_velocity`. It arcs, tumbles, bounces
-  off the platform and comes to rest. `wait_until_rest()` watches the body
-  until it settles.
+  off the platform and comes to rest. `_wait_throw_rest()` watches the body
+  from the stage; an epoch token cancels old flights when a rewind clears the
+  gems, without resuming a coroutine on a deleted rigid body.
 - Nothing is pre-rolled. The landing spot, flight time and spin come from the
   story RNG, and whatever face lands front-most — read with
   `front_face_for_azimuth()` — **is** the word. Only then does the show take
-  over: `lift_to()` freezes the body, lifts it onto its mark keeping that face
+  over: `lift_to()` freezes the body, disables collisions so the stage cannot
+  push a settled gem sideways, lifts it onto its mark keeping that face
   to the camera. That is choreography, and it says so.
 - The two gems are on collision layer 2 with mask 1, i.e. they collide with
   the world and never with each other. Two hero props shoving each other off
@@ -69,15 +71,20 @@ The words are engraved on the eight slanted pavilion faces. In the first build
 each label was roughly six times wider than the triangle it sat on, so all
 eight overlapped into mush and none of them looked attached to anything.
 
-- The label is placed at its facet's **centroid**, offset 6 mm along the
-  facet's own outward normal, and tipped to the facet's slope.
-- Its `pixel_size` is solved so the whole word fits inside the triangle
-  (`WORD_FIT`, plus a height cap so short words do not grow).
-- The label's `+Z` axis points out through the facet — the side `Label3D`
-  draws its glyphs on — so the word is read, not mirrored, from outside.
+- Each facet's true plane and outward normal come from its three mesh
+  vertices (the pavilion normal points **down**, not up). The label lies in
+  that plane, biased just 3 mm out to avoid depth fighting.
+- The centre is 19% of the way from the girdle edge towards the apex: this
+  reserves room for both the top and bottom of the word as the triangle
+  narrows. `pixel_size` budgets **glyphs and their outline** in both axes;
+  tests project all four corners of the ink rectangle into triangle
+  barycentric coordinates and fail if even one falls outside the facet.
+- The label's `+Z` axis points out of its facet, and `_fade_faces()` keeps
+  the camera-facing facet visible. A reveal flashes the gem's emission,
+  never doubles the text size and spills it onto neighbouring faces.
 - `_fade_faces()` keeps only the face square to the camera. It measures by
-  **azimuth**, not by a dot product: the pavilion normals lean 44° up, so a dot
-  with a nearly level camera never approaches 1 and every face looked "front".
+  **azimuth**, not by a dot product: the pavilion normals lean downward, so a
+  dot with a nearly level camera cannot reliably distinguish adjacent faces.
   A yaw of `+y` carries face azimuth `a` to `a - y`; using `+y` picked the
   neighbouring facet and put the wrong word in the light.
 - `Label3D.outline_modulate` does **not** follow `modulate`'s alpha, so a
@@ -110,7 +117,10 @@ dialogue file and fails on any unescaped one.
   `ShowDirector._balloon()` looked for `VNBalloon` under `/root` when the
   balloon is parented to the current scene. Both are fixed, and the integrity
   test asserts exactly one portrait, under `World3D/Characters`, standing on
-  her mark and inside the camera frame.
+  her mark and inside the camera frame. Rewinds restore motion *before*
+  GameState spawns Aurora; old quads and stage props detach immediately so
+  repeated rewinds cannot create overlapping copies. The integrity test also
+  rewinds repeatedly and interrupts a physical throw mid-flight.
 
 ## 6. You play AS Aurora; actions decide, words situate
 

@@ -75,10 +75,10 @@ func _gs() -> Node:
 	return get_node_or_null("/root/GameState")
 
 
-func stage() -> Node3D:
+func stage() -> ShowStage:
 	if get_tree() == null:
 		return null
-	return get_tree().get_first_node_in_group("show_stage") as Node3D
+	return get_tree().get_first_node_in_group("show_stage") as ShowStage
 
 
 func _motion() -> Node:
@@ -121,6 +121,8 @@ func begin_show() -> void:
 	var gs := _gs()
 	if gs != null:
 		gs.show_round = 0
+		gs.show_ren_key = ""
+		gs.show_aurora_key = ""
 		gs.show_stars = 0
 		gs.show_cheers = 1
 		gs.show_part = ""
@@ -135,6 +137,11 @@ func begin_show() -> void:
 	var st := stage()
 	if st != null:
 		st.reset_show()
+	var motion := _motion()
+	if motion != null:
+		motion.remove_quad("aurora")
+	if st != null:
+		st.aurora_quad = null
 
 
 func next_round() -> void:
@@ -298,6 +305,9 @@ func swap_mod_gem() -> void:
 	gs.rerolls_used = int(gs.rerolls_used) + 1
 	var face: int = await st.rethrow_gem(1, gs.rng)
 	if not _is_current(epoch, st) or int(face) < 0 or int(face) >= ShowStageScript.MODS.size():
+		if int(face) < 0 and _is_current(epoch, st):
+			gs.show_cheers = int(gs.show_cheers) + 1
+			gs.rerolls_used = int(gs.rerolls_used) - 1
 		return
 	gs.show_mod_face = int(face)
 	gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
@@ -391,6 +401,11 @@ func sync_from_state() -> void:
 		return
 	if str(gs.show_aurora_key) != "":
 		_spawn_actor("aurora", str(gs.show_aurora_key), ShowStageScript.AURORA_MARK, ShowStageScript.AURORA_BASE_HEIGHT)
+	else:
+		var motion := _motion()
+		if motion != null:
+			motion.remove_quad("aurora")
+		st.aurora_quad = null
 	if str(gs.show_part) != "" and int(gs.show_part_face) >= 0:
 		st.place_gems_settled(str(gs.show_part), int(gs.show_part_face), str(gs.show_mod), int(gs.show_mod_face))
 		st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor())

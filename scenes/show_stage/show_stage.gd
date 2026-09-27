@@ -85,6 +85,8 @@ var aurora_quad: Node3D = null
 
 var _cosmetic := RandomNumberGenerator.new()
 var _gems: Array[FlatTopGem] = []
+## Invalidates an in-flight throw when a rewind/restore clears the gems.
+var _gem_epoch := 0
 var _plaque_mod: Node3D = null
 var _plaque_part: Node3D = null
 var _props: Node3D = null
@@ -666,8 +668,12 @@ func _make_gem(slot: Vector3, color: Color, word_list: PackedStringArray, physic
 
 
 func clear_gems() -> void:
+	_gem_epoch += 1
 	for gem in _gems:
 		if is_instance_valid(gem):
+			gem.hide()
+			if gem.get_parent() != null:
+				gem.get_parent().remove_child(gem)
 			gem.queue_free()
 	_gems.clear()
 	_clear_plaque(true)
@@ -697,13 +703,24 @@ func throw_gems(rng: RandomNumberGenerator) -> Array:
 	# Shapeshift (modification) gem hangs on the LEFT, body-part gem on the RIGHT.
 	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
+	var epoch := _gem_epoch
 
 	# The body part goes first, thrown long across the stage; it gets its own
 	# landing, its own reveal, and its own word before the second stone flies.
-	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng)
+	# Every await is epoch-guarded: a rewind clears the gems mid-flight, and
+	# this choreography must stop when its stones are gone.
+	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng, epoch)
+	if epoch != _gem_epoch or part_face < 0:
+		return []
 	await get_tree().create_timer(0.25).timeout
-	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng)
+	if epoch != _gem_epoch:
+		return []
+	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng, epoch)
+	if epoch != _gem_epoch or mod_face < 0:
+		return []
 	await get_tree().create_timer(0.3).timeout
+	if epoch != _gem_epoch:
+		return []
 	return [part_face, mod_face]
 
 
@@ -714,17 +731,25 @@ func throw_gems_fixed(part_face: int, mod_face: int) -> void:
 	clear_gems()
 	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
-	await _throw_one(gem_part, LAND_PART, part_face, true)
+	var epoch := _gem_epoch
+	await _throw_one(gem_part, LAND_PART, part_face, true, epoch)
+	if epoch != _gem_epoch:
+		return
 	await get_tree().create_timer(0.25).timeout
-	await _throw_one(gem_mod, LAND_MOD, mod_face, false)
+	if epoch != _gem_epoch:
+		return
+	await _throw_one(gem_mod, LAND_MOD, mod_face, false, epoch)
+	if epoch != _gem_epoch:
+		return
 	await get_tree().create_timer(0.3).timeout
 
 
 ## One full physics-random throw: leave the hand under a seeded impulse,
 ## land, rest, READ the face that landed front-most, lift onto the mark
 ## keeping it, flash it, present the word, and fly it to its slot.
-## Returns the face index the stones chose.
-func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: RandomNumberGenerator) -> int:
+## Returns the face index the stones chose, or -1 when a rewind cancelled
+## the flight (the gems were cleared under it — see _gem_epoch).
+func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: RandomNumberGenerator, epoch: int) -> int:
 	var from := aurora_hand() + (Vector3(0.16, 0.04, -0.06) if is_part else Vector3(-0.14, 0.08, -0.02))
 	_pulse_lights(2.2)
 	# Every throw is its own throw: the landing spot, the flight time and the
@@ -736,20 +761,30 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 	if not is_part:
 		spin = spin * -0.8
 	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin)
-	await gem.wait_until_rest(3.2)
+	# Wait on the STAGE rather than on the body: on rewind the body is
+	# freed, and a suspended method on it would resume into a dead instance.
+	await _wait_throw_rest(gem, epoch)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return -1
 	_pulse_lights(1.9)
 	var cam_az := _camera_azimuth()
 	var face := gem.front_face_for_azimuth(cam_az)
 	await gem.lift_to(GEM_SLOT_PART if is_part else GEM_SLOT_MOD, face, cam_az, 1.05)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return -1
 	await gem.flash_face(face)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return -1
 	await gem.flash_reveal()
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return -1
 	await present_word(gem, face, is_part)
 	return face
 
 
 ## One full throw: leave the hand, land, rest, lift onto the mark, flash the
 ## named face, present the word, and fly it to its presentation slot.
-func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool) -> void:
+func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch: int) -> void:
 	var from := aurora_hand() + (Vector3(0.16, 0.04, -0.06) if is_part else Vector3(-0.14, 0.08, -0.02))
 	_pulse_lights(2.2)
 	# Gravity does the rest: this is a real impulse, not a tween.
@@ -758,12 +793,40 @@ func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool) -> voi
 		_arc_velocity(from, land, 1.0 if is_part else 0.78),
 		Vector3(7.0, 9.5, 4.5) * (1.0 if is_part else -0.8)
 	)
-	await gem.wait_until_rest(3.2)
+	# Wait on the STAGE rather than on the body: on rewind the body is
+	# freed, and a suspended method on it would resume into a dead instance.
+	await _wait_throw_rest(gem, epoch)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return
 	_pulse_lights(1.9)
 	await gem.lift_to(GEM_SLOT_PART if is_part else GEM_SLOT_MOD, face, _camera_azimuth(), 1.05)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return
 	await gem.flash_face(face)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return
 	await gem.flash_reveal()
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return
 	await present_word(gem, face, is_part)
+
+
+func _wait_throw_rest(gem: FlatTopGem, epoch: int) -> void:
+	var elapsed := 0.0
+	var calm_frames := 0
+	while elapsed < 3.2 and epoch == _gem_epoch and is_instance_valid(gem):
+		await get_tree().physics_frame
+		if epoch != _gem_epoch or not is_instance_valid(gem):
+			return
+		elapsed += get_physics_process_delta_time()
+		if gem.freeze:
+			return
+		if gem.linear_velocity.length() < 0.35 and gem.angular_velocity.length() < 1.1:
+			calm_frames += 1
+			if calm_frames >= 4:
+				return
+		else:
+			calm_frames = 0
 
 
 ## Instant version for rollback / saves: gems appear already settled.
@@ -823,6 +886,8 @@ func place_word_plaque(word: String, is_part: bool) -> void:
 func _clear_plaque(is_part: bool) -> void:
 	var plaque := _plaque_part if is_part else _plaque_mod
 	if is_instance_valid(plaque):
+		if plaque.get_parent() != null:
+			plaque.get_parent().remove_child(plaque)
 		plaque.queue_free()
 	if is_part:
 		_plaque_part = null
@@ -904,7 +969,7 @@ func rethrow_gem(which: int, rng: RandomNumberGenerator) -> int:
 		return -1
 	var gem := _gems[which]
 	var is_part := which == 0
-	return await _throw_one_physics(gem, LAND_PART if is_part else LAND_MOD, is_part, rng)
+	return await _throw_one_physics(gem, LAND_PART if is_part else LAND_MOD, is_part, rng, _gem_epoch)
 
 
 ## Deterministic single re-throw for tests: lands, then lifts the REQUESTED
@@ -914,7 +979,7 @@ func rethrow_gem_fixed(which: int, face: int) -> void:
 		return
 	var gem := _gems[which]
 	var is_part := which == 0
-	await _throw_one(gem, LAND_PART if is_part else LAND_MOD, face, is_part)
+	await _throw_one(gem, LAND_PART if is_part else LAND_MOD, face, is_part, _gem_epoch)
 
 
 # --------------------------------------------------------- modification chip
@@ -1015,6 +1080,8 @@ func apply_mod_chip(part: String, mod: String, at: Vector3) -> void:
 
 func clear_mod_chip() -> void:
 	if is_instance_valid(_chip):
+		if _chip.get_parent() != null:
+			_chip.get_parent().remove_child(_chip)
 		_chip.queue_free()
 	_chip = null
 	_chip_label = null
@@ -1075,6 +1142,8 @@ func reset_aurora_fx() -> void:
 func clear_props() -> void:
 	_stop_salvo()
 	if is_instance_valid(_props):
+		if _props.get_parent() != null:
+			_props.get_parent().remove_child(_props)
 		_props.queue_free()
 	_props = Node3D.new()
 	_props.name = "Props"

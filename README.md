@@ -42,6 +42,11 @@ Save, load, settings, auto, and the story map live on the bottom system row.
 
 ### Display & settings notes
 
+V-Sync is on by default. The toolbar Skip button latches; holding the Skip
+key is momentary, and releasing it during a choice does not re-enable skip
+after a response. Aurora remains the only on-stage portrait after rewinds,
+loads and panic returns.
+
 - Resolution presets and any custom size keep the 1280×720 layout and draw it at the window's pixel density, so the UI and sprites stay the same size without being stretched or blurred. The resolution row describes the window that is actually open — it follows a window-manager resize, a maximize and the Fullscreen checkbox — while the saved preference stays the size you last picked. A size the screen cannot show is fitted to the work area at the same aspect; a preset that cannot fit is greyed out, and a fit that happened is reported with a toast. Picking a size takes effect from a maximized or fullscreen window too (it returns to a plain window and unchecks Fullscreen), while a restored setting never fights one. The saved size is also applied to the title card at launch, so a restart does not look like the setting was forgotten. The panic page applies the same scale and — when it replaces the game — the saved rotation itself.
 - Every slider except volume covers a wider range and is taller; UI scale and skip speed also have a number field beside the slider (the skip number is the delay in seconds; the slider still reads as speed, right is faster).
 - In a portrait view the sprites are larger and set apart, and the speaking portrait stands in front of the other while staying behind the dialogue UI. A line that changes the speaker's expression brings their portrait forward even without a `#focus=` tag.
