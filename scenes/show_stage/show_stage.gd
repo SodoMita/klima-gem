@@ -444,7 +444,8 @@ func _fast_settle(gem: FlatTopGem) -> void:
 ## head-on, at the face the stone rests on — upright, never mirrored — then
 ## returns to the house shot.
 func _underview(gem: FlatTopGem, face: int, epoch: int) -> void:
-	var label := gem.label_for(face)
+	# Read the twin word that lies against the glass, not the one facing up.
+	var label := gem.under_label(face)
 	if _camera == null or label == null:
 		return
 	var lb := label.global_basis.orthonormalized()

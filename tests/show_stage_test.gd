@@ -177,7 +177,7 @@ func _run_tests() -> void:
 				"gem %d rests on the glass floor in the air, not on the platform" % gi2)
 			# The word is legible from below: its label faces DOWN (toward an
 			# under-view camera) and its up-vector reads upright from there.
-			var lab2: Label3D = g2.label_for(face2)
+			var lab2: Label3D = g2.under_label(face2)
 			var n2: Vector3 = lab2.global_basis.z.normalized()
 			check(n2.y < -0.45, "gem %d: rolled word points down through the glass floor (%.2f)" % [gi2, n2.y])
 			# Rebuild the under-view shot exactly as the stage frames it and
