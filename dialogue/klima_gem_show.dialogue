@@ -68,9 +68,12 @@ do apply_mods()
 %2 A ripple runs the length of the glowstick wave. Even the painted stars on the cloth seem to lean in.
 do set_aurora_expression("surprised")
 Aurora: I can FEEL it. That is... aggressively my {{show_part}} now.
-[if show_part == "VOICE" and show_mod == "STICKY"]Aurora: When I try to speak, words come out... attached to things. This is going to be a legal situation.[/if]
-[if show_part == "EYES" and show_mod == "GLOWING"]Aurora: I can see the infrastructure of the stage. The scaffolding of reality has [b]EXPOSED BOLTS[/b], Ren.[/if]
-[if show_part == "HEART" and show_mod == "HEAVY"]Aurora: My chest has a ballast now. Emotionally I remain very light. Physically the engineers disagree.[/if]
+if show_part == "VOICE" and show_mod == "STICKY":
+	Aurora: When I try to speak, words come out... attached to things. This is going to be a legal situation.
+if show_part == "EYES" and show_mod == "GLOWING":
+	Aurora: I can see the infrastructure of the stage. The scaffolding of reality has [b]EXPOSED BOLTS[/b], Ren.
+if show_part == "HEART" and show_mod == "HEAVY":
+	Aurora: My chest has a ballast now. Emotionally I remain very light. Physically the engineers disagree.
 if show_outlook == "advantage":
 	Ren: And read the board, folks — the odds just leaned HER way. That combination is an advantage!
 	%2 Aurora: The gems like me tonight. I have decided to be terrified by that in a productive way.

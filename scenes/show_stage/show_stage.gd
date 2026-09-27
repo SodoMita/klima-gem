@@ -668,6 +668,9 @@ func _make_gem(slot: Vector3, color: Color, word_list: PackedStringArray, physic
 func clear_gems() -> void:
 	for gem in _gems:
 		if is_instance_valid(gem):
+			gem.hide()
+			if gem.get_parent() != null:
+				gem.get_parent().remove_child(gem)
 			gem.queue_free()
 	_gems.clear()
 	_clear_plaque(true)
@@ -780,6 +783,8 @@ func place_word_plaque(word: String, is_part: bool) -> void:
 func _clear_plaque(is_part: bool) -> void:
 	var plaque := _plaque_part if is_part else _plaque_mod
 	if is_instance_valid(plaque):
+		if plaque.get_parent() != null:
+			plaque.get_parent().remove_child(plaque)
 		plaque.queue_free()
 	if is_part:
 		_plaque_part = null
@@ -960,6 +965,8 @@ func apply_mod_chip(part: String, mod: String, at: Vector3) -> void:
 
 func clear_mod_chip() -> void:
 	if is_instance_valid(_chip):
+		if _chip.get_parent() != null:
+			_chip.get_parent().remove_child(_chip)
 		_chip.queue_free()
 	_chip = null
 	_chip_label = null
@@ -1020,6 +1027,8 @@ func reset_aurora_fx() -> void:
 func clear_props() -> void:
 	_stop_salvo()
 	if is_instance_valid(_props):
+		if _props.get_parent() != null:
+			_props.get_parent().remove_child(_props)
 		_props.queue_free()
 	_props = Node3D.new()
 	_props.name = "Props"
