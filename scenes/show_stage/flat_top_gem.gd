@@ -17,10 +17,10 @@ const SIDES := 8
 
 ## Facet triangles are narrow; the word is sized to this share of the facet's
 ## base edge so it never spills onto a neighbouring face.
-const WORD_FIT := 0.66
+const WORD_FIT := 0.60
 ## How much of the facet's height a whole word may use (keeps the fit sane
 ## for short words like "TINY").
-const WORD_HEIGHT_LIMIT := 0.42
+const WORD_HEIGHT_LIMIT := 0.28
 
 @export var girdle_radius := 0.5
 @export var table_radius := 0.26
@@ -133,9 +133,10 @@ func word_at(face: int) -> String:
 func _face_normal(i: int) -> Vector3:
 	var a := face_azimuth(i)
 	var mid := Vector3(cos(a), 0.0, sin(a))
-	# The pavilion leans outward as it drops, so the normal tips upward a little.
-	var slope := atan2(pavilion_height, girdle_radius * cos(PI / float(SIDES)))
-	return (mid * cos(slope) + Vector3.UP * sin(slope)).normalized()
+	# The outward normal of (girdle[i], girdle[i+1], apex). The apex is
+	# BELOW the rim, so this plane's outward normal slopes DOWN, not up.
+	var apothem := girdle_radius * cos(PI / float(SIDES))
+	return (mid * pavilion_height - Vector3.UP * apothem).normalized()
 
 
 ## The facet triangle that carries word [param i], in local space: the girdle
@@ -175,7 +176,7 @@ func _build_mesh() -> void:
 
 	# Pavilion: eight word-bearing triangles, girdle edge down to the point.
 	for i in SIDES:
-		_tri(st, girdle[i], apex, girdle[(i + 1) % SIDES])
+		_tri(st, girdle[i], girdle[(i + 1) % SIDES], apex)
 	# Crown: eight quiet trapezoids from girdle up to the table edge.
 	for i in SIDES:
 		_quad(st, girdle[i], girdle[(i + 1) % SIDES], table[(i + 1) % SIDES], table[i])
@@ -221,7 +222,8 @@ func _build_labels() -> void:
 	var base_size := 96
 	var facet_base := 2.0 * girdle_radius * sin(PI / float(SIDES))
 	var target_width := facet_base * WORD_FIT
-	var max_height := pavilion_height * WORD_HEIGHT_LIMIT
+	var facet_height := sqrt(pavilion_height * pavilion_height + pow(girdle_radius * cos(PI / float(SIDES)), 2))
+	var max_height := facet_height * WORD_HEIGHT_LIMIT
 	for i in SIDES:
 		var label := Label3D.new()
 		label.text = words[i]
@@ -230,29 +232,37 @@ func _build_labels() -> void:
 		label.outline_size = 18
 		label.modulate = word_color
 		label.outline_modulate = _outline_color
-		label.no_depth_test = false
+		# Only the front-facing facet's word is rendered; putting it in front
+		# of its own translucent depth pre-pass prevents punched-out glyphs.
+		label.no_depth_test = true
+		# Opaque pre-pass: back-face words are depth-rejected by the near
+		# facets instead of ghosting through the stone. The facing fade
+		# (modulate alpha) is what keeps seven of the eight words off the
+		# screen, so the settled gem reads as one named face.
+		label.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS
 		label.render_priority = 2
 		label.shaded = false
 		label.double_sided = false
-		# Alpha blending, not an alpha scissor: the facing fade is what keeps
-		# seven of the eight words off the screen, and a scissor would make
-		# that fade a hard pop instead.
-		label.alpha_cut = Label3D.ALPHA_CUT_DISABLED
 		# Fit the whole word inside the triangle it names.
 		var text_px := font.get_string_size(words[i], HORIZONTAL_ALIGNMENT_LEFT, -1, base_size)
-		var px := target_width / maxf(text_px.x, 1.0)
+		# The glyph's OUTLINE also takes space; budget its full bounding box.
+		var ink_width := text_px.x + 2.0 * label.outline_size
+		var ink_height := text_px.y + 2.0 * label.outline_size
+		var px := target_width / maxf(ink_width, 1.0)
 		# ...and never let it grow taller than the facet is deep.
-		var height_units := text_px.y * px
+		var height_units := ink_height * px
 		if height_units > max_height:
 			px *= max_height / height_units
 		label.pixel_size = px
 		_label_base_pixel_size.append(px)
 
 		var corners := facet_corners(i)
-		var centroid := (corners[0] + corners[1] + corners[2]) / 3.0
+		# At the centroid a horizontal word can only occupy 2/3 of the
+		# base if it has zero height. Move its centre up the facet so its
+		# entire rectangular ink+outline box fits BETWEEN the sloping sides.
+		var centre := ((corners[0] + corners[1]) * 0.5).lerp(corners[2], 0.19)
 		var normal := _face_normal(i)
-		# Sit the text on the facet plane, a hair proud of it.
-		var pos := centroid + normal * 0.006
+		var pos := centre + normal * 0.003  # depth bias only; same plane
 		# Label3D draws into its -Z half-space looking down +Z; aiming the -Z
 		# axis at the inverted normal turns the glyphs outward through the
 		# facet, and UP is re-resolved against the facet's own slope.
@@ -339,6 +349,10 @@ func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3) -> voi
 	_kill_hover()
 	spinning = false
 	settled = false
+	collision_layer = 2
+	collision_mask = 1
+	if is_instance_valid(shape):
+		shape.set_deferred("disabled", false)
 	freeze = false
 	sleeping = false
 	rotation = Vector3.ZERO
@@ -375,7 +389,13 @@ func lift_to(target: Vector3, face: int, cam_azimuth: float, duration := 1.1) ->
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
 	freeze = true
-	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	# Once lifted, the hero prop is scenery. Disable its collider so the
+	# physics server cannot push it sideways off its presentation mark.
+	collision_layer = 0
+	collision_mask = 0
+	if is_instance_valid(shape):
+		shape.set_deferred("disabled", true)
+	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	spinning = false
 	var current := wrapf(rotation.y, 0.0, TAU)
 	var target_yaw := face_azimuth(face) - cam_azimuth
@@ -424,7 +444,11 @@ func snap_settled(target: Vector3, face: int, cam_azimuth: float) -> void:
 	spinning = false
 	settled = true
 	freeze = true
-	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	collision_layer = 0
+	collision_mask = 0
+	if is_instance_valid(shape):
+		shape.set_deferred("disabled", true)
+	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	position = target
 	rotation = Vector3(0.0, wrapf(face_azimuth(face) - cam_azimuth, 0.0, TAU), 0.0)
 
@@ -442,13 +466,11 @@ func flash_reveal() -> void:
 ## A one-word pop on the facet that was just announced, so the eye catches
 ## which face of the stone is the named one.
 func flash_face(face: int) -> void:
-	if face < 0 or face >= face_labels.size():
+	if face < 0 or face >= face_labels.size() or not is_instance_valid(body):
 		return
-	var label := face_labels[face]
-	var base: float = _label_base_pixel_size[face] if face < _label_base_pixel_size.size() else label.pixel_size
+	# Flash the gem's light, NEVER enlarge the word past its triangular face.
+	var mat := body.material_override as StandardMaterial3D
 	var tw := create_tween()
-	tw.tween_property(label, "pixel_size", base * 2.1, 0.18)
-	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(label, "pixel_size", base, 0.5)
-	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(mat, "emission_energy_multiplier", 2.6, 0.16)
+	tw.tween_property(mat, "emission_energy_multiplier", 0.7, 0.35)
 	await tw.finished

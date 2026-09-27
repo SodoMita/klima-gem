@@ -1363,6 +1363,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.92, 0.92, 0.95, 1)
 theme_override_font_sizes/font_size = 16
 text = "on"
+button_pressed = true
 
 [node name="ResolutionRow" type="BoxContainer" parent="Balloon/UIRoot/SettingsPanel/SettingsMargin/SettingsScroll/SettingsVBox" unique_id=456107360]
 layout_mode = 2

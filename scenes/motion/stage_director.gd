@@ -711,6 +711,10 @@ func remove_quad(alias: String) -> void:
 		var quad: Node = _spawned[alias]
 		if is_instance_valid(quad):
 			_kill_tweens_for(quad)
+			# queue_free alone leaves old portraits visible/countable until the
+			# next frame. Detach now, then release safely at frame end.
+			if quad.get_parent() != null:
+				quad.get_parent().remove_child(quad)
 			quad.queue_free()
 		_spawned.erase(alias)
 	if _targets.get(alias) is Sprite3DQuad:
