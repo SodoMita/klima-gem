@@ -188,7 +188,7 @@ func _test_dialogue_colons() -> void:
 
 func _test_gem_throw_is_physics() -> void:
 	print("-- the throw --")
-	var stage: Node3D = ShowStageScript.new()
+	var stage: Node3D = (load("res://scenes/show_stage/show_stage.tscn") as PackedScene).instantiate()
 	add_child(stage)
 	await get_tree().process_frame
 	check(stage.has_method("_build_colliders"), "the stage builds colliders")
