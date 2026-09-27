@@ -65,20 +65,30 @@ func _ready() -> void:
 	gs.show_body_mods = {"EYES": "GLASS"}
 	director.sync_from_state()
 	quad = stage.aurora_quad as Sprite3DQuad
-	check(quad != null and quad.texture.resource_path.ends_with("aurora_serious_glass.webp"),
+	check(quad != null and str(quad.texture.get_meta("aurora_base_key", "")).begins_with("aurora_serious"),
 		"GLASS dresses Aurora herself, not a separate icon")
+	check(quad != null and quad.texture.get_meta("aurora_body_mods", {}).get("EYES", "") == "GLASS",
+		"GLASS on EYES lands on the eye layer, not on the whole body")
 	check(_quad_count(stage) == 1, "GLASS keeps one and only one standing character")
 	director.set_aurora_expression("happy")
 	quad = stage.aurora_quad as Sprite3DQuad
-	check(quad != null and quad.texture.resource_path.ends_with("aurora_happy_glass.webp"),
+	check(quad != null and str(quad.texture.get_meta("aurora_base_key", "")).begins_with("aurora_happy"),
 		"a happy expression retains the GLASS transformation")
 	check(_quad_count(stage) == 1, "expression swap does not duplicate Aurora")
+	gs.show_part = "SKIN"
+	gs.show_mod = "GLASS"
+	gs.show_body_mods["SKIN"] = "GLASS"
+	director.sync_from_state()
+	quad = stage.aurora_quad as Sprite3DQuad
+	check(quad != null and str(quad.texture.get_meta("aurora_base_key", "")).ends_with("aurora_happy_glass.webp"),
+		"a shift on SKIN still wears the full-body plate as its layer")
+	gs.show_body_mods.erase("SKIN")
 	gs.show_part = "BACK"
 	gs.show_mod = "MEGA"
 	await director.apply_mods()
 	quad = stage.aurora_quad as Sprite3DQuad
-	check(quad != null and quad.texture.resource_path.ends_with("aurora_happy_mega.webp"),
-		"a new shift replaces the sprite, keeping Aurora's smile")
+	check(quad != null and quad.texture.get_meta("aurora_body_mods", {}).get("BACK", "") == "MEGA",
+		"a new shift lands on the new part, keeping Aurora's smile")
 	check(gs.show_body_mods.has("EYES") and gs.show_body_mods.has("BACK"),
 		"the previous GLASS shift is still carried alongside MEGA")
 

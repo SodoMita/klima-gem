@@ -413,11 +413,35 @@ func _modded_aurora_texture(key: String, original: Texture2D, mods: Dictionary) 
 		# Aurora earned, rather than showing a future word before its cue.
 		var parts: Array = mods.keys()
 		mod = str(mods[parts[parts.size() - 1]])
-	var path := AURORA_MOD_SPRITES + key + "_" + mod.to_lower() + ".webp"
-	if not ResourceLoader.exists(path):
-		return original
-	var variant := load(path) as Texture2D
-	return variant if variant != null else original
+	# A shift on SKIN is the whole body, so the full-body plate IS the part
+	# layer. Every other word names a piece of her, and the piece is cut out of
+	# this very sprite and transformed on its own (AuroraBody).
+	var base := original
+	var base_key := key
+	var layers: Dictionary = AuroraBody.usable_mods(mods)
+	if layers.get("SKIN", "") == mod.to_upper() or not AuroraBody.has_region(_current_part(mods)):
+		var path := AURORA_MOD_SPRITES + key + "_" + mod.to_lower() + ".webp"
+		if ResourceLoader.exists(path):
+			var variant := load(path) as Texture2D
+			if variant != null:
+				base = variant
+				base_key = path
+				layers.erase("SKIN")
+	if layers.is_empty():
+		return base
+	var composed := AuroraBody.compose(base_key, base, layers)
+	return composed if composed != null else base
+
+
+## Which body part the portrait is currently wearing a shift on.
+func _current_part(mods: Dictionary) -> String:
+	var gs := _gs()
+	if gs != null and mods.has(str(gs.show_part)):
+		return str(gs.show_part).to_upper()
+	var parts: Array = mods.keys()
+	if parts.is_empty():
+		return ""
+	return str(parts[parts.size() - 1]).to_upper()
 
 
 func _refresh_aurora_sprite() -> void:
