@@ -109,6 +109,15 @@ func _test_director_music() -> void:
 	ok(String(a.current_theme) == "festival", "festival theme selected")
 	ok(a.dub_scene == "", "festival does not start the dubstep engine")
 
+	# A phase pick straight out of the calm festival score must START the
+	# engine (this is how the Echo Choir used to play in silence).
+	a.pick_best_music("challenge_run")
+	if a.has_dubstep_engine():
+		ok(a.music_source == "dubstep", "a phase pick from festival starts the dubstep engine")
+		ok(bool(a._dub.call("dub_active")), "the engine is actually running after the pick")
+		ok(a.dub_intensity >= 0.85, "and the pick's intensity survived the start (%.2f)" % a.dub_intensity)
+	a.play_scene("festival")
+
 	# the show floor is active music
 	a.play_dubstep("stage")
 	if a.has_dubstep_engine():
@@ -136,37 +145,39 @@ func _test_music_picker() -> void:
 	var a := AudioDirector
 	a.procedural_enabled = true
 
-	# Test picking music across primary game states:
-	# 1. 1 gem rolled
-	a.pick_best_music("gem_1_rolled")
-	ok(a.dub_scene == "stage_suspense", "1 gem rolled picks suspense mode")
-	ok(a.dub_intensity > 0.7, "1 gem rolled sets high tension intensity")
-
-	# 2. Both gems placed and revealed
-	a.pick_best_music("both_revealed")
-	ok(a.dub_scene == "stage_groove", "both gems placed picks heavy groove")
-	ok(a.dub_intensity > 0.9, "both gems placed sets peak groove intensity")
-
-	# 3. Challenge running
-	a.pick_best_music("challenge_run")
-	ok(a.dub_scene == "stage_trial", "challenge run picks trial mode")
-
-	# 4. Challenge victory
-	a.pick_best_music("challenge_victory")
-	ok(a.dub_scene == "stage_groove", "challenge victory returns to groove")
-
-	# 5. Challenge loss
-	a.pick_best_music("challenge_loss")
-	ok(a.dub_scene == "stage_chill", "challenge loss picks chill mode")
-
-	# 6. Overall victory
-	a.pick_best_music("overall_victory")
-	ok(a.dub_scene == "stage_victory", "overall victory picks victory fanfare")
-	ok(is_equal_approx(a.dub_intensity, 1.0), "overall victory sets max intensity")
-
-	# 7. Overall loss
-	a.pick_best_music("overall_loss")
-	ok(a.dub_scene == "stage_defeat", "overall loss picks defeat theme")
+	# Test picking music across primary game states. The picker is RANDOM
+	# within each phase's candidates (human: no fixed selection), so a pick
+	# must land on one of them, in the right intensity band, and many picks
+	# must not all land on the same one.
+	var phases := {
+		"gem_1_rolled": [0.6, 0.9], "both_revealed": [0.78, 1.0], "challenge_run": [0.85, 1.0],
+		"challenge_victory": [0.8, 1.0], "challenge_loss": [0.3, 0.6],
+		"overall_victory": [0.9, 1.0], "overall_loss": [0.2, 0.5],
+	}
+	for phase in phases:
+		var allowed: Array = []
+		for opt in a.PHASE_CHOICES[phase]:
+			allowed.append(str(opt[0]))
+		var seen := {}
+		for i in 12:
+			a.pick_best_music(phase)
+			seen[a.dub_scene] = true
+			ok(allowed.has(a.dub_scene), "%s picks one of its candidates (%s)" % [phase, a.dub_scene])
+			var band: Array = phases[phase]
+			ok(a.dub_intensity >= float(band[0]) - 0.001 and a.dub_intensity <= float(band[1]) + 0.001, "%s intensity in band (%.2f)" % [phase, a.dub_intensity])
+		ok(allowed.size() < 2 or seen.size() > 1, "%s does not always pick the same variant" % phase)
+	ok(a.PHASE_ALIASES.has("trial_win"), "phase aliases resolve the director's names")
+	# Music seed is fresh per boot: two directors never share a score seed
+	# unless pinned.
+	ok(a.randomize_music_on_boot, "music seed is randomised at boot")
+	# One-shots come in several takes.
+	a._dub_cache.clear()
+	var takes := {}
+	for i in 24:
+		var st := a._dub_stream("gem_hit", 0.8)
+		if st != null:
+			takes[st] = true
+	ok(a._dub == null or takes.size() > 1, "gem_hit is rendered in more than one take (%d)" % takes.size())
 
 	a.stop_music(0.05)
 
@@ -192,12 +203,12 @@ func _test_victory_loss_hooks() -> void:
 
 	sd.on_show_victory()
 	ok(a.sfx_played > before, "on_show_victory triggers audio SFX")
-	ok(a.dub_scene == "stage_victory", "on_show_victory switches music to stage_victory")
+	ok(a.dub_scene in ["stage_victory", "stage_groove"], "on_show_victory switches music to a victory variant (%s)" % a.dub_scene)
 
 	before = a.sfx_played
 	sd.on_show_defeat()
 	ok(a.sfx_played > before, "on_show_defeat triggers audio SFX")
-	ok(a.dub_scene == "stage_defeat", "on_show_defeat switches music to stage_defeat")
+	ok(a.dub_scene in ["stage_defeat", "stage_chill"], "on_show_defeat switches music to a defeat variant (%s)" % a.dub_scene)
 
 	a.stop_music(0.05)
 

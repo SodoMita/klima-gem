@@ -185,6 +185,44 @@ var last_sfx: String = ""              ## key of the most recent SFX
 var last_sfx_source: String = ""       ## "ogg" or "synth"
 var last_sfx_pitch: float = 1.0        ## pitch of the most recent SFX
 var music_seed: int = 20260921         ## arpeggio RNG seed
+## Draw a fresh music seed at boot (tests turn this off to pin the score).
+var randomize_music_on_boot: bool = true
+## How many different renders ("takes") of each one-shot are kept; a play
+## picks one at random so two gem hits never sound identical.
+const SFX_TAKES := 4
+## Per-phase candidates: a phase picks one variant+intensity at random from
+## its list, so the same beat of the show is scored differently each night.
+const PHASE_CHOICES: Dictionary = {
+	"entrance": [["stage", 0.55], ["stage_groove", 0.5], ["stage_chill", 0.6]],
+	"rolling": [["stage_suspense", 0.70], ["stage_trial", 0.6], ["stage", 0.75]],
+	"gem_1_rolled": [["stage_suspense", 0.78], ["stage_suspense", 0.7], ["stage", 0.8]],
+	"both_revealed": [["stage_groove", 0.92], ["stage", 0.95], ["stage_victory", 0.85]],
+	"challenge_build": [["stage_trial", 0.85], ["stage_suspense", 0.85], ["stage_groove", 0.8]],
+	"challenge_run": [["stage_trial", 0.95], ["stage_groove", 0.95], ["stage", 1.0]],
+	"challenge_victory": [["stage_groove", 0.88], ["stage_victory", 0.9], ["stage", 0.9]],
+	"challenge_loss": [["stage_chill", 0.45], ["stage_defeat", 0.5], ["stage_suspense", 0.4]],
+	"overall_victory": [["stage_victory", 1.0], ["stage_groove", 1.0]],
+	"overall_loss": [["stage_defeat", 0.35], ["stage_chill", 0.3]],
+	"chill": [["stage_chill", 0.40], ["stage_defeat", 0.45], ["stage", 0.4]],
+}
+const PHASE_ALIASES: Dictionary = {
+	"host": "entrance", "idle": "entrance",
+	"gem_throw": "rolling", "throw_1": "rolling", "throw_2": "rolling",
+	"1_gem_rolled": "gem_1_rolled",
+	"both_placed": "both_revealed", "gems_ready": "both_revealed",
+	"trial_intro": "challenge_build", "trial_active": "challenge_run",
+	"trial_win": "challenge_victory", "trial_loss": "challenge_loss",
+	"show_win": "overall_victory", "show_loss": "overall_loss", "rest": "chill",
+}
+const PHASE_EVENTS: Dictionary = {
+	"gem_1_rolled": ["stab", "fill"], "both_revealed": ["drop"],
+	"challenge_build": ["fill", "riser"], "challenge_run": ["riser"],
+	"challenge_victory": ["drop", "impact"], "challenge_loss": ["break"],
+	"overall_victory": ["drop"], "overall_loss": ["break"],
+}
+## The last phase chosen and what it resolved to, for tests and the HUD.
+var last_phase := ""
+var last_phase_choice: Array = []
 var _scene_key: String = ""
 var _scene_mood: String = ""
 
@@ -266,6 +304,13 @@ func _ready() -> void:
 	_hold_player.name = "HoldTone"
 	_hold_player.bus = &"SFX"
 	add_child(_hold_player)
+	# Every boot is a different night: the score seed is drawn at random
+	# unless a test pins it through reroll(seed) / music_seed. A fixed seed
+	# made every show open on the very same bars and the very same hits.
+	if randomize_music_on_boot:
+		var r := RandomNumberGenerator.new()
+		r.randomize()
+		music_seed = int(r.randi() & 0x7fffffff) | 1
 	_rng.seed = music_seed
 	_attach_engine()
 	_attach_dubstep()
@@ -664,47 +709,23 @@ func music_event(name: String) -> void:
 ## Pick the best music variant / intensity for the current gameplay phase,
 ## or switch smoothly between them.
 func pick_best_music(phase: String) -> void:
-	match phase:
-		"entrance", "host", "idle":
-			switch_dubstep("stage", 0.55, 0.8)
-		"rolling", "gem_throw", "throw_1":
-			switch_dubstep("stage_suspense", 0.70, 0.4)
-		"gem_1_rolled", "1_gem_rolled":
-			# when 1 gem rolled: tension tick, intermediate hold
-			switch_dubstep("stage_suspense", 0.78, 0.3)
-			music_event("stab")
-		"throw_2":
-			switch_dubstep("stage_suspense", 0.82, 0.4)
-		"both_revealed", "both_placed", "gems_ready":
-			# when both labeled already revealed and moved to place:
-			# full active driving dubstep groove, beat drop!
-			switch_dubstep("stage_groove", 0.92, 0.2)
-			music_event("drop")
-		"challenge_build", "trial_intro":
-			switch_dubstep("stage_trial", 0.85, 0.5)
-			music_event("fill")
-		"challenge_run", "trial_active":
-			switch_dubstep("stage_trial", 0.95, 0.3)
-			music_event("riser")
-		"challenge_victory", "trial_win":
-			switch_dubstep("stage_groove", 0.88, 0.3)
-			music_event("drop")
-		"challenge_loss", "trial_loss":
-			switch_dubstep("stage_chill", 0.45, 0.4)
-			music_event("break")
-		"overall_victory", "show_win":
-			# Overall victory in show: triumphant fanfare, peak energy
-			switch_dubstep("stage_victory", 1.0, 0.2)
-			music_event("drop")
-		"overall_loss", "show_loss":
-			# Overall loss in show: dark sub decay, melancholy chill
-			switch_dubstep("stage_defeat", 0.35, 0.6)
-			music_event("break")
-		"chill", "rest":
-			switch_dubstep("stage_chill", 0.40, 0.8)
-		_:
-			if DUB_SCENES.has(phase):
-				switch_dubstep(phase)
+	var key := str(PHASE_ALIASES.get(phase, phase))
+	last_phase = key
+	if PHASE_CHOICES.has(key):
+		var options: Array = PHASE_CHOICES[key]
+		# Not the same choice twice in a row when there is a choice.
+		var pick: Array = options[_rng.randi_range(0, options.size() - 1)]
+		if options.size() > 1 and not last_phase_choice.is_empty() and pick == last_phase_choice:
+			pick = options[(options.find(pick) + 1 + _rng.randi_range(0, options.size() - 2)) % options.size()]
+		last_phase_choice = pick
+		var intensity := clampf(float(pick[1]) + _rng.randf_range(-0.06, 0.06), 0.0, 1.0)
+		var fade := _rng.randf_range(0.25, 0.7)
+		switch_dubstep(str(pick[0]), intensity, fade)
+		if PHASE_EVENTS.has(key):
+			var events: Array = PHASE_EVENTS[key]
+			music_event(str(events[_rng.randi_range(0, events.size() - 1)]))
+	elif DUB_SCENES.has(key):
+		switch_dubstep(key)
 
 
 ## Dynamic smooth switch between dubstep variants
@@ -712,11 +733,22 @@ func switch_dubstep(scene_key: String, target_intensity: float = -1.0, fade: flo
 	if not DUB_SCENES.has(scene_key):
 		return
 	var variant: int = int(DUB_SCENES[scene_key])
-	dub_scene = scene_key
-	current_theme = StringName(scene_key)
-	music_source = "dubstep"
+	var running := false
+	if _dub != null and _dub.has_method("dub_active"):
+		running = bool(_dub.call("dub_active"))
 	if target_intensity >= 0.0:
 		dub_intensity = clampf(target_intensity, 0.0, 1.0)
+	# Coming from the calm festival score, a plain loop, or silence: the
+	# engine has to be STARTED, not merely re-tuned, or the phase stays mute.
+	if not running or music_source != "dubstep":
+		var wanted := dub_intensity
+		play_dubstep(scene_key)
+		dub_intensity = wanted
+		if _dub != null:
+			_dub.call("dub_set_intensity", dub_intensity, fade)
+		return
+	dub_scene = scene_key
+	current_theme = StringName(scene_key)
 	if _dub != null:
 		if _dub.has_method("dub_switch_mode"):
 			_dub.call("dub_switch_mode", variant, dub_intensity, fade)
@@ -765,7 +797,7 @@ func play_event(key: String, energy: float = 0.8, pitch: float = 1.0) -> void:
 		last_sfx_source = "synth"
 		_play_stream(_synth_stream(key), pitch)
 		return
-	_play_stream(stream, pitch + _rng.randf_range(-0.03, 0.03))
+	_play_stream(stream, pitch + _rng.randf_range(-0.08, 0.08))
 
 
 ## Cheap ducking hook: a loud collision also nudges the score.
@@ -778,7 +810,10 @@ func play_collision(key: String, energy: float = 0.8) -> void:
 func _dub_stream(key: String, energy: float) -> AudioStream:
 	var kind: int = int(DUB_SFX[key])
 	var bucket: int = clampi(int(round(clampf(energy, 0.0, 1.0) * 4.0)), 0, 4)
-	var cache_key := "%s#%d" % [key, bucket]
+	# A random take: the generator renders each take from a fresh seed, so
+	# the same hit at the same energy still comes out a little different.
+	var take: int = _rng.randi_range(0, SFX_TAKES - 1)
+	var cache_key := "%s#%d#%d" % [key, bucket, take]
 	if _dub_cache.has(cache_key):
 		return _dub_cache[cache_key]
 	if _dub == null:
