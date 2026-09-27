@@ -1,0 +1,95 @@
+{
+  "canvas": [
+    768,
+    1376
+  ],
+  "aspect": 0.5581395348837209,
+  "parts": {
+    "BACK": {
+      "z": 0,
+      "pivot": [
+        0.5,
+        0.36
+      ],
+      "file": "back.webp"
+    },
+    "LEGS": {
+      "z": 1,
+      "pivot": [
+        0.5,
+        0.47
+      ],
+      "file": "legs.webp"
+    },
+    "SKIN": {
+      "z": 2,
+      "pivot": [
+        0.5,
+        0.965
+      ],
+      "file": "skin.webp"
+    },
+    "HAIR": {
+      "z": 3,
+      "pivot": [
+        0.5,
+        0.12
+      ],
+      "file": "hair.webp"
+    },
+    "MILK": {
+      "z": 4,
+      "pivot": [
+        0.5,
+        0.3
+      ],
+      "file": "milk.webp"
+    },
+    "HANDS": {
+      "z": 5,
+      "pivot": [
+        0.5,
+        0.255
+      ],
+      "file": "hands.webp"
+    },
+    "EYES": {
+      "z": 6,
+      "pivot": [
+        0.5,
+        0.128
+      ],
+      "file": "eyes.webp",
+      "variants": {
+        "happy": "eyes_happy.webp",
+        "sad": "eyes_sad.webp",
+        "serious": "eyes_serious.webp",
+        "surprised": "eyes_surprised.webp",
+        "gorgeous": "eyes_gorgeous.webp"
+      }
+    },
+    "VOICE": {
+      "z": 7,
+      "pivot": [
+        0.487,
+        0.183
+      ],
+      "file": "voice.webp",
+      "variants": {
+        "happy": "voice_happy.webp",
+        "sad": "voice_sad.webp",
+        "serious": "voice_serious.webp",
+        "surprised": "voice_surprised.webp",
+        "gorgeous": "voice_gorgeous.webp"
+      }
+    },
+    "HEART": {
+      "z": 8,
+      "pivot": [
+        0.47,
+        0.3
+      ],
+      "file": "heart.webp"
+    }
+  }
+}
