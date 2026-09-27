@@ -224,6 +224,7 @@ func _test_gem_throw_is_physics() -> void:
 	check(gem.linear_velocity.length() > 0.0 or gem.sleeping, "the body is being integrated by the physics server")
 
 	# A full ceremonial throw must put both gems on their marks.
+	gem.queue_free()  # the isolated physics probe was not in stage._gems
 	stage.clear_gems()
 	await stage.throw_gems("EYES", 1, "GLOWING", 7)
 	check(stage._gems.size() == 2, "two gems come back")
@@ -233,6 +234,19 @@ func _test_gem_throw_is_physics() -> void:
 		check(g.settled, "gem %d reports itself settled" % i)
 		check(g.global_position.distance_to(slot) < 0.12,
 			"gem %d stands on its mark within a hand's width (%.2f)" % [i, g.global_position.distance_to(slot)])
+	# Interrupt the first physical flight with a rewind. A stale throw must
+	# never resume after the restore and create a third gem/word plaque.
+	stage.throw_gems("EYES", 1, "GLOWING", 7)
+	await get_tree().create_timer(0.2).timeout
+	stage.place_gems_settled("HANDS", 0, "GIANT", 0)
+	await get_tree().create_timer(0.5).timeout
+	check(stage._gems.size() == 2 and stage._gems[0].word_at(0) == "HANDS",
+		"rewind mid-flight cancels the old throw without replacing the new gems")
+	var live_gems := 0
+	for child in stage.get_children():
+		if child is FlatTopGem and child.build_words:
+			live_gems += 1
+	check(live_gems == 2, "rewind mid-flight leaves no abandoned gem visible")
 	stage.queue_free()
 	await get_tree().process_frame
 
@@ -319,6 +333,10 @@ func _test_portrait_on_stage() -> void:
 			"rewinding before arrival removes the guest")
 		check(stage._gems.is_empty() and stage._chip == null,
 			"rewinding before the gem round removes the gems and chip")
+	balloon._restore_panic_place({"state": with_guest.duplicate(true), "bg": "none", "left": "none", "right": "none", "focus": ""})
+	check(held.get_child_count() == 1 and stage._gems.size() == 2,
+		"panic-place restore keeps guest and gems after motion replay")
+
 	# Held skip must not relatch after release at a choice (or after toolbar
 	# toggles it off); the next selected line may NOT re-enable skip itself.
 	balloon._set_skip_active(true)

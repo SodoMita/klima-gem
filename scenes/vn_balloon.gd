@@ -2654,6 +2654,11 @@ func _restore_panic_place(place: Dictionary) -> void:
 		"right": str(place.get("right", "")),
 		"focus": str(place.get("focus", "")),
 	})
+	# This legacy panic route restores GameState BEFORE motion. Motion.reset_all
+	# clears 3D portraits, so re-dress the show once the replay is finished.
+	var show_director := get_tree().root.get_node_or_null("ShowDirector")
+	if is_instance_valid(show_director):
+		show_director.sync_from_state()
 
 
 func _resume_from_panic(place: Dictionary) -> void:
@@ -2685,6 +2690,11 @@ func _resume_from_panic(place: Dictionary) -> void:
 		"right": str(place.get("right", "")),
 		"focus": str(place.get("focus", "")),
 	})
+	# This legacy panic route restores GameState BEFORE motion. Motion.reset_all
+	# clears 3D portraits, so re-dress the show once the replay is finished.
+	var show_director := get_tree().root.get_node_or_null("ShowDirector")
+	if is_instance_valid(show_director):
+		show_director.sync_from_state()
 	if bool(place.get("paused", false)):
 		open_pause()
 	else:

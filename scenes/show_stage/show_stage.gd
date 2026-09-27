@@ -85,6 +85,8 @@ var aurora_quad: Node3D = null
 
 var _cosmetic := RandomNumberGenerator.new()
 var _gems: Array[FlatTopGem] = []
+## Invalidates an in-flight throw when a rewind/restore clears the gems.
+var _gem_epoch := 0
 var _plaque_mod: Node3D = null
 var _plaque_part: Node3D = null
 var _props: Node3D = null
@@ -666,6 +668,7 @@ func _make_gem(slot: Vector3, color: Color, word_list: PackedStringArray, physic
 
 
 func clear_gems() -> void:
+	_gem_epoch += 1
 	for gem in _gems:
 		if is_instance_valid(gem):
 			gem.hide()
@@ -698,18 +701,25 @@ func throw_gems(part_word: String, part_face: int, mod_word: String, mod_face: i
 	# Shapeshift (modification) gem hangs on the LEFT, body-part gem on the RIGHT.
 	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
+	var epoch := _gem_epoch
 
 	# The body part goes first, thrown long across the stage; it gets its own
 	# landing, its own reveal, and its own word before the second stone flies.
-	await _throw_one(gem_part, LAND_PART, part_face, true)
+	await _throw_one(gem_part, LAND_PART, part_face, true, epoch)
+	if epoch != _gem_epoch:
+		return
 	await get_tree().create_timer(0.25).timeout
-	await _throw_one(gem_mod, LAND_MOD, mod_face, false)
+	if epoch != _gem_epoch:
+		return
+	await _throw_one(gem_mod, LAND_MOD, mod_face, false, epoch)
+	if epoch != _gem_epoch:
+		return
 	await get_tree().create_timer(0.3).timeout
 
 
 ## One full throw: leave the hand, land, rest, lift onto the mark, flash the
 ## named face, present the word, and fly it to its presentation slot.
-func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool) -> void:
+func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch: int) -> void:
 	var from := aurora_hand() + (Vector3(0.16, 0.04, -0.06) if is_part else Vector3(-0.14, 0.08, -0.02))
 	_pulse_lights(2.2)
 	# Gravity does the rest: this is a real impulse, not a tween.
@@ -718,12 +728,40 @@ func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool) -> voi
 		_arc_velocity(from, land, 1.0 if is_part else 0.78),
 		Vector3(7.0, 9.5, 4.5) * (1.0 if is_part else -0.8)
 	)
-	await gem.wait_until_rest(3.2)
+	# Wait on the STAGE rather than on the body: on rewind the body is
+	# freed, and a suspended method on it would resume into a dead instance.
+	await _wait_throw_rest(gem, epoch)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return
 	_pulse_lights(1.9)
 	await gem.lift_to(GEM_SLOT_PART if is_part else GEM_SLOT_MOD, face, _camera_azimuth(), 1.05)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return
 	await gem.flash_face(face)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return
 	await gem.flash_reveal()
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return
 	await present_word(gem, face, is_part)
+
+
+func _wait_throw_rest(gem: FlatTopGem, epoch: int) -> void:
+	var elapsed := 0.0
+	var calm_frames := 0
+	while elapsed < 3.2 and epoch == _gem_epoch and is_instance_valid(gem):
+		await get_tree().physics_frame
+		if epoch != _gem_epoch or not is_instance_valid(gem):
+			return
+		elapsed += get_physics_process_delta_time()
+		if gem.freeze:
+			return
+		if gem.linear_velocity.length() < 0.35 and gem.angular_velocity.length() < 1.1:
+			calm_frames += 1
+			if calm_frames >= 4:
+				return
+		else:
+			calm_frames = 0
 
 
 ## Instant version for rollback / saves: gems appear already settled.
@@ -864,7 +902,7 @@ func rethrow_gem(which: int, face: int, word: String) -> void:
 		return
 	var gem := _gems[which]
 	var is_part := which == 0
-	await _throw_one(gem, LAND_PART if is_part else LAND_MOD, face, is_part)
+	await _throw_one(gem, LAND_PART if is_part else LAND_MOD, face, is_part, _gem_epoch)
 
 
 # --------------------------------------------------------- modification chip
