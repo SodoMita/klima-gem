@@ -5,6 +5,8 @@ extends Node
 signal stat_changed(stat_name: String, value: int)
 signal bond_changed(character_id: String, value: int)
 signal mind_read_unlocked(unlocked: bool)
+## Emitted at the end of restore(); the Klima Gem stage re-dresses itself on it.
+signal state_restored
 
 @export var player_name: String = "Ren"
 @export var trust: int = 0
@@ -16,6 +18,25 @@ signal mind_read_unlocked(unlocked: bool)
 @export var teased_selene: bool = false
 @export var supported_aurora: bool = false
 @export var protected_nova: bool = false
+
+## --- Klima Gem show state ------------------------------------------------
+## Trial counter (0 before the first throw), stars won, crowd cheers left,
+## the two rolled words and their face indices, the current outlook, which
+## trial's props are standing, and the guest's current portrait key.
+@export var show_round: int = 0
+@export var show_stars: int = 0
+@export var show_cheers: int = 1
+@export var show_part: String = ""
+@export var show_mod: String = ""
+@export var show_part_face: int = -1
+@export var show_mod_face: int = -1
+@export var show_outlook: String = ""
+@export var show_props_round: int = 0
+@export var show_ren_key: String = ""
+@export var show_aurora_key: String = ""
+@export var rerolls_used: int = 0
+@export var last_roll: float = 0.0
+@export var last_success: bool = false
 ## Fixed for the playthrough. A from-start replay uses this, not a fresh roll,
 ## so the same choices produce the same random results. Saves keep it inside
 ## each history snapshot.
@@ -91,6 +112,20 @@ func snapshot() -> Dictionary:
 		"protected_nova": protected_nova,
 		"story_seed": story_seed,
 		"bond": bond.duplicate(true),
+		"show_round": show_round,
+		"show_stars": show_stars,
+		"show_cheers": show_cheers,
+		"show_part": show_part,
+		"show_mod": show_mod,
+		"show_part_face": show_part_face,
+		"show_mod_face": show_mod_face,
+		"show_outlook": show_outlook,
+		"show_props_round": show_props_round,
+		"show_ren_key": show_ren_key,
+		"show_aurora_key": show_aurora_key,
+		"rerolls_used": rerolls_used,
+		"last_roll": last_roll,
+		"last_success": last_success,
 	}
 	# Strings, not raw ints: a save is JSON, and a 64-bit RNG state does not survive a number.
 	data["rng_state"] = str(rng.state)
@@ -113,6 +148,20 @@ func restore(data: Dictionary) -> void:
 	teased_selene = bool(data.get("teased_selene", false))
 	supported_aurora = bool(data.get("supported_aurora", false))
 	protected_nova = bool(data.get("protected_nova", false))
+	show_round = int(data.get("show_round", 0))
+	show_stars = int(data.get("show_stars", 0))
+	show_cheers = int(data.get("show_cheers", 1))
+	show_part = str(data.get("show_part", ""))
+	show_mod = str(data.get("show_mod", ""))
+	show_part_face = int(data.get("show_part_face", -1))
+	show_mod_face = int(data.get("show_mod_face", -1))
+	show_outlook = str(data.get("show_outlook", ""))
+	show_props_round = int(data.get("show_props_round", 0))
+	show_ren_key = str(data.get("show_ren_key", ""))
+	show_aurora_key = str(data.get("show_aurora_key", ""))
+	rerolls_used = int(data.get("rerolls_used", 0))
+	last_roll = float(data.get("last_roll", 0.0))
+	last_success = bool(data.get("last_success", false))
 	if data.has("story_seed"):
 		story_seed = int(data["story_seed"])
 	var saved: Variant = data.get("bond", {})
@@ -130,6 +179,7 @@ func restore(data: Dictionary) -> void:
 	stat_changed.emit("trust", trust)
 	stat_changed.emit("insight", insight)
 	stat_changed.emit("power", power)
+	state_restored.emit()
 
 
 func reset() -> void:

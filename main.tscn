@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://cao4hs88e08tp" path="res://bgs/nexus_chamber.jpg" id="2_nexus"]
 [ext_resource type="FontFile" uid="uid://ctxcxi25fm0pu" path="res://assets/fonts/DejaVuSerif.ttf" id="3_serif"]
 [ext_resource type="FontFile" uid="uid://ex3s7gibjgfb" path="res://assets/fonts/DejaVuSerif-Bold.ttf" id="4_bold"]
+[ext_resource type="PackedScene" path="res://scenes/show_stage/show_stage.tscn" id="5_stage"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn"]
 content_margin_left = 16.0
@@ -143,7 +144,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.86, 1, 0.8)
 theme_override_fonts/font = ExtResource("4_bold")
 theme_override_font_sizes/font_size = 13
-text = "РАЗЛОМ РАЗДВИГАЕТСЯ"
+text = "ПРЯМОЙ ЭФИР ИЗ РАЗЛОМА"
 horizontal_alignment = 1
 
 [node name="Title" type="Label" parent="TitleLayer/Center/Card/VBox" unique_id=2052285640]

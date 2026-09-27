@@ -35,7 +35,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if title_layer == null or not title_layer.visible:
 		return
 	if event.is_action_pressed(&"dialogue_advance") or event.is_action_pressed(&"ui_accept"):
-		_start("opening")
+		_start("show_start")
 		get_viewport().set_input_as_handled()
 
 

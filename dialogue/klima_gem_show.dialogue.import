@@ -1,0 +1,16 @@
+[remap]
+
+importer="dialogue_manager"
+importer_version=18
+type="Resource"
+uid="uid://dgul7ps4p3wvq"
+path="res://.godot/imported/klima_gem_show.dialogue-249a3086f0d7f05e84a19f6e4affe825.tres"
+
+[deps]
+
+source_file="res://dialogue/klima_gem_show.dialogue"
+dest_files=["res://.godot/imported/klima_gem_show.dialogue-249a3086f0d7f05e84a19f6e4affe825.tres"]
+
+[params]
+
+defaults=true

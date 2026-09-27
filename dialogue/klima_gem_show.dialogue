@@ -1,0 +1,166 @@
+# KLIMA GEM — the show.
+# Ren presents. Aurora throws. Two flat-topped gems, eight words each:
+# the first gem names a body part, the second names a modification.
+# What lands face-up is what the stage enforces. Three trials; the words
+# lean the odds before every roll. Banter is seeded, so a playthrough
+# always tells the same story it told the first time.
+using GameState
+using ShowDirector
+
+~ show_start
+do begin_show()
+A hush, and then the light finds it: a round stage under a proscenium of cold neon, a cloth of slow stars, and a sign that says KLIMA GEM. Below the apron, an audience of silhouettes holds its glowsticks like candles. [#bg=none, #sprite=none:left, #sprite=none:right, #music=festival]
+do enter_ren()
+Ren: Good evening, good evening — every dimension currently tuned in! You are live at the Klima Gem stage, and I am Ren: your host, your referee, and — by default, because nobody else applied — the funniest man in this reality.
+Ren: New viewers, here is the entire rulebook. This show has one prop and no mercy. The gems.
+Ren: Each gem is cut flat on top and worded on every slanted face — eight words apiece. My guest throws two of them.
+Ren: The first gem names a body part. The second names a modification. Body part meets modification... and reality, obligingly, agrees.
+Ren: Then we play three trials on this stage. The gems stack her odds before we ever roll. The stage provides the obstacles. The crowd provides the noise.
+Ren: And now — the moment the ratings wait for. From the Chrono Nexus itself, trembling politely at her own mark... my guest... AURORA!
+do aurora_enters()
+[#sfx=open]
+Aurora: H-hello! Um. Aurora. Subsystem construct of the Chrono Nexus, and — apparently — tonight's contestant.
+Aurora: I did read the contract. The one sentence I understood said the show is not responsible for gravity.
+Ren: That sentence is the show, Aurora. Now — the crowd wants to know what kind of night this will be. How do we open?
+- Big lights, big voice. Give them a finale before we even begin.
+	do add_trust(1)
+	Ren: YES. That is the energy. Roll the intro like we stole it!
+	The audience answers with a wall of noise, and the glowsticks blur into one bright wave.
+- Gently. Let her throw first and dazzle them later.
+	do add_bond("aurora", 1)
+	Ren: A soft opening. Very classy. Chaos is scheduled for later; it signed a form.
+	Aurora: ...thank you. I'm fairly sure the gems can smell panic. Better they smell confidence first.
+Ren: Guest's hands on the gems. Crowd, hold your hearts. THROW!
+=> round_intro
+
+~ round_intro
+do next_round()
+if show_round == 1:
+	Ren: Trial one of three: {{challenge_name(show_round)}}. The floor is about to stop being a floor.
+elif show_round == 2:
+	Ren: Trial two of three: {{challenge_name(show_round)}}. Precision round. The props have feelings and none of them are kind.
+else:
+	Ren: The final trial: {{challenge_name(show_round)}}. Everything from here on is memory and nerve.
+	Aurora: My palms are sweating and I don't even have palms right now. Metaphorically sweating!
+do build_challenge(show_round)
+if show_round == 1:
+	A tear opens across the stage floor, deep violet and patient. Four flat stones float over it in a lazy diagonal, each one lit from below like a thought.
+elif show_round == 2:
+	A brass little cannon wheels in at stage left and aims itself at a rack of three golden bells, stage right. It polishes its aim. Nobody asked it to.
+else:
+	Four podiums rise in a gentle arc at the back of the stage, each topped with a glowing pad of a different hue. They hum in a chord that expects to be remembered.
+=> gem_round
+
+~ gem_round
+do set_aurora_expression("serious")
+Ren: Two gems. Eight words each. One body, about to be renegotiated. [#sfx=open]
+do throw_gem_round()
+Ren: They hover... they slow... the flat tops settle, and the stage reads them out! First — the body!
+Ren: {{show_part}}!
+[#sfx=confirm]
+do set_aurora_expression("surprised")
+Ren: And the modification...
+Ren: {{show_mod}}!
+[#sfx=confirm]
+Ren: By decree of two rocks: {{show_part}} x {{show_mod}}. The show accepts. Reality complies.
+do apply_mods()
+%3 The crowd loses its collective mind. Somewhere in the dark a horn section hits a note it will regret by morning.
+%2 A ripple runs the length of the glowstick wave. Even the painted stars on the cloth seem to lean in.
+do set_aurora_expression("surprised")
+Aurora: I can FEEL it. That is... aggressively my {{show_part}} now.
+[if show_part == "VOICE" and show_mod == "STICKY"]Aurora: When I try to speak, words come out... attached to things. This is going to be a legal situation.[/if]
+[if show_part == "EYES" and show_mod == "GLOWING"]Aurora: I can see the infrastructure of the stage. The scaffolding of reality has [b]EXPOSED BOLTS[/b], Ren.[/if]
+[if show_part == "HEART" and show_mod == "HEAVY"]Aurora: My chest has a ballast now. Emotionally I remain very light. Physically the engineers disagree.[/if]
+if show_outlook == "advantage":
+	Ren: And read the board, folks — the odds just leaned HER way. That combination is an advantage!
+	%2 Aurora: The gems like me tonight. I have decided to be terrified by that in a productive way.
+	%3 Aurora: Fortune favors the bold! And also, specifically, me!
+elif show_outlook == "disadvantage":
+	do set_aurora_expression("sad")
+	Ren: Oh no. Oh no, no. That pairing works AGAINST her — the bookmakers call it a disadvantage, and the bookmakers on this stage are the gems.
+	Aurora: The gems have chosen mischief and I respect the craft.
+	Ren: There is a cheat code, though. One crowd cheer buys a re-throw of the modification gem. We are holding {{show_cheers}}.
+	- Spend the cheer. Send the modification gem back into the air.
+		do swap_mod_gem()
+		Ren: The producer weeps. The audience ROARS. New words — and the new pairing is... {{show_part}} x {{show_mod}}!
+		%2 Aurora: A second chance! On live television! I will not waste it, probably!
+		%3 Aurora: The gem came back DIFFERENT. They're individuals, Ren. I don't think we're supposed to know that.
+	- Keep the bad hand. Play it with style.
+		do add_bond("aurora", 1)
+		do set_aurora_expression("serious")
+		Aurora: No swap. If I'm going to be ridiculous, I'll be ridiculous CONFIDENTLY.
+		Ren: That is the bravest sentence ever spoken on this stage, and I once hosted a volcano wedding.
+else:
+	Ren: A fair draw! No favor, no curse — just nerve versus design.
+	%2 Aurora: Balanced. Like a good gem. Like ME. Balanced!
+	%3 Aurora: An honest roll! Do honest rolls get applause, or just quiet respect?
+Ren: The stage is set, the words are worn. Tonight's odds for my guest: {{outlook_word(show_round)}}. Roll them!
+=> trial
+
+~ trial
+Ren: No do-overs, no nets, no refunds. Trial {{show_round}} — on my mark... begin!
+do run_challenge()
+if last_success:
+	do set_aurora_expression("happy")
+	%2 Ren: CLEAR! Text the stars — she made it look rehearsed!
+	%3 Ren: CLEAR! I felt that one in my resumé!
+	A star peels off the pedestal, arcs across the stage, and lands on the pillar with the others. Gold on gold.
+	- Praise her footing. She earned a technical note.
+		do add_insight(1)
+		Ren: Footwork, timing, angle of descent — text-book. I'd say lucky, but luck doesn't bend like that.
+		Aurora: My {{show_part}} did the thing! The GOOD thing!
+	- Credit the crowd. They carried her over.
+		do add_bond("aurora", 1)
+		Ren: Give it up for the audience — that roar had LIFT!
+		Aurora: I heard every single one of you. Even the weird whistle. Especially the weird whistle.
+else:
+	do set_aurora_expression("sad")
+	%2 Ren: ...a miss. The klaxon of shame stays silent, but only because it handed in its notice.
+	%3 Ren: A miss! A beautiful, televised miss. The replays will be merciless and I will watch every one.
+	Aurora: I was SO close. My {{show_part}} almost listened.
+	- Comfort her. Properly, not for the cameras.
+		do add_bond("aurora", 2)
+		do add_trust(1)
+		Ren: Camera two, take a cookie break. Aurora — the gem picked the words, not you. You threw them exactly right.
+		Aurora: ...you mean that. Your voice does the thing where it stops performing. Thank you.
+	- Turn the flop into a bit. The show must bite.
+		do add_power(1)
+		Ren: LIVE television, people — we don't hide the falls, we INTERVIEW them! Aurora, describe the failure in one word!
+		Aurora: ...sparkly.
+		Ren: She said SPARKLY, folks! That's the spirit! That's the show!
+if show_round < 3:
+	Ren: Reset the floor. Tear the props down, count the stars — we have {{show_stars}} — and bring on the next trial!
+	=> round_intro
+Ren: And that's the show... well. That's the show on the scorecard. The scorecard doesn't know everything.
+=> finale
+
+~ finale
+do set_aurora_expression("serious")
+The stage stands empty again: props struck, gems dimmed to embers on their pedestal. Only the sign and the slow stars keep working overtime.
+if show_stars == 3:
+	do set_aurora_expression("gorgeous")
+	do finale_confetti()
+	Ren: THREE STARS! A PERFECT SHOW! I have hosted one hundred and nine of these and I have seen this exactly never!
+	Golden rain falls over the round stage, catching in her light like the whole sky decided to audition for her.
+	Aurora: Three for three. My {{show_part}} is still modified, by the way. The modification stays until the credits. It's in the contract.
+	Ren: Then stand there, exactly like that, being a {{show_part}} of {{show_mod}} — because that is the most Klimа Gem image this stage has ever produced.
+elif show_stars == 2:
+	do set_aurora_expression("happy")
+	Ren: TWO STARS out of three! A fine show! A strong show! The kind of show that gets a second season and a slightly bigger cannon!
+	Aurora: Two stars and one honest miss. I can live in those numbers.
+	Ren: The gem still says {{show_part}} x {{show_mod}} on its face, you know. It's grown on me. Like weather.
+else:
+	do set_aurora_expression("sad")
+	Ren: One star, or none. A rough night at the Klima Gem. But hear me — nobody throws two gems like that and walks out a nobody.
+	Aurora: The words were against me all night. But I threw them anyway. On camera. That has to count somewhere.
+	Ren: It counts here. Trust me. I'm the host.
+if show_stars >= 1 and can_read_mind("aurora"):
+	A quiet channel opens — the resonance the Nexus leaves between you two, the one that lets you hear her when her bond runs deep enough.
+	Aurora: (What he isn't saying into the microphone is that he watched every throw like it mattered. That's the prize I'm taking home.)
+Ren: For my guest tonight — Aurora of the Chrono Nexus: {{show_stars}} stars, {{rerolls_used}} mercies spent, and one stage that will remember her {{show_part}}.
+do set_aurora_expression("happy")
+Aurora: Same stage next season?
+Ren: Same stage. New words. Maybe fewer cannon-related injuries.
+Aurora: ...no promises about the cannon.
+The lights take a last bow around the round stage, and the sign hums KLIMA GEM into the dark like a promise it intends to keep.
+=> END

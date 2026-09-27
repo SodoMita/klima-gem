@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/show_stage/show_stage.gd" id="1_stage"]
+
+[node name="ShowStage" type="Node3D"]
+script = ExtResource("1_stage")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.9926222, 0.1212246, 0, -0.1212246, 0.9926222, 0, 2.35, 8.2)
+fov = 50.0
+current = true

@@ -133,5 +133,11 @@ echo ""
 echo "=== Step 8: StageDirector motion tests ==="
 bash tests/motion_director_test.sh
 
+# Step 9: The Klima Gem show — gems, trials, restore re-dressing, and a
+# full seeded playthrough of the show dialogue.
+echo ""
+echo "=== Step 9: Klima Gem show tests ==="
+bash tests/show_stage_test.sh
+
 echo ""
 echo "=== All checks passed ==="

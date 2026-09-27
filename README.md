@@ -55,7 +55,9 @@ exactly where the story left them. Full tag grammar:
 - `scenes/vn_balloon.tscn` — authored UI. Edit it in the Godot editor; the script does not build the chrome.
 - `scenes/panic_screen.tscn` — the panic page, its own scene (`scenes/panic_screen.gd`), restyled here as a black lecture sheet; it can be redesigned without touching the balloon.
 - `scenes/display_scale.gd` — shared window layout: the design canvas stays at the authored 1280×720 and larger windows render it with more pixels (never a window bigger than the screen).
-- `dialogue/klima_gem_prologue.dialogue` — the story. Stage tags: `#bg=`, `#sprite=key:left|right`, `#focus=`, `#music=`, `#sfx=`.
+- `dialogue/klima_gem_show.dialogue` — the booted story: the Klima Gem show. Stage tags: `#bg=`, `#sprite=key:left|right`, `#focus=`, `#music=`, `#sfx=`; show mutations resolve against the `ShowDirector` autoload.
+- `scenes/show_stage/show_stage.tscn` + `show_stage.gd` — the 3D television studio, built procedurally from geometry; owns gems, the modification chip, trial props, star pips, stamps, confetti.
+- `scenes/show_stage/flat_top_gem.gd` — the Klima Gem itself: an octagonal-girdle diamond with a fully flat top and a word on every pavilion face.
 - `dialogue/chrono_nexus.dialogue` — the Chrono Nexus branch of the story; also where the motion tags are demonstrated (`#tween=`, `#set=`, `#shake=`, `#nla=`, `#target=`, `#nla_track=`, `#sprite3d=`, `#place3d=`); full grammar in docs/motion_director.md.
 - `scenes/motion/stage_director.gd` — the StageDirector: tweens, shakes and NLA tracks for any 2D/3D scene object, authored as the `MotionDirector` node in the balloon.
 - `autoloads/game_state.gd` — trust, insight, power, bonds. Choices mutate these; rollback restores them.
