@@ -400,10 +400,32 @@ func _test_portrait_on_stage() -> void:
 ## GameState and on the pips — is the count from before the trial.
 func _test_rewind_resets_stars() -> void:
 	print("-- rewind un-wins --")
+	# The previous test's balloon lives at the tree root (Dialogue Manager
+	# parents balloons there), so it outlives its main scene. Clear it.
+	for child in get_tree().root.get_children():
+		if child.has_method("rollback_to"):
+			get_tree().root.remove_child(child)
+			child.free()
+	await get_tree().process_frame
 	var main: Node = load("res://main.tscn").instantiate()
 	add_child(main)
 	await get_tree().create_timer(0.5).timeout
-	main._start("show_start")
+	# Straight to the first trial with a settled board: the intro's arrival
+	# choreography is covered elsewhere and only slows this rewind down.
+	var gs0 := get_node("/root/GameState")
+	gs0.show_round = 1
+	gs0.show_stars = 0
+	gs0.show_part = "EYES"
+	gs0.show_mod = "GLOWING"
+	gs0.show_part_face = 1
+	gs0.show_mod_face = 7
+	gs0.show_props_round = 1
+	# Enough nerve to clear the Crossing (bond + trust), so a real star is won.
+	gs0.trust = 5
+	gs0.insight = 5
+	gs0.power = 5
+	gs0.bond = {"ren": 5}
+	main._start("trial")
 	await get_tree().create_timer(0.8).timeout
 	var director := get_node_or_null("/root/ShowDirector")
 	var balloon: Node = director._balloon() if director != null else null
@@ -423,10 +445,14 @@ func _test_rewind_resets_stars() -> void:
 	while steps < 1500 and not after_seen:
 		steps += 1
 		await get_tree().create_timer(0.05).timeout
-		if not balloon.is_waiting_for_input:
-			continue
 		var line = balloon.dialogue_line
 		if line == null:
+			continue
+		if balloon.dialogue_label.is_typing:
+			balloon.dialogue_label.skip_typing()
+			continue
+		var at_choice: bool = line.responses.size() > 0 and balloon.responses_menu.visible
+		if not balloon.is_waiting_for_input and not at_choice:
 			continue
 		var text := str(line.text)
 		if text.begins_with("(Actions, not luck"):
@@ -452,7 +478,7 @@ func _test_rewind_resets_stars() -> void:
 	check(before_idx >= 0, "the pre-trial line is in the backlog")
 	if after_seen and before_idx >= 0:
 		var stars_after := int(gs.show_stars)
-		check(stars_after == stars_before + (1 if bool(gs.last_success) else 0), "the trial's outcome moved the stars (%d -> %d)" % [stars_before, stars_after])
+		check(bool(gs.last_success) and stars_after == stars_before + 1, "the trial was cleared and won a star (%d -> %d)" % [stars_before, stars_after])
 		await balloon.rollback_to(before_idx)
 		await get_tree().create_timer(0.3).timeout
 		check(int(gs.show_stars) == stars_before, "rewinding to before the trial resets the stars (%d, want %d)" % [int(gs.show_stars), stars_before])

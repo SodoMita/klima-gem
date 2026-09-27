@@ -719,7 +719,8 @@ func remove_quad(alias: String) -> void:
 				quad.get_parent().remove_child(quad)
 			quad.queue_free()
 		_spawned.erase(alias)
-	if _targets.get(alias) is Sprite3DQuad:
+	var target = _targets.get(alias)
+	if not is_instance_valid(target) or target is Sprite3DQuad:
 		_targets.erase(alias)
 
 
