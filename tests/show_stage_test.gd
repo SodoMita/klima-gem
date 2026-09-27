@@ -116,6 +116,39 @@ func _run_tests() -> void:
 	check(director.stack_word("GIANT").begins_with("x3"), "x3 stack reads mastered")
 	var parts3 := parts_only + int((director.PART_EDGE["BACK"] as Array)[0])
 	check(director.edge_for(1) == parts3 + 3, "a mastered GIANT is +1 per part even where it used to hurt")
+	# --- stack audit: same part, replacement, persistence (K9) -----------------
+	# One mod per body part: rolling the same pair twice must NOT inflate the
+	# stack — the second landing just re-affirms what the body already holds.
+	gs.show_body_mods = {"HANDS": "GIANT"}
+	gs.show_part = "HANDS"
+	gs.show_mod = "GIANT"
+	check(director.mod_stacks().get("GIANT", 0) == 1, "same pair twice is still one copy, not a stack")
+	check(director.stack_word("GIANT") == "", "a single copy has no stack word")
+	# Re-rolling the same part REPLACES its shift: the old stack deflates.
+	gs.show_body_mods = {"HANDS": "GIANT", "LEGS": "GIANT"}
+	gs.show_part = "HANDS"
+	gs.show_mod = "TINY"
+	check(director.mod_stacks().get("GIANT", 0) == 1, "re-rolled part leaves the old stack (GIANT x1)")
+	check(director.mod_stacks().get("TINY", 0) == 1, "re-rolled part carries its new shift (TINY x1)")
+	# Stacks ride in the snapshot: save mid-show, restore, the body remembers.
+	gs.show_body_mods = {"LEGS": "GIANT"}
+	gs.show_part = "HANDS"
+	gs.show_mod = "GIANT"
+	var kept_snap: Dictionary = gs.snapshot()
+	gs.show_body_mods = {}
+	gs.show_part = ""
+	gs.show_mod = ""
+	gs.restore(kept_snap)
+	check(director.mod_stacks().get("GIANT", 0) == 2, "a restored body keeps its x2 stack")
+	# ...and a snapshot from before the commit restores the un-stacked body,
+	# which is what a rewind to an earlier choice lands on.
+	gs.show_body_mods = {}
+	gs.show_part = "HANDS"
+	gs.show_mod = "GIANT"
+	var early_snap: Dictionary = gs.snapshot()
+	gs.show_body_mods = {"LEGS": "GIANT", "HANDS": "GIANT"}
+	gs.restore(early_snap)
+	check(director.mod_stacks().get("GIANT", 0) == 1, "rewound body drops the later copy (GIANT x1)")
 	gs.show_body_mods = {}
 	gs.show_part = "HANDS"
 	gs.show_mod = "GIANT"
