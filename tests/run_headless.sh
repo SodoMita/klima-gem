@@ -154,6 +154,13 @@ echo ""
 echo "=== Step 10: Klima Gem stage integrity tests ==="
 bash tests/stage_integrity_test.sh
 
+# Step 10b: Aurora's transformations are FULL-BODY sprites, not icon cards.
+# Verify all variants are transparent lossless WebP and that changing an
+# expression, restoring or applying a later shift keeps one Aurora on stage.
+echo ""
+echo "=== Step 10b: transformed Aurora sprite tests ==="
+bash tests/aurora_mod_sprites_test.sh
+
 # Step 11 (optional): the rendered framing check. Boots the real main scene
 # under sway headless + pixman + llvmpipe, walks the show, and measures the
 # projected rectangle of everything the audience has to read. Skips when no

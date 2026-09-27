@@ -321,8 +321,53 @@ func _spawn_actor(alias: String, tex_key: String, at: Vector3, height: float) ->
 	if tex == null:
 		push_warning("ShowDirector: no portrait key '%s'" % tex_key)
 		return
+	# Keep Aurora's expression, face and original silhouette while wearing
+	# the body-shift sprite. Only the existing portrait quad changes texture.
+	var gs := _gs()
+	if alias == "aurora" and gs != null:
+		tex = _modded_aurora_texture(tex_key, tex, gs.show_body_mods)
 	var quad: Node3D = motion.spawn_quad(alias, tex, st.characters_parent(), height, true, at)
 	st.set_actor(alias, quad)
+
+
+## Full-body transformation sprites are generated from Aurora's real VN
+## expressions by tools/generate_aurora_mod_sprites.py. No second character,
+## icon card or opaque JPEG is ever drawn in the shot.
+const AURORA_MOD_SPRITES := "res://assets/characters/mods/"
+
+
+func _modded_aurora_texture(key: String, original: Texture2D, mods: Dictionary) -> Texture2D:
+	if original == null or not key.begins_with("aurora_") or mods.is_empty():
+		return original
+	var mod := ""
+	var gs := _gs()
+	if gs != null and mods.has(str(gs.show_part)):
+		mod = str(mods[str(gs.show_part)])
+	else:
+		# The current roll has not been applied yet: keep the last shift
+		# Aurora earned, rather than showing a future word before its cue.
+		var parts: Array = mods.keys()
+		mod = str(mods[parts[parts.size() - 1]])
+	var path := AURORA_MOD_SPRITES + key + "_" + mod.to_lower() + ".webp"
+	if not ResourceLoader.exists(path):
+		return original
+	var variant := load(path) as Texture2D
+	return variant if variant != null else original
+
+
+func _refresh_aurora_sprite() -> void:
+	var gs := _gs()
+	var st := stage()
+	var balloon := _balloon()
+	if gs == null or st == null or balloon == null:
+		return
+	var quad := st.aurora_quad as Sprite3DQuad
+	if quad == null:
+		return
+	var key := str(gs.show_aurora_key)
+	var base: Texture2D = balloon.sprites.get(key)
+	if base != null:
+		quad.texture = _modded_aurora_texture(key, base, gs.show_body_mods)
 
 
 # ------------------------------------------------------------ gem ceremony
@@ -399,6 +444,7 @@ func apply_mods() -> void:
 		return
 	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor(), gs.show_body_mods)
 	st.apply_body_mods(gs.show_body_mods)
+	_refresh_aurora_sprite()
 	await st.get_tree().create_timer(0.9).timeout
 
 
