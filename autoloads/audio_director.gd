@@ -39,6 +39,31 @@ const SCENE_LOOPS: Dictionary = {
 	"alley": &"tense",
 	"festival": &"warm",
 	"lighthouse": &"calm",
+	"stage": &"tense",
+	"stage_trial": &"tense",
+	"stage_chill": &"night",
+}
+
+## Scenes that run the C dubstep engine instead of the pad/pluck score.
+## festival stays the calm party score; the show floor gets the wobble.
+const DUB_SCENES: Dictionary = {
+	"stage": 0,        ## AG_DUB_VARIANT_STAGE
+	"stage_trial": 1,  ## AG_DUB_VARIANT_TRIAL
+	"stage_chill": 2,  ## AG_DUB_VARIANT_CHILL
+}
+const DUB_BPM: Dictionary = {"stage": 140.0, "stage_trial": 150.0, "stage_chill": 128.0}
+
+## #music_event= / music_event() names -> AgDubEvent.
+const DUB_EVENTS: Dictionary = {
+	"riser": 0, "build": 0, "drop": 1, "impact": 2, "fill": 3, "stab": 4, "break": 5,
+}
+
+## Event sounds cut from the same dubstep palette (AgDubSfxKind).
+const DUB_SFX: Dictionary = {
+	"gem_hit": 0, "gem_land": 1, "gem_spawn": 2, "throw": 3, "catch": 4,
+	"wobble_blip": 5, "sub_drop": 6, "impact": 7, "riser": 8, "stab": 9,
+	"correct": 10, "wrong": 11, "win": 12, "lose": 13, "airhorn": 14,
+	"scratch": 15, "reveal": 16, "tick": 17,
 }
 
 ## Procedural score: chords as scale degrees; plucks/bass_hits per bar.
@@ -194,6 +219,12 @@ var _hold_player: AudioStreamPlayer
 var hold_pitch: float = 1.4            ## hold tone pitch (falls as it fills)
 var _synth_cache: Dictionary = {}   ## synth blips, on first use
 var _engine: Object = null          ## SceneScore, when the extension loaded
+var _dub: Object = null             ## AudioGen, the C dubstep engine
+var dub_scene: String = ""          ## active dubstep scene key ("" when off)
+var dub_intensity: float = 0.55     ## last requested intensity
+var dub_events_sent: int = 0        ## #music_event calls that reached the engine
+var dub_sfx_rendered: int = 0       ## one-shots pulled out of the C generator
+var _dub_cache: Dictionary = {}     ## key|energy bucket -> AudioStreamWAV
 var _push := PackedVector2Array()  ## reused generator buffer
 
 
@@ -224,6 +255,7 @@ func _ready() -> void:
 	add_child(_hold_player)
 	_rng.seed = music_seed
 	_attach_engine()
+	_attach_dubstep()
 
 
 func _make_music_player(node_name: String) -> AudioStreamPlayer:
@@ -236,6 +268,9 @@ func _make_music_player(node_name: String) -> AudioStreamPlayer:
 
 
 func _process(delta: float) -> void:
+	if music_source == "dubstep":
+		_pump_dubstep()
+		return
 	if _engine != null:
 		if bool(_engine.call("active")):
 			_pump_engine()
@@ -256,6 +291,7 @@ func _notification(what: int) -> void:
 				p.stop()
 				p.stream = null
 		_synth_cache.clear()
+		_dub_cache.clear()
 		_playback = null
 
 
@@ -283,8 +319,13 @@ func play_theme(theme: StringName) -> void:
 
 ## Generated score for a background. A mood tints that score; it does not swap in a shared loop.
 func play_scene(scene_key: String, mood: String = "") -> void:
+	if DUB_SCENES.has(scene_key):
+		play_dubstep(scene_key, mood)
+		return
 	if not SCENE_THEMES.has(scene_key):
 		return
+	if music_source == "dubstep":
+		_stop_dubstep(0.6)
 	if procedural_enabled and _scene_key == scene_key and _scene_mood == mood and music_source == "procedural" and current_theme == StringName(scene_key):
 		return
 	var same_scene := procedural_enabled and music_source == "procedural" and _scene_key == scene_key and current_theme == StringName(scene_key)
@@ -395,6 +436,7 @@ func stop_music(fade: float = 0.8) -> void:
 	_gain_target = 0.0
 	if _engine != null:
 		_engine.call("release")
+	_stop_dubstep(fade)
 	current_theme = &""
 	_last_theme = &""
 	_scene_key = ""
@@ -450,6 +492,12 @@ func request_music(spec: String) -> void:
 		var key: String = spec.substr(5)
 		var path: String = key if key.begins_with("res://") else "res://assets/music/%s.ogg" % key
 		play_music_loop(path)
+	elif DUB_SCENES.has(spec):
+		play_dubstep(spec)
+	elif spec.begins_with("event:"):
+		music_event(spec.substr(6))
+	elif spec.begins_with("intensity:"):
+		set_music_intensity(float(spec.substr(10)))
 	elif SCENE_THEMES.has(spec):
 		play_scene(spec)
 	elif spec in ["calm", "warm", "tense", "night"] and _scene_key != "":
@@ -524,6 +572,156 @@ func reroll(new_seed: int = 0) -> void:
 	_rng.seed = new_seed
 	if _engine != null:
 		_engine.call("reseed", new_seed)
+
+
+## ---------------------------------------------------------------- dubstep --
+## The show floor is not a calm background: it runs the C dubstep generator
+## (native/audio_gen/ag_dubstep.c) live, so intensity and drops follow play.
+
+func _attach_dubstep() -> void:
+	if not ClassDB.class_exists("AudioGen"):
+		push_warning("AudioDirector: AudioGen extension is not loaded; dubstep falls back to the GDScript synth.")
+		return
+	_dub = ClassDB.instantiate("AudioGen")
+	if _dub == null:
+		push_warning("AudioDirector: AudioGen failed to construct; dubstep falls back to the GDScript synth.")
+		return
+	# Teach the engine our stream rate (one-shots are cut at this rate too),
+	# then park it silent until a stage scene asks for it.
+	_dub.call("dub_start", 0, 140.0, float(music_seed), float(SAMPLE_RATE))
+	_dub.call("dub_release", 0.01)
+
+
+func has_dubstep_engine() -> bool:
+	return _dub != null
+
+
+## Start (or switch) the live dubstep score. mood tints the intensity only.
+func play_dubstep(scene_key: String = "stage", mood: String = "") -> void:
+	var variant: int = int(DUB_SCENES.get(scene_key, 0))
+	var bpm: float = float(DUB_BPM.get(scene_key, 140.0))
+	_scene_key = scene_key
+	_scene_mood = mood
+	_last_theme = StringName(scene_key)
+	if not procedural_enabled:
+		play_music_loop(_scene_loop_path(scene_key, mood), true)
+		return
+	if _dub == null:
+		# No extension: the pad/pluck mixer plays the most driving score we have.
+		_begin_score(StringName(scene_key), (SCENE_THEMES["rift"] as Dictionary).duplicate(true))
+		return
+	if _engine != null:
+		_engine.call("release")
+	_fade_out_loops()
+	_gain_target = 0.0
+	var same := dub_scene == scene_key and music_source == "dubstep"
+	dub_scene = scene_key
+	music_source = "dubstep"
+	current_theme = StringName(scene_key)
+	_auto_loop = false
+	var base: float = 0.55
+	match mood:
+		"calm": base = 0.3
+		"night": base = 0.35
+		"tense": base = 0.9
+		"warm": base = 0.5
+	dub_intensity = base
+	if not same:
+		_dub.call("dub_start", variant, bpm, float(music_seed ^ hash(scene_key)), float(SAMPLE_RATE))
+	_dub.call("dub_set_intensity", base, 0.8 if same else 0.4)
+	_ensure_playback()
+
+
+## 0 = sub and hats only, 1 = full drop energy.
+func set_music_intensity(intensity: float, fade: float = 0.6) -> void:
+	dub_intensity = clampf(intensity, 0.0, 1.0)
+	if _dub != null:
+		_dub.call("dub_set_intensity", dub_intensity, fade)
+
+
+## riser | drop | impact | fill | stab | break
+func music_event(name: String) -> void:
+	if _dub == null or not DUB_EVENTS.has(name):
+		return
+	dub_events_sent += 1
+	_dub.call("dub_event", int(DUB_EVENTS[name]))
+
+
+func _stop_dubstep(fade: float = 0.8) -> void:
+	dub_scene = ""
+	if _dub != null:
+		_dub.call("dub_release", maxf(0.05, fade))
+	if music_source == "dubstep":
+		music_source = ""
+
+
+func _pump_dubstep() -> void:
+	if _dub == null:
+		music_source = ""
+		return
+	_ensure_playback()
+	if _playback == null:
+		return
+	var frames: int = mini(_playback.get_frames_available(), MAX_PUSH_PER_FRAME)
+	if frames <= 0:
+		return
+	if _push.size() != frames:
+		_push.resize(frames)
+	_dub.call("dub_render", _push)
+	_playback.push_buffer(_push)
+	frames_pushed += frames
+
+
+## ------------------------------------------------------------ event sounds --
+## play_event("gem_hit", 0.9) - collisions, throws, reveals, wins. The waveform
+## comes out of the C generator and is cached per energy bucket.
+func play_event(key: String, energy: float = 0.8, pitch: float = 1.0) -> void:
+	if not DUB_SFX.has(key):
+		play_sfx(key, pitch)
+		return
+	sfx_played += 1
+	last_sfx = key
+	last_sfx_pitch = pitch
+	last_sfx_source = "dubstep" if _dub != null else "synth"
+	var stream := _dub_stream(key, energy)
+	if stream == null:
+		last_sfx_source = "synth"
+		_play_stream(_synth_stream(key), pitch)
+		return
+	_play_stream(stream, pitch + _rng.randf_range(-0.03, 0.03))
+
+
+## Cheap ducking hook: a loud collision also nudges the score.
+func play_collision(key: String, energy: float = 0.8) -> void:
+	play_event(key, energy, 1.0 + (0.5 - energy) * 0.25)
+	if energy > 0.75 and _dub != null and music_source == "dubstep":
+		_dub.call("dub_event", int(DUB_EVENTS["stab"]))
+
+
+func _dub_stream(key: String, energy: float) -> AudioStream:
+	var kind: int = int(DUB_SFX[key])
+	var bucket: int = clampi(int(round(clampf(energy, 0.0, 1.0) * 4.0)), 0, 4)
+	var cache_key := "%s#%d" % [key, bucket]
+	if _dub_cache.has(cache_key):
+		return _dub_cache[cache_key]
+	if _dub == null:
+		return null
+	var frames: int = int(_dub.call("dub_sfx_frames", kind))
+	if frames <= 0:
+		return null
+	var buf := PackedVector2Array()
+	buf.resize(frames)
+	var written: int = int(_dub.call("render_dub_sfx", kind, buf, float(bucket) / 4.0))
+	if written <= 0:
+		return null
+	var mono := PackedFloat32Array()
+	mono.resize(written)
+	for i: int in written:
+		mono[i] = buf[i].x
+	var stream := _to_wav(mono)
+	_dub_cache[cache_key] = stream
+	dub_sfx_rendered += 1
+	return stream
 
 
 func _attach_engine() -> void:

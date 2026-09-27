@@ -29,6 +29,7 @@ This extends the existing `SceneScore` live score mixer with many more generator
 - **ag_reverb**: Freeverb (8 combs + 4 allpass) with room_size/damping/wet/dry/width, plus cheaper Schroeder (4 combs+2 allpass).
 - **ag_delay**: Delay line (feedback+LP filter), ping-pong stereo, tape delay (wow/flutter via LFO).
 - **ag_proc_music**: High-level procedural music. Mood-based spec (calm/warm/tense/night/dream/lofi/chiptune/ambient/rift/festival/lab), each with scale, chord progression, gains, plucks/bass per bar, shape, drums. Live scheduler like SceneScore: queue bars ahead, spawn voices, crossfade mixer of 2 layers, optional reverb/delay and drum machine.
+- **ag_dubstep**: Dubstep. Live endless score (halftime kick/snare/hats, LFO wobble bass through a Moog-ish ladder + growl formant, sub, echo, risers, drops, fills, breaks; variants stage/trial/chill; intensity 0..1; events riser/drop/impact/fill/stab/break) plus 18 deterministic one-shots (gem_hit, gem_land, gem_spawn, throw, catch, wobble_blip, sub_drop, impact, riser, stab, correct, wrong, win, lose, airhorn, scratch, reveal, tick). Used by the show floor: AudioDirector.play_dubstep("stage"), set_music_intensity(), music_event(), play_event()/play_collision(). Render proof: `bin/gen_dubstep` (84 checks, WAVs in /tmp/ag_dub_*.wav).
 - **ag_wav**: WAV writer (float32, int16) and reader, plus mem writer.
 
 ### Environment & Ambient (NEW)

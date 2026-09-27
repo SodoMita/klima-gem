@@ -89,6 +89,16 @@ static func azimuth_of(dir: Vector3) -> float:
 	return atan2(dir.z, dir.x)
 
 
+## Emitted on every contact: energy 0..1, and true once the stone is settling.
+signal collided(energy: float, settling: bool)
+
+## Contacts that made a sound (tests read this).
+var collision_sfx: int = 0
+var _contacts_seen: int = 0
+var _speed_prev: float = 0.0
+var _sfx_cooldown: float = 0.0
+
+
 func _init() -> void:
 	words.resize(SIDES)
 	# A gem that only ever stands still should not shove the stage around.
@@ -146,7 +156,8 @@ func _process(delta: float) -> void:
 	_fade_faces()
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	_collision_audio(delta)
 	if freeze or _touched or settle_linear_damp <= 0.0:
 		return
 	if get_contact_count() > 0:
@@ -154,6 +165,32 @@ func _physics_process(_delta: float) -> void:
 		_touched = true
 		linear_damp = settle_linear_damp
 		angular_damp = settle_angular_damp
+
+
+## A thrown stone is loud. Every contact plays a clink out of the C dubstep
+## generator, with the impact speed as its energy, and the last bounce before
+## it settles gets the heavier landing thud. Cooldown keeps a rolling gem from
+## machine-gunning the mixer.
+func _collision_audio(delta: float) -> void:
+	if not physical or freeze:
+		_speed_prev = 0.0
+		return
+	if _sfx_cooldown > 0.0:
+		_sfx_cooldown -= delta
+	var speed := linear_velocity.length()
+	if get_contact_count() > 0 and _sfx_cooldown <= 0.0:
+		var impact: float = maxf(_speed_prev, speed)
+		if impact > 0.35:
+			var energy: float = clampf(impact / 5.5, 0.12, 1.0)
+			var settling: bool = speed < 0.9 and _contacts_seen > 0
+			collision_sfx += 1
+			_contacts_seen += 1
+			_sfx_cooldown = 0.11
+			collided.emit(energy, settling)
+			var audio := get_node_or_null("/root/AudioDirector")
+			if audio != null and audio.has_method("play_collision"):
+				audio.play_collision("gem_land" if settling else "gem_hit", energy)
+	_speed_prev = speed
 
 
 func _is_body_awake() -> bool:

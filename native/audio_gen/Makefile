@@ -6,7 +6,7 @@ SRC = src/ag_dubstep.c src/ag_common.c src/ag_osc.c src/ag_envelope.c src/ag_fil
 
 OBJ = $(SRC:.c=.o)
 
-BIN = bin/test_all bin/gen_samples bin/gen_env
+BIN = bin/test_all bin/gen_samples bin/gen_dubstep bin/gen_env
 
 all: $(BIN)
 
