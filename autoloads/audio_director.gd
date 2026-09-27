@@ -46,6 +46,7 @@ const SCENE_LOOPS: Dictionary = {
 
 ## Scenes that run the C dubstep engine instead of the pad/pluck score.
 ## festival stays the calm party score; the show floor gets the wobble.
+const SFX_TAKES := 3
 const DUB_SCENES: Dictionary = {
 	"stage": 0,           ## AG_DUB_VARIANT_STAGE (general active stage floor)
 	"stage_trial": 1,     ## AG_DUB_VARIANT_TRIAL (challenge / precision round)
@@ -266,6 +267,12 @@ func _ready() -> void:
 	_hold_player.name = "HoldTone"
 	_hold_player.bus = &"SFX"
 	add_child(_hold_player)
+	# Random music and sound every launch (human: no predefined selection).
+	# Pass --fixed-audio-seed on the command line for reproducible runs.
+	if not OS.get_cmdline_user_args().has("--fixed-audio-seed"):
+		var r := RandomNumberGenerator.new()
+		r.randomize()
+		music_seed = int(r.randi() & 0x7fffffff) | 1
 	_rng.seed = music_seed
 	_attach_engine()
 	_attach_dubstep()
@@ -397,7 +404,7 @@ func _begin_score(theme_name: StringName, score: Dictionary) -> void:
 	current_theme = theme_name
 	music_source = "procedural"
 	_auto_loop = false
-	var seed_value := hash(String(theme_name) + _scene_mood) ^ music_seed
+	var seed_value := hash(String(theme_name) + _scene_mood) ^ music_seed ^ int(_rng.randi() & 0x7fffffff)
 	_rng.seed = seed_value
 	if _engine != null:
 		var first := not bool(_engine.call("active"))
@@ -611,8 +618,9 @@ func has_dubstep_engine() -> bool:
 
 ## Start (or switch) the live dubstep score. mood tints the intensity only.
 func play_dubstep(scene_key: String = "stage", mood: String = "") -> void:
-	var variant: int = int(DUB_SCENES.get(scene_key, 0))
-	var bpm: float = float(DUB_BPM.get(scene_key, 140.0))
+	var variant: int = _pick_variant(scene_key)
+	# Random tempo drift so no two entries of a scene sound the same.
+	var bpm: float = float(DUB_BPM.get(scene_key, 140.0)) + float(_rng.randi_range(-4, 4))
 	_scene_key = scene_key
 	_scene_mood = mood
 	_last_theme = StringName(scene_key)
@@ -640,9 +648,23 @@ func play_dubstep(scene_key: String = "stage", mood: String = "") -> void:
 		"warm": base = 0.5
 	dub_intensity = base
 	if not same:
-		_dub.call("dub_start", variant, bpm, float(music_seed ^ hash(scene_key)), float(SAMPLE_RATE))
+		_dub.call("dub_start", variant, bpm, float((music_seed ^ hash(scene_key) ^ _rng.randi()) & 0x7fffffff), float(SAMPLE_RATE))
 	_dub.call("dub_set_intensity", base, 0.8 if same else 0.4)
 	_ensure_playback()
+
+
+## Random pick among variants that fit a scene: the general stage floor may
+## come up as the plain stage or groove track; phase-specific keys keep theirs.
+const DUB_POOLS: Dictionary = {
+	"stage": ["stage", "stage_groove"],
+	"stage_chill": ["stage_chill", "stage_suspense"],
+}
+
+
+func _pick_variant(scene_key: String) -> int:
+	var pool: Array = DUB_POOLS.get(scene_key, [scene_key])
+	var key := str(pool[_rng.randi_range(0, pool.size() - 1)])
+	return int(DUB_SCENES.get(key, DUB_SCENES.get(scene_key, 0)))
 
 
 ## 0 = sub and hats only, 1 = full drop energy.
@@ -765,7 +787,7 @@ func play_event(key: String, energy: float = 0.8, pitch: float = 1.0) -> void:
 		last_sfx_source = "synth"
 		_play_stream(_synth_stream(key), pitch)
 		return
-	_play_stream(stream, pitch + _rng.randf_range(-0.03, 0.03))
+	_play_stream(stream, pitch * _rng.randf_range(0.94, 1.06))
 
 
 ## Cheap ducking hook: a loud collision also nudges the score.
@@ -778,7 +800,10 @@ func play_collision(key: String, energy: float = 0.8) -> void:
 func _dub_stream(key: String, energy: float) -> AudioStream:
 	var kind: int = int(DUB_SFX[key])
 	var bucket: int = clampi(int(round(clampf(energy, 0.0, 1.0) * 4.0)), 0, 4)
-	var cache_key := "%s#%d" % [key, bucket]
+	# SFX_TAKES random takes per bucket (rendered at jittered energy), one
+	# picked at random per hit, so repeated events never sound identical.
+	var take := _rng.randi_range(0, SFX_TAKES - 1)
+	var cache_key := "%s#%d#%d" % [key, bucket, take]
 	if _dub_cache.has(cache_key):
 		return _dub_cache[cache_key]
 	if _dub == null:
@@ -788,7 +813,8 @@ func _dub_stream(key: String, energy: float) -> AudioStream:
 		return null
 	var buf := PackedVector2Array()
 	buf.resize(frames)
-	var written: int = int(_dub.call("render_dub_sfx", kind, buf, float(bucket) / 4.0))
+	var e := clampf(float(bucket) / 4.0 + (0.0 if take == 0 else _rng.randf_range(-0.12, 0.12)), 0.0, 1.0)
+	var written: int = int(_dub.call("render_dub_sfx", kind, buf, e))
 	if written <= 0:
 		return null
 	var mono := PackedFloat32Array()

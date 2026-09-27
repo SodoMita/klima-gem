@@ -25,6 +25,7 @@ func _ready() -> void:
 	_test_event_sounds()
 	_test_victory_loss_hooks()
 	await _test_gem_collision()
+	_test_random_selection()
 	print("checks=%d fails=%d" % [checks, fails])
 	if fails == 0:
 		print("DUBSTEP AUDIO TESTS: PASS")
@@ -230,3 +231,21 @@ func _test_gem_collision() -> void:
 	if not hits.is_empty():
 		ok(hits[0] > 0.0 and hits[0] <= 1.0, "impact energy is normalised (%.2f)" % hits[0])
 	root.queue_free()
+
+
+## V4: music and SFX are randomly selected, never one fixed pick.
+func _test_random_selection() -> void:
+	var a := AudioDirector
+	ok(int(a.music_seed) != 20260921, "music seed randomized per launch (not the old constant)")
+	var variants := {}
+	for i in 40:
+		variants[a._pick_variant("stage")] = true
+	ok(variants.size() >= 2, "stage music picks among several variants (%d seen)" % variants.size())
+	ok(a._pick_variant("stage_victory") == int(a.DUB_SCENES["stage_victory"]), "phase-specific keys keep their track")
+	if a.has_dubstep_engine():
+		var takes := {}
+		for i in 30:
+			var st: AudioStream = a._dub_stream("gem_hit", 0.8)
+			if st != null:
+				takes[st.get_instance_id()] = true
+		ok(takes.size() >= 2, "gem_hit SFX drawn from several random takes (%d seen)" % takes.size())
