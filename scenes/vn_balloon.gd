@@ -1094,6 +1094,12 @@ func rollback_to(index: int) -> void:
 	if line != null:
 		dialogue_line = line
 	_restoring = false
+	# Fetching the line ran ITS mutations (a trial can score itself again), so
+	# the story drifted past the entry we jumped to. Re-assert the snapshot:
+	# wins, round, words and the dressed stage must be exactly what this line
+	# showed, whether the player jumped backwards or forwards.
+	if is_instance_valid(game_state) and game_state.has_method("restore") and entry.has("state"):
+		game_state.restore(entry.state)
 
 
 ## Roll forward to the newest kept line after a rollback.
