@@ -16,6 +16,8 @@ class_name FlatTopGem extends RigidBody3D
 const SIDES := 8
 ## Result index for a stone that comes to rest on its table.
 const TOP_FACE := 8
+## Geometric index of the table in [method local_face_normal].
+const TABLE_FACE := 16
 ## Words float this far off their face (coplanar quads z-fight).
 const WORD_LIFT := 0.004
 ## Table label frame: +Z up out of the table, text reading along +X.
@@ -347,10 +349,11 @@ func _fade_faces() -> void:
 		label.visible = a > 0.01
 
 
-## Outward normal of a face in this gem's local space. Faces 0..7 are the
-## pavilion facets, 8..15 the crown facets, TOP_FACE the table.
+## Outward normal of a face in this gem's local space. Geometric faces 0..7
+## are the pavilion facets, 8..15 the crown facets, TABLE_FACE (16) the table.
+## (Results are different: 0..7 name a sector, TOP_FACE (8) the table.)
 func local_face_normal(face: int) -> Vector3:
-	if face == TOP_FACE:
+	if face == TABLE_FACE:
 		return Vector3.UP
 	if face >= SIDES and face < 2 * SIDES:
 		var c := crown_corners(face - SIDES)
@@ -373,7 +376,7 @@ func resting_face() -> int:
 		if d > best:
 			best = d
 			best_face = f
-	if local_face_normal(TOP_FACE).dot(down_local) > best:
+	if local_face_normal(TABLE_FACE).dot(down_local) > best:
 		return TOP_FACE
 	return best_face % SIDES
 

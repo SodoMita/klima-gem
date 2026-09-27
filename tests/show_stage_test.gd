@@ -66,8 +66,8 @@ func _run_tests() -> void:
 	check(director.stage() == stage, "director finds the stage by group")
 
 	# --- word lists and geometry -------------------------------------------
-	check(ShowStageScript.PARTS.size() == 8, "eight body-part words")
-	check(ShowStageScript.MODS.size() == 8, "eight modification words")
+	check(ShowStageScript.PARTS.size() == 9 and ShowStageScript.PARTS[8] == "MILK", "eight body-part side words plus MILK on the table")
+	check(ShowStageScript.MODS.size() == 9 and ShowStageScript.MODS[8] == "MEGA", "eight modification side words plus MEGA on the table")
 	for part in ShowStageScript.PARTS:
 		check(director.PART_EDGE.has(part), "edge table covers part %s" % part)
 	for mod in ShowStageScript.MODS:
@@ -112,7 +112,7 @@ func _run_tests() -> void:
 	await director.throw_gem_round()
 	check(str(gs.show_part) in ShowStageScript.PARTS, "rolled a legal body part: %s" % gs.show_part)
 	check(str(gs.show_mod) in ShowStageScript.MODS, "rolled a legal modification: %s" % gs.show_mod)
-	check(int(gs.show_part_face) >= 0 and int(gs.show_part_face) < 8, "part face index in range")
+	check(int(gs.show_part_face) >= 0 and int(gs.show_part_face) <= FlatTopGem.TOP_FACE, "part face index in range")
 	var live_gems: Array = stage._gems
 	check(live_gems.size() == 2, "two gems hover on the stage")
 	if live_gems.size() == 2:
@@ -120,12 +120,15 @@ func _run_tests() -> void:
 		check(live_gems[1].word_at(int(gs.show_mod_face)) == str(gs.show_mod), "gem B carries the rolled mod on the rolled face")
 		check(live_gems[0].face_labels.size() == 8, "gem A wears eight word labels")
 		check(live_gems[1].face_labels[0].text != "", "gem B labels carry text")
+		check(live_gems[0].crown_labels.size() == 8 and live_gems[1].crown_labels.size() == 8, "both gems wear words on the eight upper (crown) faces")
+		check(live_gems[0].top_label != null and live_gems[0].top_label.text == "MILK", "body-part gem table reads MILK")
+		check(live_gems[1].top_label != null and live_gems[1].top_label.text == "MEGA", "modification gem table reads MEGA")
 		# The human rule: every word on its own facet, in the facet's plane,
 		# inside the facet's triangle. Corners of each label rectangle are
 		# tested against the facet plane and barycentrically against it.
 		for gi in 2:
 			var gem_n: Node = live_gems[gi]
-			var dgt: Transform3D = gem_n.dress.global_transform
+			var dgt: Transform3D = gem_n.global_transform
 			var all_in := true
 			var max_off := 0.0
 			for i in 8:
@@ -160,8 +163,15 @@ func _run_tests() -> void:
 		check(live_gems[0].words[0] == "HANDS" and live_gems[0].words[7] == "SKIN", "gem A word order is stable")
 		# A finished round leaves each gem dollied forward at its reveal mark,
 		# tipped toward the house camera; the slot is only the throw's landing.
-		check_vec_close(live_gems[0].position, ShowStageScript.GEM_REVEAL_PART, "body-part gem reveals on the RIGHT")
-		check_vec_close(live_gems[1].position, ShowStageScript.GEM_REVEAL_MOD, "shapeshift gem reveals on the LEFT")
+		check(live_gems[0].global_position.distance_to(ShowStageScript.GEM_SLOT_PART) < 0.12, "body-part gem is presented on the RIGHT")
+		check(live_gems[1].global_position.distance_to(ShowStageScript.GEM_SLOT_MOD) < 0.12, "shapeshift gem is presented on the LEFT")
+		# The presented face looks straight into the house camera.
+		for gi2 in 2:
+			var g2: FlatTopGem = live_gems[gi2]
+			var face2 := int(gs.show_part_face) if gi2 == 0 else int(gs.show_mod_face)
+			var lab2 := g2.label_for(face2)
+			var to_cam2: Vector3 = (stage.camera().global_position - lab2.global_position).normalized()
+			check(lab2.global_basis.z.normalized().dot(to_cam2) > 0.97, "gem %d: rolled word faces the camera" % gi2)
 
 	# --- the glowing word presentation ---------------------------------------
 	check(is_instance_valid(stage._plaque_part), "body-part word is presented")
@@ -336,20 +346,16 @@ func _run_tests() -> void:
 			check(str(gs.show_part) != "" and str(gs.show_mod) != "", "branch %d rolled words along the way" % branch)
 		check(reached_end, "all seeded branches ran")
 
-	# --- determinism: the same seed must roll the same words -------------------
-	gs.story_seed = 777
-	gs._reseed()
+	# --- fairness: no predefined night. Every new show throws under a new
+	# seed, so the same save slot never replays the same stones by default.
+	director.pin_seed = false
 	director.begin_show()
-	director.next_round()
-	await director.throw_gem_round()
-	var first_part := str(gs.show_part)
-	var first_mod := str(gs.show_mod)
-	gs.story_seed = 777
-	gs._reseed()
+	var seed_a := int(gs.story_seed)
 	director.begin_show()
-	director.next_round()
-	await director.throw_gem_round()
-	check(str(gs.show_part) == first_part and str(gs.show_mod) == first_mod, "same seed rolls the same gems")
+	var seed_b := int(gs.story_seed)
+	director.begin_show()
+	var seed_c := int(gs.story_seed)
+	check(not (seed_a == seed_b and seed_b == seed_c), "every new show draws a fresh throw seed (%d, %d, %d)" % [seed_a, seed_b, seed_c])
 
 	# Release the shared font so nothing is held at exit.
 	FlatTopGem.word_font = null

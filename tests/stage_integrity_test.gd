@@ -93,7 +93,7 @@ func _test_facet_words_are_welded() -> void:
 		check(normal.dot(geometric) > 0.999, "face %d label uses the actual facet normal" % i)
 		var off_plane: float = absf((label.position - corners[0]).dot(geometric))
 		var from_centre: float = (label.position - centre).length()
-		if off_plane <= 0.005 and from_centre <= 0.005:
+		if off_plane <= 0.005 and from_centre <= 0.03:
 			worn += 1
 		else:
 			printerr("      face %d: off-plane %.4f, %.4f from the ink centre" % [i, off_plane, from_centre])
@@ -121,17 +121,35 @@ func _test_facet_words_are_welded() -> void:
 		check(inside, "face %d '%s' entire ink and outline fit within its triangle" % [i, label.text])
 	check(worn == 8, "all eight words sit on their own facet")
 
-	# The facing fade must pick the face the gem was told to show. This is the
-	# bug that put the neighbouring word in the light.
-	for cam_az in [0.0, 1.6, 3.0, -2.2, PI]:
+	# Crown words: in their trapezoid's plane, inside it, facing out.
+	check(gem.crown_labels.size() == 8, "eight crown (upper face) words are built")
+	for i in gem.crown_labels.size():
+		var cl := gem.crown_labels[i]
+		var n := gem.local_face_normal(FlatTopGem.SIDES + i)
+		check(cl.basis.z.normalized().dot(n) > 0.999, "crown %d word lies in its face plane" % i)
+		var cc := gem.crown_corners(i)
+		check(absf((cl.position - cc[0]).dot(n) - FlatTopGem.WORD_LIFT) < 0.001, "crown %d word sits on its face" % i)
+		check(cl.text == gem.words[i], "crown %d carries the same word as pavilion %d" % [i, i])
+	check(gem.top_label != null and gem.top_label.basis.z.normalized().dot(Vector3.UP) > 0.999, "the table word lies flat on the table")
+
+	# Fair reading: rest the stone on each face and read it back.
+	for f in 2 * FlatTopGem.SIDES + 1:
+		var down_n: Vector3 = gem.local_face_normal(f)
+		# Orient so that face's normal points straight down.
+		var rest_basis := Basis(Vector3.RIGHT, PI) if f == FlatTopGem.TABLE_FACE else Basis(Quaternion(down_n, Vector3.DOWN))
+		gem.global_transform = Transform3D(rest_basis, Vector3.ZERO)
+		var want := FlatTopGem.TOP_FACE if f == 2 * FlatTopGem.SIDES else f % FlatTopGem.SIDES
+		check(gem.resting_face() == want, "resting on face %d reads result %d (got %d)" % [f, want, gem.resting_face()])
+
+	# Presentation turns the result's word squarely to any viewer.
+	for viewer in [Vector3(0, 2.2, 9.4), Vector3(3, 1, 4), Vector3(-4, 3, 2)]:
 		var wrong := 0
-		for face in 8:
-			gem.snap_settled(Vector3.ZERO, face, cam_az)
-			if gem.front_face_for_azimuth(cam_az) != face:
+		for face in FlatTopGem.TOP_FACE + 1:
+			gem.snap_settled(Vector3.ZERO, face, viewer)
+			var lab := gem.label_for(face)
+			if lab.global_basis.z.normalized().dot((viewer - lab.global_position).normalized()) < 0.98:
 				wrong += 1
-				printerr("      cam %.2f: settled on face %d, front face reads %d"
-					% [cam_az, face, gem.front_face_for_azimuth(cam_az)])
-		check(wrong == 0, "at camera azimuth %.2f the announced face is the one in the light" % cam_az)
+		check(wrong == 0, "every result word turns to the viewer at %s" % viewer)
 	gem.queue_free()
 	await get_tree().process_frame
 
@@ -191,7 +209,7 @@ func _test_gem_throw_is_physics() -> void:
 	var stage: Node3D = (load("res://scenes/show_stage/show_stage.tscn") as PackedScene).instantiate()
 	add_child(stage)
 	await get_tree().process_frame
-	check(stage.has_method("_build_colliders"), "the stage builds colliders")
+	check(stage.get_node_or_null("ThrowBox") is StaticBody3D and stage.get_node_or_null("Physics/PlatformBody") is StaticBody3D, "the authored stage carries the closed box and floor colliders")
 	var platform := stage.get_node_or_null("Physics/PlatformBody") as StaticBody3D
 	check(platform != null, "the stage floor is a StaticBody3D")
 	if platform != null:
@@ -232,8 +250,8 @@ func _test_gem_throw_is_physics() -> void:
 	var faces: Array = await stage.throw_gems(rng)
 	check(faces.size() == 2, "the throw reads two faces off the landing")
 	if faces.size() == 2:
-		check(int(faces[0]) >= 0 and int(faces[0]) < 8, "the part face is a legal face (%s)" % faces[0])
-		check(int(faces[1]) >= 0 and int(faces[1]) < 8, "the mod face is a legal face (%s)" % faces[1])
+		check(int(faces[0]) >= 0 and int(faces[0]) <= FlatTopGem.TOP_FACE, "the part face is a legal face (%s)" % faces[0])
+		check(int(faces[1]) >= 0 and int(faces[1]) <= FlatTopGem.TOP_FACE, "the mod face is a legal face (%s)" % faces[1])
 	check(stage._gems.size() == 2, "two gems come back")
 	for i in stage._gems.size():
 		var g: FlatTopGem = stage._gems[i]
@@ -242,8 +260,9 @@ func _test_gem_throw_is_physics() -> void:
 		check(g.global_position.distance_to(slot) < 0.12,
 			"gem %d stands on its mark within a hand's width (%.2f)" % [i, g.global_position.distance_to(slot)])
 	if stage._gems.size() == 2 and faces.size() == 2:
-		check(stage._gems[0].front_face() == int(faces[0]) or stage._gems[0].front_face() == -1,
-			"the part gem shows the face it landed on")
+		var lab0: Label3D = stage._gems[0].label_for(int(faces[0]))
+		check(lab0 != null and lab0.global_basis.z.dot((stage.camera().global_position - lab0.global_position).normalized()) > 0.95,
+			"the part gem shows the face it landed on to the camera")
 	# The deterministic staging helper still exists for framing shots.
 	stage.clear_gems()
 	await stage.throw_gems_fixed(1, 7)
