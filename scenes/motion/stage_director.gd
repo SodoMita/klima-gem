@@ -164,7 +164,7 @@ func apply_tag(tag: String, instant: bool = false) -> bool:
 ## Resolve an alias or inline NodePath to a live node, or null.
 func resolve_target(alias: String) -> Node:
 	if _targets.has(alias):
-		var node: Node = _targets[alias]
+		var node = _targets[alias]
 		if is_instance_valid(node):
 			return node
 		_targets.erase(alias)
@@ -708,7 +708,9 @@ func spawn_quad(alias: String, tex: Texture2D, parent: Node3D, height: float, an
 ## Remove a spawned quad; tweens on it die with it.
 func remove_quad(alias: String) -> void:
 	if _spawned.has(alias):
-		var quad: Node = _spawned[alias]
+		# Untyped on purpose: after a scene teardown the entry may point at a
+		# freed object, and assigning that to a typed Node is itself an error.
+		var quad = _spawned[alias]
 		if is_instance_valid(quad):
 			_kill_tweens_for(quad)
 			# queue_free alone leaves old portraits visible/countable until the

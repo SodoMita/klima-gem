@@ -443,6 +443,8 @@ func sync_from_state() -> void:
 	else:
 		st.reset_aurora_fx()
 	st.clear_props()
+	if st.has_method("clear_result_stamp"):
+		st.clear_result_stamp()
 	match clampi(int(gs.show_props_round), 0, 3):
 		1: st.build_crossing()
 		2: st.build_bells()

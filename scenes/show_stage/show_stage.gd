@@ -227,6 +227,18 @@ func aurora_hand() -> Vector3:
 
 # ---------------------------------------------------------------- stage build
 
+## Free a node NOW as far as the scene tree is concerned. queue_free() alone
+## leaves it parented until the end of the frame, so a rebuild in the same
+## frame (rollback, save-load, a jump from the story map) adds a second node
+## with the same name and the stage wears two of everything. Detach, then free.
+func _free_now(node: Node) -> void:
+	if not is_instance_valid(node):
+		return
+	if node.get_parent() != null:
+		node.get_parent().remove_child(node)
+	node.queue_free()
+
+
 func _mesh_instance(mesh: Mesh, mat: StandardMaterial3D, parent: Node = self) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
@@ -618,7 +630,7 @@ func _clear_plaque(is_part: bool) -> void:
 ## A word plaque: the glowing copy of the rolled word plus its additive halo.
 func _make_word_plaque(word: String, is_part: bool) -> Node3D:
 	var root := Node3D.new()
-	root.name = "WordPlaque"
+	root.name = "WordPlaquePart" if is_part else "WordPlaqueMod"
 	var label := Label3D.new()
 	label.text = word
 	label.font = FlatTopGemScript._font()
@@ -1244,8 +1256,7 @@ func _spawn_note(at: Vector3) -> void:
 # ------------------------------------------------------------------ results
 
 func _show_result(success: bool) -> void:
-	if is_instance_valid(_stamp):
-		_stamp.queue_free()
+	_free_now(_stamp)
 	_stamp = _label("CLEAR!" if success else "MISS...", 150, Color(1.0, 0.85, 0.3) if success else Color(0.65, 0.75, 0.95), Color(0.03, 0.05, 0.12, 0.95), 0.008)
 	_stamp.name = "ResultStamp"
 	_stamp.position = Vector3(0, 2.75, 1.4)
@@ -1256,7 +1267,7 @@ func _show_result(success: bool) -> void:
 	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(0.7)
 	tw.tween_property(_stamp, "modulate:a", 0.0, 0.5)
-	tw.finished.connect(_stamp.queue_free)
+	tw.finished.connect(_free_now.bind(_stamp))
 	_pulse_lights(2.6 if success else 1.2)
 
 
@@ -1291,8 +1302,7 @@ func fly_star(earned: bool, star_index: int) -> void:
 
 ## Golden rain for a perfect show.
 func confetti_burst() -> void:
-	if is_instance_valid(_confetti):
-		_confetti.queue_free()
+	_free_now(_confetti)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	var piece := BoxMesh.new()
@@ -1351,12 +1361,18 @@ func _pulse_lights(peak: float) -> void:
 
 # ---------------------------------------------------------------- full reset
 
+## Drop the CLEAR!/MISS... stamp — a restore must not keep a verdict from a
+## future the player just rewound out of.
+func clear_result_stamp() -> void:
+	_free_now(_stamp)
+	_stamp = null
+
+
 func reset_show() -> void:
 	clear_gems()
 	clear_props()
 	clear_mod_chip()
 	set_stars(0)
 	reset_aurora_fx()
-	if is_instance_valid(_stamp):
-		_stamp.queue_free()
-		_stamp = null
+	_free_now(_stamp)
+	_stamp = null

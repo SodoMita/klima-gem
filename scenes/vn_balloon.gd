@@ -1091,6 +1091,13 @@ func rollback_to(index: int) -> void:
 
 	_restoring = true
 	var line: DialogueLine = await dialogue_resource.get_next_dialogue_line(entry.id, temporary_game_states)
+	# Fetching the line again re-runs any mutation that sits between the
+	# jump target and the line (Dialogue Manager resolves `do` lines on the
+	# way), and an async show beat can still be writing into GameState. The
+	# snapshot is the truth of that moment: assert it again after the fetch
+	# so a rewind past a trial really un-wins it.
+	if is_instance_valid(game_state) and game_state.has_method("restore") and entry.has("state"):
+		game_state.restore(entry.state)
 	if line != null:
 		dialogue_line = line
 	_restoring = false

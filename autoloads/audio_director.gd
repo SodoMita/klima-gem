@@ -199,6 +199,9 @@ var _push := PackedVector2Array()  ## reused generator buffer
 
 func _ready() -> void:
 	_ensure_audio_buses()
+	# The saved mixer sliders must be live before the FIRST note: the main
+	# menu plays its theme long before any balloon exists to apply them.
+	apply_saved_volumes()
 	_gen = AudioStreamGenerator.new()
 	_gen.mix_rate = SAMPLE_RATE
 	_gen.buffer_length = 0.25
@@ -874,6 +877,34 @@ func _to_wav(samples: PackedFloat32Array) -> AudioStreamWAV:
 
 
 ## Idempotent bus setup.
+## Where the game keeps its settings (the same file the balloon writes).
+const SETTINGS_PATH := "user://klima_gem/settings.json"
+
+
+## Read the saved mixer sliders and push them onto the buses. Safe to call
+## at any time; missing or malformed settings leave the buses alone.
+func apply_saved_volumes() -> void:
+	_ensure_audio_buses()
+	if not FileAccess.file_exists(SETTINGS_PATH):
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(SETTINGS_PATH))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return
+	var data: Dictionary = parsed
+	for pair: Array in [["vol_master", "Master"], ["vol_music", "Music"], ["vol_voice", "Voice"], ["vol_sfx", "SFX"]]:
+		if data.has(pair[0]):
+			set_bus_percent(String(pair[1]), float(data[pair[0]]))
+
+
+## One mixer slider, in percent (0..100), applied to one bus.
+func set_bus_percent(bus_name: String, percent: float) -> void:
+	var index: int = AudioServer.get_bus_index(bus_name)
+	if index == -1:
+		return
+	var linear: float = clampf(percent, 0.0, 100.0) / 100.0
+	AudioServer.set_bus_volume_db(index, linear_to_db(linear) if linear > 0.0 else -80.0)
+
+
 func _ensure_audio_buses() -> void:
 	for bus_name: String in ["Music", "Voice", "SFX"]:
 		if AudioServer.get_bus_index(bus_name) == -1:
