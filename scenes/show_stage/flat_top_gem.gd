@@ -211,7 +211,7 @@ func _build_mesh() -> void:
 	mat.emission = gem_color * 0.55
 	mat.emission_energy_multiplier = 0.7
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.cull_mode = BaseMaterial3D.CULL_BACK
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # two-sided: glass gem seen from inside/below
 	body.material_override = mat
 	body.mesh = mesh
 	add_child(body)

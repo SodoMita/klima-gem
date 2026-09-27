@@ -366,10 +366,20 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 	# a random orientation, a random shove and a random spin. Nothing about
 	# the result is chosen: the stone decides by the face it comes to rest on.
 	var half := BOX_SIZE * 0.5
+	# DaVinci: no predefined outcome. The saved story seed is mixed with the
+	# wall clock and the cursor at the moment of the throw, so a rewind or a
+	# load can never replay a known result.
+	var mouse := get_viewport().get_mouse_position()
+	var live := RandomNumberGenerator.new()
+	live.seed = hash([rng.randi(), Time.get_ticks_usec(), mouse.x, mouse.y, randi()])
+	rng = live
 	var from := BOX_CENTER + Vector3(
 		rng.randf_range(0.35, 0.8) * half.x, BOX_SIZE.y - 0.3, rng.randf_range(-0.5, 0.5) * half.z)
 	var target := Vector3(
 		rng.randf_range(-0.8, 0.3) * half.x, BOX_CENTER.y, BOX_CENTER.z + rng.randf_range(-0.6, 0.6) * half.z)
+	var aim = _cursor_target(mouse, half)
+	if aim != null:
+		target = aim
 	var flight := rng.randf_range(0.28, 0.45)
 	var spin := Vector3(rng.randf_range(-24.0, 24.0), rng.randf_range(-24.0, 24.0), rng.randf_range(-24.0, 24.0))
 	_fast_settle(gem)
@@ -431,9 +441,30 @@ func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch:
 
 ## Fly fast, stop fast: heavy damping and a dull bounce so a stone that has
 ## spent its energy quits rolling instead of creeping for seconds.
+## Where the cursor points on the box floor plane (clamped inside the box),
+## or null without a camera. The throw aims there; spin and toss stay random.
+func _cursor_target(mouse: Vector2, half: Vector3) -> Variant:
+	if _camera == null or not is_instance_valid(_camera):
+		return null
+	var o := _camera.project_ray_origin(mouse)
+	var d := _camera.project_ray_normal(mouse)
+	if absf(d.y) < 0.0001:
+		return null
+	var t := (BOX_CENTER.y - o.y) / d.y
+	if t <= 0.0:
+		return null
+	var p := o + d * t
+	p.x = clampf(p.x, BOX_CENTER.x - half.x * 0.8, BOX_CENTER.x + half.x * 0.8)
+	p.z = clampf(p.z, BOX_CENTER.z - half.z * 0.8, BOX_CENTER.z + half.z * 0.8)
+	p.y = BOX_CENTER.y
+	return p
+
+
 func _fast_settle(gem: FlatTopGem) -> void:
-	gem.linear_damp = 0.9
-	gem.angular_damp = 2.4
+	# Natural fall: real gravity, almost no air drag (heavy damp looked floaty).
+	gem.gravity_scale = 1.0
+	gem.linear_damp = 0.05
+	gem.angular_damp = 0.6
 	var pm := PhysicsMaterial.new()
 	pm.bounce = 0.15
 	pm.friction = 0.95
