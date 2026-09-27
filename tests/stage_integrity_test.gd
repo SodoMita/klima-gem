@@ -229,8 +229,9 @@ func _test_gem_throw_is_physics() -> void:
 	# Launch it straight up and let gravity bring it back: a tween cannot do this.
 	gem.physical = true
 	gem.freeze = false
-	gem.position = Vector3(0.0, 3.0, 0.0)
-	gem.throw_with_velocity(Vector3(0.0, 3.0, 0.0), Vector3(0.0, 3.0, 0.0), Vector3(2.0, 3.0, 1.0))
+	# Launched clear of the glass box: inside it the lid (correctly) stops the rise.
+	gem.position = Vector3(0.0, 3.0, -3.0)
+	gem.throw_with_velocity(Vector3(0.0, 3.0, -3.0), Vector3(0.0, 3.0, 0.0), Vector3(2.0, 3.0, 1.0))
 	var peak := gem.position.y
 	var fell := gem.position.y
 	for i in 60:
