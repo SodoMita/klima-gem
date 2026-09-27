@@ -330,12 +330,38 @@ func _spawn_actor(alias: String, tex_key: String, at: Vector3, height: float) ->
 ## physics puts them, and the faces that land front-most become the words.
 ## Same seed, same throw parameters, same landing — deterministic, but the
 ## words come from the simulation, never from a randi_range(0, 7).
+## True while the player fast-forwards (next-choice seek, silent map travel,
+## skip): throws resolve instantly and trials play no choreography, so a jump
+## never plays gem/star animations it would then repeat (human 77/78).
+func fast_mode() -> bool:
+	var b := _balloon()
+	if b == null:
+		return false
+	return bool(b.get("_seeking_choice")) or bool(b.get("_silent_travel"))
+
+
+## One instant random face with the real stone's odds (table ~25%).
+func _quick_face(gs: Node, table: int) -> int:
+	if gs.rng.randf() < 0.25:
+		return table
+	return gs.rng.randi_range(0, table - 1)
+
+
 func throw_gem_round() -> void:
 	var gs := _gs()
 	var st := stage()
 	if gs == null or st == null:
 		return
 	var epoch := _state_epoch
+	if fast_mode():
+		var pf := _quick_face(gs, ShowStageScript.PARTS.size() - 1)
+		var mf := _quick_face(gs, ShowStageScript.MODS.size() - 1)
+		gs.show_part_face = pf
+		gs.show_mod_face = mf
+		gs.show_part = ShowStageScript.PARTS[pf]
+		gs.show_mod = ShowStageScript.MODS[mf]
+		st.place_gems_settled(str(gs.show_part), pf, str(gs.show_mod), mf)
+		return
 	var faces: Array = await st.throw_gems(gs.rng)
 	if not _is_current(epoch, st) or faces.size() != 2:
 		return
@@ -359,7 +385,11 @@ func swap_mod_gem() -> void:
 	var epoch := _state_epoch
 	gs.show_cheers = int(gs.show_cheers) - 1
 	gs.rerolls_used = int(gs.rerolls_used) + 1
-	var face: int = await st.rethrow_gem(1, gs.rng)
+	var face: int
+	if fast_mode():
+		face = _quick_face(gs, ShowStageScript.MODS.size() - 1)
+	else:
+		face = await st.rethrow_gem(1, gs.rng)
 	if not _is_current(epoch, st) or int(face) < 0 or int(face) >= ShowStageScript.MODS.size():
 		if int(face) < 0 and _is_current(epoch, st):
 			gs.show_cheers = int(gs.show_cheers) + 1
@@ -367,6 +397,8 @@ func swap_mod_gem() -> void:
 		return
 	gs.show_mod_face = int(face)
 	gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
+	if fast_mode():
+		st.place_gems_settled(str(gs.show_part), int(gs.show_part_face), str(gs.show_mod), int(gs.show_mod_face))
 	await apply_mods()
 
 
@@ -387,7 +419,8 @@ func apply_mods() -> void:
 	gs.show_outlook = outlook_for(int(gs.show_round))
 	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor(), gs.show_body_mods)
 	st.apply_body_mods(gs.show_body_mods)
-	await st.get_tree().create_timer(0.9).timeout
+	if not fast_mode():
+		await st.get_tree().create_timer(0.9).timeout
 
 
 # ----------------------------------------------------------------- trials
@@ -427,6 +460,13 @@ func run_challenge() -> void:
 	var score := total_for(int(gs.show_round))
 	gs.last_roll = float(score)
 	gs.last_success = score >= need
+	if fast_mode():
+		if gs.last_success:
+			gs.show_stars = int(gs.show_stars) + 1
+		st.set_stars(int(gs.show_stars))
+		st.clear_props()
+		gs.show_props_round = 0
+		return
 	await st.play_challenge(int(gs.show_round), bool(gs.last_success), _pattern)
 	if not _is_current(epoch, st):
 		return
