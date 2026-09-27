@@ -1,7 +1,9 @@
 extends Node
 ## Controllable animation boundaries: exercise real director + GameState restore
 ## without depending on physics wall-clock timing or renderer availability.
-class PausedStage extends Node3D:
+class PausedStage extends ShowStage:
+	func _ready() -> void: pass
+	func _process(_delta: float) -> void: pass
 	signal landed
 	signal played
 	signal awarded
@@ -10,7 +12,6 @@ class PausedStage extends Node3D:
 	var throws := 0
 	var faces: Array = [2, 3]
 	var face := 4
-	var aurora_quad: Node3D
 	func throw_gems(_rng: RandomNumberGenerator) -> Array:
 		throws += 1
 		await landed
