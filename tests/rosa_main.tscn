@@ -1,0 +1,177 @@
+[gd_scene load_steps=7 format=3 uid="uid://df6g3f7ks8sju"]
+
+[ext_resource type="Script" uid="uid://qyg0bakcoedf" path="res://main.gd" id="1_main"]
+[ext_resource type="FontFile" uid="uid://ctxcxi25fm0pu" path="res://assets/fonts/DejaVuSerif.ttf" id="3_serif"]
+[ext_resource type="FontFile" uid="uid://ex3s7gibjgfb" path="res://assets/fonts/DejaVuSerif-Bold.ttf" id="4_bold"]
+[ext_resource type="PackedScene" path="res://scenes/show_stage/show_stage.tscn" id="5_stage"]
+[ext_resource type="Script" path="res://tests/rosa_probe.gd" id="9_rosa"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn"]
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+bg_color = Color(0.06, 0.09, 0.16, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.42, 0.55, 0.82, 0.55)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hot"]
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+bg_color = Color(0.1, 0.16, 0.3, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7, 0.86, 1, 0.95)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="Theme" id="Theme_title"]
+default_font = ExtResource("3_serif")
+default_font_size = 18
+Button/colors/font_color = Color(0.9, 0.95, 1, 1)
+Button/colors/font_focus_color = Color(0.8, 0.92, 1, 1)
+Button/colors/font_hover_color = Color(0.8, 0.92, 1, 1)
+Button/colors/font_pressed_color = Color(0.8, 0.92, 1, 1)
+Button/styles/disabled = SubResource("StyleBoxFlat_btn")
+Button/styles/focus = SubResource("StyleBoxFlat_hot")
+Button/styles/hover = SubResource("StyleBoxFlat_hot")
+Button/styles/normal = SubResource("StyleBoxFlat_btn")
+Button/styles/pressed = SubResource("StyleBoxFlat_hot")
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+content_margin_left = 36.0
+content_margin_top = 32.0
+content_margin_right = 36.0
+content_margin_bottom = 28.0
+bg_color = Color(0.035, 0.05, 0.12, 0.82)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.58, 0.76, 1, 0.55)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+shadow_color = Color(0.25, 0.4, 0.95, 0.42)
+shadow_size = 24
+shadow_offset = Vector2(0, 10)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_primary"]
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+bg_color = Color(0.12, 0.2, 0.36, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.74, 0.88, 1, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[node name="Main" type="Node" unique_id=182449774]
+script = ExtResource("1_main")
+
+[node name="TitleLayer" type="CanvasLayer" parent="." unique_id=1625491531]
+layer = 20
+
+[node name="Scrim" type="ColorRect" parent="TitleLayer" unique_id=76956351]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.012, 0.02, 0.06, 0.46)
+
+[node name="Center" type="CenterContainer" parent="TitleLayer" unique_id=2050252781]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_title")
+
+[node name="Card" type="PanelContainer" parent="TitleLayer/Center" unique_id=1704313013]
+custom_minimum_size = Vector2(540, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="VBox" type="VBoxContainer" parent="TitleLayer/Center/Card" unique_id=1153860362]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Kicker" type="Label" parent="TitleLayer/Center/Card/VBox" unique_id=35201800]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.86, 1, 0.8)
+theme_override_fonts/font = ExtResource("4_bold")
+theme_override_font_sizes/font_size = 13
+text = "ПРЯМОЙ ЭФИР"
+horizontal_alignment = 1
+
+[node name="Title" type="Label" parent="TitleLayer/Center/Card/VBox" unique_id=2052285640]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.96, 1, 1)
+theme_override_fonts/font = ExtResource("4_bold")
+theme_override_font_sizes/font_size = 46
+text = "КЛИМА ГЕМ"
+horizontal_alignment = 1
+
+[node name="Rule" type="ColorRect" parent="TitleLayer/Center/Card/VBox" unique_id=735500104]
+custom_minimum_size = Vector2(128, 2)
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+color = Color(0.58, 0.8, 1, 0.8)
+
+[node name="Subtitle" type="Label" parent="TitleLayer/Center/Card/VBox" unique_id=1965312108]
+custom_minimum_size = Vector2(460, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.86, 0.98, 0.92)
+theme_override_font_sizes/font_size = 17
+text = "Два кристалла, три испытания: гость бросает — сцена решает"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="BeginButton" type="Button" parent="TitleLayer/Center/Card/VBox" unique_id=1399500151]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_hot")
+theme_override_styles/hover = SubResource("StyleBoxFlat_hot")
+theme_override_styles/focus = SubResource("StyleBoxFlat_hot")
+text = "В эфир!"
+
+[node name="Hint" type="Label" parent="TitleLayer/Center/Card/VBox" unique_id=546668314]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.7, 0.84, 0.85)
+theme_override_font_sizes/font_size = 14
+text = "Enter, интервал: дальше. Ctrl: перемотка. H: история. Esc: пауза. Backspace: назад."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="3d" type="Node" parent="." unique_id=895882631]
+
+[node name="ShowStage" parent="3d" instance=ExtResource("5_stage")]
+
+[connection signal="pressed" from="TitleLayer/Center/Card/VBox/BeginButton" to="." method="_on_begin_pressed"]
+
+[node name="RosaProbe" type="Node" parent="."]
+script = ExtResource("9_rosa")
