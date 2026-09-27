@@ -425,6 +425,9 @@ func swap_mod_gem() -> void:
 	var epoch := _state_epoch
 	gs.show_cheers = int(gs.show_cheers) - 1
 	gs.rerolls_used = int(gs.rerolls_used) + 1
+	# The re-throw REPLACES the word: the stamp it made is taken back before
+	# the new word is stamped, so a rerolled shift does not keep stacking.
+	_unstamp_current(gs)
 	if replaying():
 		gs.show_mod_face = gs.rng.randi_range(0, ShowStageScript.MODS.size() - 1)
 		gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
@@ -439,6 +442,27 @@ func swap_mod_gem() -> void:
 	gs.show_mod_face = int(face)
 	gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
 	await apply_mods()
+
+
+## Take back the stamp the current pairing made (if it made one): the
+## rerolled word is gone, so its count and its slot on the body go too.
+func _unstamp_current(gs: Node) -> void:
+	var mod := str(gs.show_mod)
+	var part := str(gs.show_part)
+	if mod == "" or str(gs.show_last_stamp) == "":
+		return
+	if not str(gs.show_last_stamp).begins_with(part + "|" + mod + "|"):
+		return
+	var counts: Dictionary = (gs.show_mod_counts as Dictionary).duplicate()
+	counts[mod] = maxi(int(counts.get(mod, 0)) - 1, 0)
+	if int(counts[mod]) == 0:
+		counts.erase(mod)
+	gs.show_mod_counts = counts
+	var kept: Dictionary = (gs.show_body_mods as Dictionary).duplicate()
+	if str(kept.get(part, "")) == mod:
+		kept.erase(part)
+	gs.show_body_mods = kept
+	gs.show_last_stamp = ""
 
 
 ## Stamp the pairing onto the guest: the floating chip, the portrait effects,

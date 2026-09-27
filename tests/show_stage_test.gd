@@ -166,6 +166,41 @@ func _run_tests() -> void:
 	gs.show_mod_counts = {}
 	gs.restore(snap_stack)
 	check(int(gs.show_mod_counts.get("GIANT", 0)) == 2, "stack counts survive snapshot/restore")
+
+	# --- a reroll replaces the word, on the board and on the body ------------
+	# The old plaque is struck as the new one arrives (never two words for
+	# one gem), and the stamp the old word made is taken back.
+	gs.show_body_mods = {}
+	gs.show_mod_counts = {}
+	gs.show_last_stamp = ""
+	gs.show_round = 1
+	gs.rerolls_used = 0
+	gs.show_part = "HANDS"
+	gs.show_mod = "GIANT"
+	gs.show_part_face = 0
+	gs.show_mod_face = 0
+	await director.apply_mods()
+	check(int(gs.show_mod_counts.get("GIANT", 0)) == 1, "the first word is stamped once")
+	await stage.throw_gems_fixed(0, 0)
+	check(is_instance_valid(stage._plaque_mod) and stage._plaque_mod.get_child(0).text == "GIANT", "the mod plaque shows the first word")
+	var old_plaque: Node3D = stage._plaque_mod
+	director._unstamp_current(gs)
+	check(int(gs.show_mod_counts.get("GIANT", 0)) == 0 and not gs.show_body_mods.has("HANDS"), "a reroll takes the old stamp back")
+	await stage.rethrow_gem_fixed(1, 3)
+	var plaques := 0
+	for child in stage.get_children():
+		if str(child.name).begins_with("WordPlaqueMod") and not child.has_meta("retired"):
+			plaques += 1
+	check(plaques == 1, "exactly one mod plaque stands after a reroll (%d)" % plaques)
+	check(is_instance_valid(stage._plaque_mod) and stage._plaque_mod != old_plaque and stage._plaque_mod.get_child(0).text == "BOUNCY", "the rerolled word replaced the old plaque")
+	await get_tree().create_timer(0.6).timeout
+	check(not is_instance_valid(old_plaque) or old_plaque.get_parent() == null, "the struck plaque is gone")
+	gs.show_mod = "BOUNCY"
+	gs.show_mod_face = 3
+	gs.rerolls_used = 1
+	await director.apply_mods()
+	check(int(gs.show_mod_counts.get("BOUNCY", 0)) == 1 and int(gs.show_mod_counts.get("GIANT", 0)) == 0, "only the rerolled word is stamped")
+	stage.clear_gems()
 	gs.show_body_mods = {}
 	gs.show_mod_counts = {}
 	gs.show_last_stamp = ""

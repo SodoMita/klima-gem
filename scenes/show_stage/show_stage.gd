@@ -583,6 +583,17 @@ func place_gems_settled(part_word: String, part_face: int, mod_word: String, mod
 ## The glowing copy of a settled word, presented high beside the stage.
 ## [param is_part] true = body part (right slot), false = shapeshift (left).
 func present_word(gem: FlatTopGem, face: int, is_part: bool) -> void:
+	# A re-throw replaces the word: the old plaque is struck as the new one
+	# flies in, so the board never shows two words for one gem. Should an
+	# old plaque somehow still be standing, the new word lands ON TOP of it
+	# (higher, nearer the house) and the old one is dropped underneath.
+	var old := _plaque_part if is_part else _plaque_mod
+	if is_part:
+		_plaque_part = null
+	else:
+		_plaque_mod = null
+	if is_instance_valid(old):
+		_retire_plaque(old)
 	var plaque := _make_word_plaque(gem.word_at(face), is_part)
 	add_child(plaque)
 	var src := gem.resting_label(face)
@@ -602,6 +613,19 @@ func present_word(gem: FlatTopGem, face: int, is_part: bool) -> void:
 		_plaque_part = plaque
 	else:
 		_plaque_mod = plaque
+
+
+## Strike a superseded word plaque: it drops, dims and shrinks out under
+## the incoming word, then is freed. Never reused, never left standing.
+func _retire_plaque(plaque: Node3D) -> void:
+	plaque.set_meta("landed", false)
+	plaque.set_meta("retired", true)
+	plaque.name = plaque.name + "Retired"
+	var tw := create_tween()
+	tw.tween_property(plaque, "position", plaque.position + Vector3(0.0, -0.45, -0.3), 0.45)
+	tw.parallel().tween_property(plaque, "scale", Vector3.ONE * 0.05, 0.45)
+	tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.finished.connect(_free_now.bind(plaque))
 
 
 func _plaque_arc(t: float, plaque: Node3D, from: Vector3, to: Vector3) -> void:
