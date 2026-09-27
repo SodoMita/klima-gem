@@ -275,7 +275,9 @@ func _build_mesh() -> void:
 	mat.emission = gem_color * 0.55
 	mat.emission_energy_multiplier = 0.7
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.cull_mode = BaseMaterial3D.CULL_BACK
+	# Both sides: a stone lying tilted shows its inner facets through the
+	# glass; back-culling turned it into loose slivers on camera.
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	body.material_override = mat
 	body.mesh = mesh
 	dress = Node3D.new()

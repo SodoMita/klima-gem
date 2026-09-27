@@ -3,13 +3,14 @@ extends Node
 ## verifies each reported word is the crown face that physically faces the
 ## sky, the stone was not moved after it settled, and it stayed in the box.
 ## Saves shots to tests/render_samples/joker/ when a rasterizer is present.
-const OUT := "res://tests/render_samples/joker"
+const OUT := "user://joker_shots"  # never into the repo
 var _stage: ShowStage
 var _fail := false
 
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
+	print("SHOTS: ", ProjectSettings.globalize_path(OUT))
 	_stage = load("res://scenes/show_stage/show_stage.tscn").instantiate()
 	add_child(_stage)
 	await get_tree().create_timer(0.5).timeout
