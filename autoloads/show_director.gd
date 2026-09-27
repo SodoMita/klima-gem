@@ -275,7 +275,7 @@ func swap_mod_gem() -> void:
 		return
 	gs.show_cheers = int(gs.show_cheers) - 1
 	gs.rerolls_used = int(gs.rerolls_used) + 1
-	var face := await st.rethrow_gem(1, gs.rng)
+	var face: int = await st.rethrow_gem(1, gs.rng)
 	gs.show_mod_face = int(face)
 	gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
 	await apply_mods()
