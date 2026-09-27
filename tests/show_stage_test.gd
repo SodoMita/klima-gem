@@ -163,15 +163,15 @@ func _run_tests() -> void:
 		check(live_gems[0].words[0] == "HANDS" and live_gems[0].words[7] == "SKIN", "gem A word order is stable")
 		# A finished round leaves each gem dollied forward at its reveal mark,
 		# tipped toward the house camera; the slot is only the throw's landing.
-		check(live_gems[0].global_position.distance_to(ShowStageScript.GEM_SLOT_PART) < 0.12, "body-part gem is presented on the RIGHT")
-		check(live_gems[1].global_position.distance_to(ShowStageScript.GEM_SLOT_MOD) < 0.12, "shapeshift gem is presented on the LEFT")
-		# The presented face looks straight into the house camera.
+		# Under-view (K7): each stone stays where it came to rest inside the
+		# floating glass box; the rolled word lies face-down on the glass.
+		var bh: Vector3 = ShowStageScript.BOX_SIZE * 0.5 + Vector3(0.1, 0.1, 0.1)
 		for gi2 in 2:
 			var g2: FlatTopGem = live_gems[gi2]
+			var rel: Vector3 = (g2.global_position - ShowStageScript.BOX_CENTER).abs()
+			check(rel.x <= bh.x and rel.z <= bh.z, "gem %d rests inside the glass box" % gi2)
 			var face2 := int(gs.show_part_face) if gi2 == 0 else int(gs.show_mod_face)
-			var lab2 := g2.label_for(face2)
-			var to_cam2: Vector3 = (stage.camera().global_position - lab2.global_position).normalized()
-			check(lab2.global_basis.z.normalized().dot(to_cam2) > 0.97, "gem %d: rolled word faces the camera" % gi2)
+			check(face2 == g2.resting_face(), "gem %d: recorded word is the face on the glass" % gi2)
 
 	# --- the glowing word presentation ---------------------------------------
 	check(is_instance_valid(stage._plaque_part), "body-part word is presented")
