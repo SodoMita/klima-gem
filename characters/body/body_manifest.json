@@ -1,0 +1,316 @@
+{
+ "version": 1,
+ "note": "Layered body-part sprites. Parts OWN pixels (priority claim, highest z first) so an unmodded compose reproduces the source exactly. Overlays never own pixels; they are effect targets only. All art under assets/characters/body/ is AI/procedural PLACEHOLDER: drop a hand-drawn <key>__<part>.webp (or <key>__<part>_<mod>.webp override) over it and the system picks it up. See docs/body_parts.md.",
+ "source_root": "assets/characters/",
+ "body_root": "assets/characters/body/",
+ "characters": {
+  "aurora": {
+   "expressions": [
+    "happy",
+    "serious",
+    "surprised",
+    "sad",
+    "gorgeous"
+   ]
+  }
+ },
+ "parts": [
+  {
+   "id": "head",
+   "z": 6,
+   "anchor": [
+    0.5,
+    0.2
+   ],
+   "claims": [
+    {
+     "type": "rect",
+     "x": [
+      0.36,
+      0.64
+     ],
+     "y": [
+      0.05,
+      0.2
+     ]
+    }
+   ]
+  },
+  {
+   "id": "torso",
+   "z": 5,
+   "anchor": [
+    0.5,
+    0.22
+   ],
+   "claims": [
+    {
+     "type": "rect",
+     "x": [
+      0.3,
+      0.7
+     ],
+     "y": [
+      0.2,
+      0.58
+     ]
+    }
+   ]
+  },
+  {
+   "id": "arms",
+   "z": 4,
+   "anchor": [
+    0.5,
+    0.21
+   ],
+   "claims": [
+    {
+     "type": "sides",
+     "outer_x": [
+      0.0,
+      0.34
+     ],
+     "inner_x": [
+      0.66,
+      1.0
+     ],
+     "y": [
+      0.19,
+      0.62
+     ]
+    },
+    {
+     "type": "rect",
+     "x": [
+      0.32,
+      0.68
+     ],
+     "y": [
+      0.33,
+      0.47
+     ]
+    }
+   ]
+  },
+  {
+   "id": "legs",
+   "z": 3,
+   "anchor": [
+    0.5,
+    0.51
+   ],
+   "claims": [
+    {
+     "type": "rect",
+     "x": [
+      0.18,
+      0.82
+     ],
+     "y": [
+      0.5,
+      1.0
+     ]
+    }
+   ]
+  },
+  {
+   "id": "hair",
+   "z": 2,
+   "anchor": [
+    0.5,
+    0.06
+   ],
+   "claims": [
+    {
+     "type": "rect",
+     "x": [
+      0.06,
+      0.94
+     ],
+     "y": [
+      0.02,
+      0.75
+     ]
+    }
+   ]
+  },
+  {
+   "id": "back",
+   "z": 1,
+   "anchor": [
+    0.5,
+    0.5
+   ],
+   "claims": [
+    {
+     "type": "rim",
+     "outside_px": 10
+    }
+   ]
+  },
+  {
+   "id": "body",
+   "z": 0,
+   "anchor": [
+    0.5,
+    0.5
+   ],
+   "claims": [
+    {
+     "type": "rest"
+    }
+   ]
+  }
+ ],
+ "overlays": [
+  {
+   "id": "eyes",
+   "rect": [
+    0.42,
+    0.095,
+    0.58,
+    0.135
+   ],
+   "anchor": [
+    0.5,
+    0.115
+   ]
+  },
+  {
+   "id": "heart",
+   "rect": [
+    0.43,
+    0.24,
+    0.57,
+    0.32
+   ],
+   "anchor": [
+    0.5,
+    0.28
+   ]
+  },
+  {
+   "id": "voice",
+   "rect": [
+    0.44,
+    0.195,
+    0.56,
+    0.235
+   ],
+   "anchor": [
+    0.5,
+    0.215
+   ]
+  }
+ ],
+ "word_map": {
+  "HANDS": {
+   "target": "arms",
+   "dilate": 1.8
+  },
+  "EYES": {
+   "target": "eyes"
+  },
+  "LEGS": {
+   "target": "legs"
+  },
+  "VOICE": {
+   "target": "voice"
+  },
+  "HAIR": {
+   "target": "hair"
+  },
+  "BACK": {
+   "target": "back"
+  },
+  "HEART": {
+   "target": "heart"
+  },
+  "SKIN": {
+   "target": "skin",
+   "note": "every owned pixel except hair"
+  },
+  "MILK": {
+   "target": "skin",
+   "palette": "milk",
+   "note": "rare table word: whole-body milky sheen"
+  }
+ },
+ "mod_params": {
+  "GIANT": {
+   "scale": 1.55
+  },
+  "TINY": {
+   "scale": 0.62
+  },
+  "STICKY": {
+   "stretch_y": 1.18,
+   "color": [
+    117,
+    240,
+    169
+   ]
+  },
+  "BOUNCY": {
+   "squash_x": 1.08,
+   "squash_y": 0.94,
+   "color": [
+    255,
+    169,
+    106
+   ]
+  },
+  "GLASS": {
+   "alpha": 0.72,
+   "color": [
+    180,
+    238,
+    255
+   ]
+  },
+  "MAGNET": {
+   "scanline": 2,
+   "color": [
+    204,
+    150,
+    255
+   ]
+  },
+  "HEAVY": {
+   "squash_y": 0.92,
+   "dim": 0.78,
+   "color": [
+    158,
+    166,
+    205
+   ]
+  },
+  "GLOWING": {
+   "glow_px": 9,
+   "color": [
+    102,
+    250,
+    240
+   ]
+  },
+  "MEGA": {
+   "scale": 1.15,
+   "glow_px": 12,
+   "color": [
+    255,
+    200,
+    120
+   ],
+   "whole": true
+  }
+ },
+ "palettes": {
+  "milk": [
+   245,
+   240,
+   255
+  ]
+ },
+ "studies": "docs/body_parts/studies/"
+}
