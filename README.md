@@ -155,3 +155,10 @@ The glass look lives on the balloon and the title card: navy panels around `Colo
 - `tests/joker_stage_test.sh` (48 checks) and `tests/joker_throw_test.tscn`
   (9 checks, incl. 24 solo throws spreading over the faces) — run as step 10b
   of `tests/run_headless.sh`.
+
+- **Jump from the story map** no longer duplicates or stalls the set: a
+  silent replay (`ShowDirector.replaying()`) keeps the state moving but skips
+  every piece of choreography — no thrown stones, no waiting for the player's
+  cue, no props built and torn down — and the stage is re-dressed from the
+  finished state exactly once, the moment the jump lands.
+  `tests/joker_replay_test.tscn` proves it (11 checks).

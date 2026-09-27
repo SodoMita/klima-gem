@@ -17,7 +17,7 @@ fi
 cd "$ROOT"
 timeout 180 "$GODOT_BIN" --headless --path . --import >/tmp/godot-import.log 2>&1 || true
 
-for scene in joker_stage_test joker_throw_test; do
+for scene in joker_stage_test joker_throw_test joker_replay_test; do
 	echo "=== ${scene} ==="
 	"$GODOT_BIN" --headless --path . "res://tests/${scene}.tscn" 2>&1 | tee "/tmp/${scene}.log"
 	if grep -qE "^FAIL|, [1-9][0-9]* failed" "/tmp/${scene}.log"; then

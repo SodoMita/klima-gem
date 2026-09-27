@@ -11,11 +11,11 @@ class PausedStage extends Node3D:
 	var faces: Array = [2, 3]
 	var face := 4
 	var aurora_quad: Node3D
-	func throw_gems(_rng: RandomNumberGenerator) -> Array:
+	func throw_gems(_rng: RandomNumberGenerator, _interactive := false) -> Array:
 		throws += 1
 		await landed
 		return faces
-	func rethrow_gem(_which: int, _rng: RandomNumberGenerator) -> int:
+	func rethrow_gem(_which: int, _rng: RandomNumberGenerator, _interactive := false) -> int:
 		throws += 1
 		await landed
 		return face
@@ -28,6 +28,12 @@ class PausedStage extends Node3D:
 		clears += 1
 	func clear_gems() -> void: pass
 	func clear_mod_chip() -> void: pass
+	func clear_mod_card() -> void: pass
+	func apply_mod_rail(_mods: Array) -> void: pass
+	func apply_mod_chip(_part: String, _mod: String, _at: Vector3) -> void: pass
+	func apply_aurora_fx(_part: String, _mod: String) -> void: pass
+	func place_gems_settled(_pw: String, _pf: int, _mw: String, _mf: int) -> void: pass
+	func chip_anchor() -> Vector3: return Vector3.ZERO
 	func reset_aurora_fx() -> void: pass
 	func set_stars(_stars: int) -> void: pass
 	func build_crossing() -> void: pass

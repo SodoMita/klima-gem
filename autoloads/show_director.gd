@@ -281,6 +281,14 @@ func throw_gem_round() -> void:
 	if gs == null or st == null:
 		return
 	var epoch := _state_epoch
+	if replaying():
+		# Off-screen: draw the same two faces from the same story RNG and
+		# set the stage instantly. No flight, no cue, no duplicated props.
+		gs.show_part_face = gs.rng.randi_range(0, ShowStageScript.PARTS.size() - 1)
+		gs.show_mod_face = gs.rng.randi_range(0, ShowStageScript.MODS.size() - 1)
+		gs.show_part = ShowStageScript.PARTS[gs.show_part_face]
+		gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
+		return
 	# The player throws: click, space, touch or stick, and the hold is the
 	# power. Falls through to an automatic throw if nobody moves.
 	var faces: Array = await st.throw_gems(gs.rng, true)
@@ -319,6 +327,12 @@ func swap_mod_gem() -> void:
 	var epoch := _state_epoch
 	gs.show_cheers = int(gs.show_cheers) - 1
 	gs.rerolls_used = int(gs.rerolls_used) + 1
+	if replaying():
+		gs.show_mod_face = gs.rng.randi_range(0, ShowStageScript.MODS.size() - 1)
+		gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
+		_remember_mod(gs)
+		gs.show_outlook = outlook_for(int(gs.show_round))
+		return
 	var face: int = await st.rethrow_gem(1, gs.rng, true)
 	if not _is_current(epoch, st) or int(face) < 0 or int(face) >= ShowStageScript.MODS.size():
 		if int(face) < 0 and _is_current(epoch, st):
@@ -339,6 +353,8 @@ func apply_mods() -> void:
 		return
 	gs.show_outlook = outlook_for(int(gs.show_round))
 	_remember_mod(gs)
+	if replaying():
+		return
 	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor())
 	st.apply_mod_rail(gs.show_applied_mods)
 	st.apply_aurora_fx(str(gs.show_part), str(gs.show_mod))
@@ -353,16 +369,21 @@ func build_challenge(round_no: int) -> void:
 	var st := stage()
 	if gs == null or st == null:
 		return
-	st.clear_props()
-	match clampi(round_no, 1, 3):
-		1: st.build_crossing()
-		2: st.build_bells()
-		3: st.build_choir()
 	gs.show_props_round = clampi(round_no, 1, 3)
 	_pattern = []
 	var rounds := 5
 	for i in rounds:
 		_pattern.append(gs.rng.randi_range(0, 3))
+	if replaying():
+		# Props are choreography; a silent replay only needs the RNG walked
+		# and the round remembered, or the set is built and torn down (and
+		# duplicated) once per replayed line.
+		return
+	st.clear_props()
+	match clampi(round_no, 1, 3):
+		1: st.build_crossing()
+		2: st.build_bells()
+		3: st.build_choir()
 	await st.get_tree().create_timer(0.7).timeout
 
 
@@ -382,6 +403,11 @@ func run_challenge() -> void:
 	var score := total_for(int(gs.show_round))
 	gs.last_roll = float(score)
 	gs.last_success = score >= need
+	if replaying():
+		if gs.last_success:
+			gs.show_stars = int(gs.show_stars) + 1
+		gs.show_props_round = 0
+		return
 	await st.play_challenge(int(gs.show_round), bool(gs.last_success), _pattern)
 	if not _is_current(epoch, st):
 		return
@@ -401,6 +427,38 @@ func finale_confetti() -> void:
 	var st := stage()
 	if st != null:
 		st.confetti_burst()
+
+
+# ------------------------------------------------------------ silent replay
+
+## True while the balloon is replaying the story to itself — a jump from the
+## story map, a "replay from the start" travel, a rewrite probe. During a
+## replay the mutations run again at full speed and off-screen, so the show
+## must NOT throw stones, wait for the player's cue, or build and tear down
+## props: that is what duplicated the set and stalled the jump. State still
+## moves; only the choreography is skipped, and the stage is re-dressed from
+## the finished state the moment the replay ends.
+func replaying() -> bool:
+	var balloon := _balloon()
+	if balloon == null:
+		return false
+	if not ("_silent_travel" in balloon):
+		return false
+	return bool(balloon.get("_silent_travel"))
+
+
+func _process(_delta: float) -> void:
+	var now := replaying()
+	if now == _was_replaying:
+		return
+	_was_replaying = now
+	if not now:
+		# The replay landed: make the visible stage agree with the state it
+		# left behind, exactly once.
+		sync_from_state()
+
+
+var _was_replaying := false
 
 
 # ---------------------------------------------------------------- restores
