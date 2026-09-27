@@ -2325,6 +2325,12 @@ func _ensure_audio_buses() -> void:
 
 
 func _set_bus_volume(bus_name: String, volume: float) -> void:
+	# One implementation for the whole game: AudioDirector owns the mixer so
+	# the main menu, the balloon and the show all agree on the saved levels.
+	var director := get_node_or_null("/root/AudioDirector")
+	if director != null and director.has_method("set_bus_percent"):
+		director.set_bus_percent(bus_name, volume)
+		return
 	var index: int = AudioServer.get_bus_index(bus_name)
 	if index == -1:
 		return

@@ -281,7 +281,9 @@ func throw_gem_round() -> void:
 	if gs == null or st == null:
 		return
 	var epoch := _state_epoch
-	var faces: Array = await st.throw_gems(gs.rng)
+	# The player throws: click, space, touch or stick, and the hold is the
+	# power. Falls through to an automatic throw if nobody moves.
+	var faces: Array = await st.throw_gems(gs.rng, true)
 	if not _is_current(epoch, st) or faces.size() != 2:
 		return
 	if int(faces[0]) < 0 or int(faces[0]) >= ShowStageScript.PARTS.size() or int(faces[1]) < 0 or int(faces[1]) >= ShowStageScript.MODS.size():
@@ -317,7 +319,7 @@ func swap_mod_gem() -> void:
 	var epoch := _state_epoch
 	gs.show_cheers = int(gs.show_cheers) - 1
 	gs.rerolls_used = int(gs.rerolls_used) + 1
-	var face: int = await st.rethrow_gem(1, gs.rng)
+	var face: int = await st.rethrow_gem(1, gs.rng, true)
 	if not _is_current(epoch, st) or int(face) < 0 or int(face) >= ShowStageScript.MODS.size():
 		if int(face) < 0 and _is_current(epoch, st):
 			gs.show_cheers = int(gs.show_cheers) + 1

@@ -100,13 +100,15 @@ func _ready() -> void:
 
 func _apply_physics() -> void:
 	mass = 1.6
-	gravity_scale = 1.0
-	linear_damp = 0.08
-	angular_damp = 0.22
+	# A show stone flies hard and settles quickly: extra gravity and heavier
+	# damping keep the tumble short and lively instead of a long slow roll.
+	gravity_scale = 1.9
+	linear_damp = 0.55
+	angular_damp = 1.15
 	physics_material_override = null
 	var pm := PhysicsMaterial.new()
-	pm.bounce = 0.32
-	pm.friction = 0.75
+	pm.bounce = 0.18
+	pm.friction = 0.95
 	physics_material_override = pm
 	continuous_cd = true
 	if physical:
@@ -457,6 +459,23 @@ func front_face_for_azimuth(cam_az: float) -> int:
 	return best_i
 
 
+## The pavilion facet lying flattest against the floor of the case: the one
+## the reveal camera reads through the glass from underneath. This is the
+## show's result, taken from where the stone actually came to rest.
+func bottom_face() -> int:
+	var best := 2.0
+	var best_i := 0
+	var basis := global_transform.basis
+	if dress != null:
+		basis = basis * dress.transform.basis
+	for i in SIDES:
+		var n := (basis * _face_normal(i)).normalized()
+		if n.y < best:
+			best = n.y
+			best_i = i
+	return best_i
+
+
 ## The face the camera is currently reading.
 func front_face() -> int:
 	return _front_face
@@ -509,7 +528,7 @@ func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3, start_
 ## The window is generous on purpose: the stones must be allowed to stop on
 ## their own, not be caught mid-tumble by an impatient timer (a timer that
 ## fires early is another way of rigging the outcome).
-func wait_until_rest(timeout := 7.0, speed := 0.22) -> bool:
+func wait_until_rest(timeout := 4.0, speed := 0.22) -> bool:
 	var waited := 0.0
 	var calm_frames := 0
 	while waited < timeout:
@@ -519,7 +538,7 @@ func wait_until_rest(timeout := 7.0, speed := 0.22) -> bool:
 			break
 		if linear_velocity.length() < speed and angular_velocity.length() < 0.7:
 			calm_frames += 1
-			if calm_frames >= 12:
+			if calm_frames >= 8:
 				return true
 		else:
 			calm_frames = 0

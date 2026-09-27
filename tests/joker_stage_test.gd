@@ -58,7 +58,13 @@ func _run() -> void:
 	for child in box.get_children():
 		if child is StaticBody3D:
 			bodies += 1
-	ok(bodies == 5, "throw box is sealed by 5 bodies (got %d)" % bodies)
+	# Four walls, a lid AND a glass floor: the case hangs in the air so the
+	# underside of a landed stone can be read through the bottom pane.
+	ok(bodies == 6, "throw box is sealed by 6 panes (got %d)" % bodies)
+	ok(stage.get_node_or_null("ThrowBox/Floor") != null, "the case has a glass floor")
+	ok(ShowStageScript.THROW_BOX_CENTER.y > ShowStageScript.STAGE_TOP + 0.5, "the case is lifted off the platform")
+	ok(stage.under_camera() != null and stage.under_camera().position.y < ShowStageScript.THROW_BOX_CENTER.y,
+		"the reveal camera sits below the glass floor")
 	ok(stage.throw_box_contains(ShowStageScript.LAND_PART), "part gem lands inside the box")
 	ok(stage.throw_box_contains(ShowStageScript.LAND_MOD), "mod gem lands inside the box")
 	ok(stage.throw_box_contains(stage.throw_origin(true)), "part gem is released inside the box")

@@ -57,5 +57,10 @@ func _on_dialogue_ended(_resource: Resource) -> void:
 
 func _play_title_theme() -> void:
 	var audio := get_node_or_null("/root/AudioDirector")
+	# The menu theme obeys the saved mixer sliders: re-read them every time
+	# the title card comes back, because the balloon may have changed them
+	# and then been torn down with the dialogue.
+	if audio != null and audio.has_method("apply_saved_volumes"):
+		audio.apply_saved_volumes()
 	if audio != null and audio.has_method("play_scene"):
 		audio.play_scene("festival")

@@ -154,6 +154,12 @@ echo ""
 echo "=== Step 10: Klima Gem stage integrity tests ==="
 bash tests/stage_integrity_test.sh
 
+# Step 10b: the authored stage scene, the lifted glass throw case, the
+# crown/table gem labels and the fairness of the physics throw.
+echo ""
+echo "=== Step 10b: Joker stage + throw tests ==="
+bash tests/joker_stage_test.sh
+
 # Step 11 (optional): the rendered framing check. Boots the real main scene
 # under sway headless + pixman + llvmpipe, walks the show, and measures the
 # projected rectangle of everything the audience has to read. Skips when no

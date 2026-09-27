@@ -84,15 +84,21 @@ const PIP_STEP := Vector3(0.42, 0.0, 0.0)
 ## keep the two bodies from shoving each other around.
 ## Both landing marks sit inside the throw box (see THROW_BOX_*), so a gem
 ## can never be thrown off the stage or out of the world.
-const LAND_PART := Vector3(0.35, STAGE_TOP, 1.45)
-const LAND_MOD := Vector3(-1.25, STAGE_TOP, 1.05)
+const LAND_PART := Vector3(0.35, STAGE_TOP + 1.15, 1.45)
+const LAND_MOD := Vector3(-1.25, STAGE_TOP + 1.15, 1.05)
 
 ## The closed throw box: a glass case downstage-left with four walls, a lid
 ## and the stage floor for a bottom. Everything thrown stays inside it.
-const THROW_BOX_CENTER := Vector3(-0.5, STAGE_TOP, 1.3)
+## The case is LIFTED off the platform and has a glass floor of its own, so
+## the underside of a landed stone is visible: the reveal camera dives under
+## the box and reads the face lying on the glass.
+const THROW_BOX_CENTER := Vector3(-0.5, STAGE_TOP + 1.15, 1.3)
 const THROW_BOX_HALF := Vector3(1.35, 0.0, 0.95)
-const THROW_BOX_HEIGHT := 1.85
+const THROW_BOX_HEIGHT := 1.5
 const THROW_BOX_WALL := 0.06
+
+## Where the reveal camera sits to read the underside of the case.
+const UNDER_CAM_POS := Vector3(-0.5, STAGE_TOP + 0.18, 3.05)
 
 ## Below this line the dialogue balloon covers the frame, so nothing the
 ## audience has to read may be placed there.
@@ -675,8 +681,11 @@ func _build_throw_box() -> void:
 		[Vector3(-hx, h * 0.5, 0), Vector3(THROW_BOX_WALL, h, hz * 2.0)],
 		[Vector3(hx, h * 0.5, 0), Vector3(THROW_BOX_WALL, h, hz * 2.0)],
 		[Vector3(0, h, 0), Vector3(hx * 2.0, THROW_BOX_WALL, hz * 2.0)],
+		# The glass FLOOR: the case hangs in the air, so a landed stone can be
+		# read from underneath through this pane.
+		[Vector3(0, 0, 0), Vector3(hx * 2.0, THROW_BOX_WALL, hz * 2.0)],
 	]
-	var names := ["WallBack", "WallFront", "WallLeft", "WallRight", "Lid"]
+	var names := ["WallBack", "WallFront", "WallLeft", "WallRight", "Lid", "Floor"]
 	for i in walls.size():
 		var offset: Vector3 = walls[i][0]
 		var size: Vector3 = walls[i][1]
@@ -704,6 +713,102 @@ func _build_throw_box() -> void:
 		post.size = Vector3(0.05, h, 0.05)
 		var pmi := _mesh_instance(post, frame_mat, box)
 		pmi.position = c + corner + Vector3(0, h * 0.5, 0)
+		# ...and a slim leg carrying the case up off the platform, so the
+		# audience can see daylight (and the gem's underside) beneath it.
+		var leg := BoxMesh.new()
+		var leg_h: float = THROW_BOX_CENTER.y - STAGE_TOP
+		leg.size = Vector3(0.05, leg_h, 0.05)
+		var lmi := _mesh_instance(leg, frame_mat, box)
+		lmi.position = Vector3(c.x + corner.x, STAGE_TOP + leg_h * 0.5, c.z + corner.z)
+
+
+## The reveal camera: it lives under the lifted case and looks straight up
+## through the glass floor at the stone lying on it.
+func under_camera() -> Camera3D:
+	var cam := get_node_or_null("UnderCam") as Camera3D
+	if cam == null:
+		cam = Camera3D.new()
+		cam.name = "UnderCam"
+		cam.fov = 38.0
+		cam.far = 40.0
+		cam.position = UNDER_CAM_POS
+		add_child(cam)
+	return cam
+
+
+## Dive under the glass and read the stone from below: the face lying on the
+## floor pane is the face the show calls, and the audience watches it being
+## read instead of taking the host's word for it.
+func reveal_from_below(gem: FlatTopGem, hold := 1.5) -> void:
+	var cam := under_camera()
+	var target := gem.global_position if is_instance_valid(gem) else THROW_BOX_CENTER
+	cam.position = Vector3(target.x, STAGE_TOP + 0.14, target.z + 1.5)
+	cam.look_at(target, Vector3.UP)
+	var house := _camera
+	cam.current = true
+	var tw := create_tween()
+	tw.tween_property(cam, "position", Vector3(target.x, STAGE_TOP + 0.2, target.z + 0.95), hold)
+	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tw.finished
+	if is_instance_valid(house):
+		house.current = true
+
+
+## Let the player throw. The stone waits until the audience (that is, the
+## player) says go: space, enter, a click, a screen touch, a gamepad button
+## or a shove of the left stick. How long the cue is held becomes the power
+## of the throw, so a flick is a gentle toss and a hold is a hard one.
+## Returns the power multiplier; a player who does nothing gets an automatic
+## throw at full power after [param timeout] seconds.
+func wait_for_throw_cue(timeout := 6.0) -> float:
+	var prompt := _make_throw_prompt()
+	var waited := 0.0
+	var held := 0.0
+	var started := false
+	while waited < timeout:
+		await get_tree().process_frame
+		var dt := get_process_delta_time()
+		waited += dt
+		var down := _throw_cue_down()
+		if down:
+			started = true
+			held += dt
+			if is_instance_valid(prompt):
+				prompt.text = "THROW!"
+			if held >= 0.9:
+				break
+		elif started:
+			break
+	if is_instance_valid(prompt):
+		prompt.queue_free()
+	if not started:
+		return 1.0
+	# 0 s (a flick) .. 0.9 s (a shove): 0.8x .. 1.45x.
+	return lerpf(0.8, 1.45, clampf(held / 0.9, 0.0, 1.0))
+
+
+## Any of the throw inputs, without touching the project's InputMap: mouse,
+## space/enter, touchscreen, gamepad face button or left stick X.
+func _throw_cue_down() -> bool:
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		return true
+	if Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_ENTER):
+		return true
+	if Input.is_joy_button_pressed(0, JOY_BUTTON_A) or Input.is_joy_button_pressed(0, JOY_BUTTON_B):
+		return true
+	if absf(Input.get_joy_axis(0, JOY_AXIS_LEFT_X)) > 0.5:
+		return true
+	if DisplayServer.is_touchscreen_available() and Input.is_action_pressed(&"ui_accept"):
+		return true
+	return false
+
+
+func _make_throw_prompt() -> Label3D:
+	var prompt := _label("THROW: click / space / stick", 78, Color(1.0, 0.92, 0.6), Color(0.05, 0.03, 0.0, 0.95), 0.0032)
+	prompt.name = "ThrowPrompt"
+	prompt.position = THROW_BOX_CENTER + Vector3(0.0, THROW_BOX_HEIGHT + 0.35, 0.0)
+	add_child(prompt)
+	return prompt
 
 
 ## Is [param p] inside the sealed case? Tests use this to prove that a thrown
@@ -828,7 +933,9 @@ func _arc_velocity(from: Vector3, to: Vector3, flight: float) -> Vector3:
 ## the show reads it off the settled stone, lifts the gem onto its mark
 ## keeping that face to the camera, and returns [part_face, mod_face].
 ## Nothing is pre-rolled; the stones decide.
-func throw_gems(rng: RandomNumberGenerator) -> Array:
+## [param interactive] lets the player throw the stones themselves (click,
+## space, touch or stick); the hold becomes the power. Tests pass false.
+func throw_gems(rng: RandomNumberGenerator, interactive := false) -> Array:
 	clear_gems()
 	# The word lists sit on the faces in order.
 	# Shapeshift (modification) gem hangs on the LEFT, body-part gem on the RIGHT.
@@ -840,13 +947,23 @@ func throw_gems(rng: RandomNumberGenerator) -> Array:
 	# landing, its own reveal, and its own word before the second stone flies.
 	# Every await is epoch-guarded: a rewind clears the gems mid-flight, and
 	# this choreography must stop when its stones are gone.
-	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng, epoch)
+	var power := 1.0
+	if interactive:
+		power = await wait_for_throw_cue()
+		if epoch != _gem_epoch:
+			return []
+	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng, epoch, power)
 	if epoch != _gem_epoch or part_face < 0:
 		return []
 	await get_tree().create_timer(0.25).timeout
 	if epoch != _gem_epoch:
 		return []
-	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng, epoch)
+	var power_mod := 1.0
+	if interactive:
+		power_mod = await wait_for_throw_cue()
+		if epoch != _gem_epoch:
+			return []
+	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng, epoch, power_mod)
 	if epoch != _gem_epoch or mod_face < 0:
 		return []
 	await get_tree().create_timer(0.3).timeout
@@ -880,21 +997,23 @@ func throw_gems_fixed(part_face: int, mod_face: int) -> void:
 ## keeping it, flash it, present the word, and fly it to its slot.
 ## Returns the face index the stones chose, or -1 when a rewind cancelled
 ## the flight (the gems were cleared under it — see _gem_epoch).
-func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: RandomNumberGenerator, epoch: int) -> int:
+func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: RandomNumberGenerator, epoch: int, power := 1.0) -> int:
 	var from := throw_origin(is_part)
 	_pulse_lights(2.2)
 	# Every throw is its own throw: the landing spot, the flight time and the
 	# spin come from the story RNG, so the same seed replays the same night
 	# while no two stones in one night fly alike.
 
-	var flight := clampf((0.62 if is_part else 0.56) + rng.randf_range(-0.1, 0.1), 0.4, 0.9)
+	# A short flight is a fast one: the stone is launched hard across the
+	# small case instead of lobbed, which is what a thrown gem looks like.
+	var flight := clampf((0.34 if is_part else 0.31) / maxf(power, 0.3) + rng.randf_range(-0.04, 0.04), 0.18, 0.55)
 	var target := land + Vector3(rng.randf_range(-0.35, 0.35), 0.0, rng.randf_range(-0.28, 0.28))
 	# Spin is drawn on every axis with a random SIGN: a spin that always turns
 	# the same way lands the same family of faces, which is a rigged stone.
 	var spin := Vector3(
-		rng.randf_range(4.0, 11.0) * (1.0 if rng.randf() < 0.5 else -1.0),
-		rng.randf_range(5.0, 13.0) * (1.0 if rng.randf() < 0.5 else -1.0),
-		rng.randf_range(4.0, 11.0) * (1.0 if rng.randf() < 0.5 else -1.0)
+		rng.randf_range(11.0, 20.0) * power * (1.0 if rng.randf() < 0.5 else -1.0),
+		rng.randf_range(12.0, 22.0) * power * (1.0 if rng.randf() < 0.5 else -1.0),
+		rng.randf_range(11.0, 20.0) * power * (1.0 if rng.randf() < 0.5 else -1.0)
 	)
 	# ...and the stone leaves the hand in a random attitude, so no facet is
 	# ever "the one nearest the floor" by construction.
@@ -907,8 +1026,14 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return -1
 	_pulse_lights(1.9)
+	# The word is the face LYING ON THE GLASS: the show reads the stone from
+	# underneath, through the floor of the case, where the audience can see
+	# it too. Nothing is chosen for it.
+	var face := gem.bottom_face()
+	await reveal_from_below(gem)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return -1
 	var cam_az := _camera_azimuth()
-	var face := gem.front_face_for_azimuth(cam_az)
 	await gem.lift_to(GEM_REVEAL_PART if is_part else GEM_REVEAL_MOD, face, cam_az, 1.05)
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return -1
@@ -1107,12 +1232,18 @@ func gem_center() -> Vector3:
 ## Quick physics-random re-throw of one gem (the producer's mercy): it goes
 ## back in the air under a fresh seeded impulse and the new word is whatever
 ## face lands front-most. Returns the face the stones chose.
-func rethrow_gem(which: int, rng: RandomNumberGenerator) -> int:
+func rethrow_gem(which: int, rng: RandomNumberGenerator, interactive := false) -> int:
 	if which < 0 or which >= _gems.size() or not is_instance_valid(_gems[which]):
 		return -1
 	var gem := _gems[which]
 	var is_part := which == 0
-	return await _throw_one_physics(gem, LAND_PART if is_part else LAND_MOD, is_part, rng, _gem_epoch)
+	var epoch := _gem_epoch
+	var power := 1.0
+	if interactive:
+		power = await wait_for_throw_cue()
+		if epoch != _gem_epoch:
+			return -1
+	return await _throw_one_physics(gem, LAND_PART if is_part else LAND_MOD, is_part, rng, epoch, power)
 
 
 ## Deterministic single re-throw for tests: lands, then lifts the REQUESTED
