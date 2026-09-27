@@ -115,8 +115,10 @@ func _run_tests() -> void:
 		check(live_gems[0].face_labels.size() == 8, "gem A wears eight word labels")
 		check(live_gems[1].face_labels[0].text != "", "gem B labels carry text")
 		check(live_gems[0].words[0] == "HANDS" and live_gems[0].words[7] == "SKIN", "gem A word order is stable")
-		check_vec_close(live_gems[0].position, ShowStageScript.GEM_SLOT_PART, "body-part gem hangs on the RIGHT")
-		check_vec_close(live_gems[1].position, ShowStageScript.GEM_SLOT_MOD, "shapeshift gem hangs on the LEFT")
+		# A finished round leaves each gem dollied forward at its reveal mark,
+		# tipped toward the house camera; the slot is only the throw's landing.
+		check_vec_close(live_gems[0].position, ShowStageScript.GEM_REVEAL_PART, "body-part gem reveals on the RIGHT")
+		check_vec_close(live_gems[1].position, ShowStageScript.GEM_REVEAL_MOD, "shapeshift gem reveals on the LEFT")
 
 	# --- the glowing word presentation ---------------------------------------
 	check(is_instance_valid(stage._plaque_part), "body-part word is presented")

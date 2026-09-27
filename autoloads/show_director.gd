@@ -62,6 +62,8 @@ func stage() -> Node3D:
 	return get_tree().get_first_node_in_group("show_stage") as Node3D
 
 
+## The StageDirector lives inside the balloon, so it is found exactly where
+## the balloon is found (see _balloon): never at the tree root.
 func _motion() -> Node:
 	var balloon := _balloon()
 	if balloon == null:
@@ -69,21 +71,33 @@ func _motion() -> Node:
 	return balloon.get_node_or_null("MotionDirector")
 
 
+## Dialogue Manager parents the balloon to the *current scene*, which is the
+## main scene node — a child of the tree root, next to the autoloads. Looking
+## for the balloon only at the root therefore never finds it in the shipped
+## game, and the stage ends up with no standing portrait at all. Search the
+## current scene first, then walk the tree.
 func _balloon() -> Node:
-	# DialogueManager parents the balloon to the current scene, so look there
-	# first; the root is only a fallback.
-	var tree := get_tree()
-	if tree == null:
+	if get_tree() == null:
 		return null
-	var scene := tree.current_scene
-	if scene != null:
-		var direct := scene.get_node_or_null("VNBalloon")
-		if direct != null:
-			return direct
-		for child in scene.get_children():
-			if child is VNBalloon:
-				return child
-	return tree.root.get_node_or_null("VNBalloon")
+	var cs := get_tree().current_scene
+	if cs != null:
+		var b := cs.get_node_or_null("VNBalloon")
+		if b != null:
+			return b
+	var r := get_tree().root.get_node_or_null("VNBalloon")
+	if r != null:
+		return r
+	return _find_by_name(get_tree().root, "VNBalloon")
+
+
+func _find_by_name(node: Node, wanted: String) -> Node:
+	for child in node.get_children():
+		if child.name == wanted:
+			return child
+		var found := _find_by_name(child, wanted)
+		if found != null:
+			return found
+	return null
 
 
 # ------------------------------------------------------------- show control
@@ -157,12 +171,13 @@ func success_chance(round_no: int) -> float:
 
 # ------------------------------------------------------------------ actors
 
-## The presenter takes his mark.
+## The presenter takes his mark. Ren is a VOICE and a name plate: the show
+## stages exactly one standing portrait (the guest), so nothing is spawned
+## for him. Kept as a hook because the dialogue calls it on the cold open.
 func enter_ren() -> void:
-	var gs := _gs()
-	if gs != null:
-		gs.show_ren_key = "ren"
-	_spawn_actor("ren", "ren", ShowStageScript.REN_MARK, 1.78)
+	var st := stage()
+	if st != null:
+		st.clear_actor("ren")
 
 
 ## The guest takes hers, wide-eyed.
@@ -302,8 +317,6 @@ func sync_from_state() -> void:
 	var st := stage()
 	if gs == null or st == null:
 		return
-	if str(gs.show_ren_key) != "":
-		_spawn_actor("ren", str(gs.show_ren_key), ShowStageScript.REN_MARK, 1.78)
 	if str(gs.show_aurora_key) != "":
 		_spawn_actor("aurora", str(gs.show_aurora_key), ShowStageScript.AURORA_MARK, ShowStageScript.AURORA_BASE_HEIGHT)
 	if str(gs.show_part) != "" and int(gs.show_part_face) >= 0:

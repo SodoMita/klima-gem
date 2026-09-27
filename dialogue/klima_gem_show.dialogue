@@ -9,7 +9,7 @@ using ShowDirector
 
 ~ show_start
 do begin_show()
-A hush, and then the light finds it: a round stage under a proscenium of cold neon, a cloth of slow stars, and a sign that says KLIMA GEM. Below the apron, an audience of silhouettes holds its glowsticks like candles. [#bg=none, #sprite=none:left, #sprite=none:right, #music=festival]
+A hush, and then the light finds it\: a round stage under a proscenium of cold neon, a cloth of slow stars, and a sign that says KLIMA GEM. Below the apron, an audience of silhouettes holds its glowsticks like candles. [#bg=none, #sprite=none:left, #sprite=none:right, #music=festival]
 do enter_ren()
 Ren: Good evening, good evening — every dimension currently tuned in! You are live at the Klima Gem stage, and I am Ren: your host, your referee, and — by default, because nobody else applied — the funniest man in this reality.
 Ren: New viewers, here is the entire rulebook. This show has one prop and no mercy. The gems.
@@ -18,7 +18,7 @@ Ren: The first gem names a body part. The second names a modification. Body part
 Ren: Then we play three trials on this stage. The gems stack her odds before we ever roll. The stage provides the obstacles. The crowd provides the noise.
 Ren: And now — the moment the ratings wait for. From the Chrono Nexus itself, trembling politely at her own mark... my guest... AURORA!
 do aurora_enters()
-Aurora: H-hello! Um. Aurora. [#sfx=open] Subsystem construct of the Chrono Nexus, and — apparently — tonight's contestant.
+Aurora: H-hello! Um. Aurora. Subsystem construct of the Chrono Nexus, and — apparently — tonight's contestant. [#sfx=open]
 Aurora: I did read the contract. The one sentence I understood said the show is not responsible for gravity.
 Ren: That sentence is the show, Aurora. Now — the crowd wants to know what kind of night this will be. How do we open?
 - Big lights, big voice. Give them a finale before we even begin.
@@ -136,14 +136,14 @@ Ren: And that's the show... well. That's the show on the scorecard. The scorecar
 
 ~ finale
 do set_aurora_expression("serious")
-The stage stands empty again: props struck, gems dimmed to embers on their pedestal. Only the sign and the slow stars keep working overtime.
+The stage stands empty again\: props struck, gems dimmed to embers on their pedestal. Only the sign and the slow stars keep working overtime.
 if show_stars == 3:
 	do set_aurora_expression("gorgeous")
 	do finale_confetti()
 	Ren: THREE STARS! A PERFECT SHOW! I have hosted one hundred and nine of these and I have seen this exactly never!
 	Golden rain falls over the round stage, catching in her light like the whole sky decided to audition for her.
 	Aurora: Three for three. My {{show_part}} is still modified, by the way. The modification stays until the credits. It's in the contract.
-	Ren: Then stand there, exactly like that, being a {{show_part}} of {{show_mod}} — because that is the most Klimа Gem image this stage has ever produced.
+	Ren: Then stand there, exactly like that, being a {{show_part}} of {{show_mod}} — because that is the most Klima Gem image this stage has ever produced.
 elif show_stars == 2:
 	do set_aurora_expression("happy")
 	Ren: TWO STARS out of three! A fine show! A strong show! The kind of show that gets a second season and a slightly bigger cannon!
