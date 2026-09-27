@@ -231,8 +231,10 @@ func aurora_hand() -> Vector3:
 ## leaves it parented until the end of the frame, so a rebuild in the same
 ## frame (rollback, save-load, a jump from the story map) adds a second node
 ## with the same name and the stage wears two of everything. Detach, then free.
-func _free_now(node: Node) -> void:
-	if not is_instance_valid(node):
+func _free_now(node: Variant) -> void:
+	# Untyped on purpose: a typed Node param rejects an already-freed
+	# instance before the validity guard can run (human msg 79).
+	if node == null or not is_instance_valid(node) or not (node is Node):
 		return
 	if node.get_parent() != null:
 		node.get_parent().remove_child(node)

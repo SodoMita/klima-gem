@@ -129,6 +129,8 @@ func begin_show() -> void:
 		if not pin_seed and gs.has_method("fresh_seed"):
 			gs.fresh_seed()
 		gs.show_body_mods = {}
+		gs.show_mod_stacks = {}
+		gs.show_stack_round = 0
 		gs.show_round = 0
 		gs.show_ren_key = ""
 		gs.show_aurora_key = ""
@@ -177,8 +179,37 @@ func edge_for(round_no: int) -> int:
 	var mods := body_mods()
 	for part in mods:
 		total += int((PART_EDGE.get(str(part), [0, 0, 0]) as Array)[idx])
-		total += int((MOD_EDGE.get(str(mods[part]), [0, 0, 0]) as Array)[idx])
+		# The same shift applied again stacks: each application adds the
+		# mod's edge once more (human msg 75).
+		var n := maxi(1, stack_count(str(part), str(mods[part])))
+		total += int((MOD_EDGE.get(str(mods[part]), [0, 0, 0]) as Array)[idx]) * n
+	# Three of the same shift is always an advantage.
+	if max_stack() >= 3:
+		total = maxi(total, clampi(round_no, 1, 3) - action_edge(round_no))
 	return total
+
+
+## Times the current/kept part+mod pair has been applied, counting the
+## live pair if this round has not committed it yet.
+func stack_count(part: String, mod: String) -> int:
+	var gs := _gs()
+	if gs == null or not ("show_mod_stacks" in gs):
+		return 1
+	var n := int((gs.show_mod_stacks as Dictionary).get(part + "|" + mod, 0))
+	if part == str(gs.show_part) and mod == str(gs.show_mod) and int(gs.show_stack_round) != int(gs.show_round):
+		n += 1
+	return n
+
+
+func max_stack() -> int:
+	var gs := _gs()
+	if gs == null:
+		return 0
+	var best := 0
+	var mods := body_mods()
+	for part in mods:
+		best = maxi(best, stack_count(str(part), str(mods[part])))
+	return best
 
 
 ## Kept modifications plus the current pair (one mod per body part).
@@ -347,6 +378,12 @@ func apply_mods() -> void:
 	if gs == null or st == null:
 		return
 	gs.show_body_mods = body_mods()
+	# Commit this round's application once (guarded so replays/jumps that
+	# re-run apply_mods cannot stack the same round twice).
+	if int(gs.show_stack_round) != int(gs.show_round) and str(gs.show_part) != "":
+		var key := str(gs.show_part) + "|" + str(gs.show_mod)
+		gs.show_mod_stacks[key] = int(gs.show_mod_stacks.get(key, 0)) + 1
+		gs.show_stack_round = int(gs.show_round)
 	gs.show_outlook = outlook_for(int(gs.show_round))
 	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor(), gs.show_body_mods)
 	st.apply_body_mods(gs.show_body_mods)

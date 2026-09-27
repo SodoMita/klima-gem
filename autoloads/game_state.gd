@@ -25,6 +25,9 @@ signal state_restored
 ## trial's props are standing, and the guest's current portrait key.
 @export var show_round: int = 0
 @export var show_stars: int = 0
+## "part|mod" -> times applied (repeat shifts stack; 3x = sure advantage).
+var show_mod_stacks: Dictionary = {}
+var show_stack_round: int = 0
 @export var show_cheers: int = 1
 @export var show_part: String = ""
 @export var show_mod: String = ""
@@ -139,6 +142,8 @@ func snapshot() -> Dictionary:
 		"bond": bond.duplicate(true),
 		"show_round": show_round,
 		"show_stars": show_stars,
+		"show_mod_stacks": show_mod_stacks.duplicate(true),
+		"show_stack_round": show_stack_round,
 		"show_cheers": show_cheers,
 		"show_part": show_part,
 		"show_mod": show_mod,
@@ -176,6 +181,9 @@ func restore(data: Dictionary) -> void:
 	protected_nova = bool(data.get("protected_nova", false))
 	show_round = int(data.get("show_round", 0))
 	show_stars = int(data.get("show_stars", 0))
+	var stk: Variant = data.get("show_mod_stacks", {})
+	show_mod_stacks = (stk as Dictionary).duplicate(true) if stk is Dictionary else {}
+	show_stack_round = int(data.get("show_stack_round", 0))
 	show_cheers = int(data.get("show_cheers", 1))
 	show_part = str(data.get("show_part", ""))
 	show_mod = str(data.get("show_mod", ""))
