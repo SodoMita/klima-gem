@@ -307,7 +307,7 @@ func _ready() -> void:
 	# Every boot is a different night: the score seed is drawn at random
 	# unless a test pins it through reroll(seed) / music_seed. A fixed seed
 	# made every show open on the very same bars and the very same hits.
-	if randomize_music_on_boot:
+	if randomize_music_on_boot and not OS.get_cmdline_user_args().has("--fixed-audio-seed"):
 		var r := RandomNumberGenerator.new()
 		r.randomize()
 		music_seed = int(r.randi() & 0x7fffffff) | 1
@@ -442,7 +442,7 @@ func _begin_score(theme_name: StringName, score: Dictionary) -> void:
 	current_theme = theme_name
 	music_source = "procedural"
 	_auto_loop = false
-	var seed_value := hash(String(theme_name) + _scene_mood) ^ music_seed
+	var seed_value := hash(String(theme_name) + _scene_mood) ^ music_seed ^ int(_rng.randi() & 0x7fffffff)
 	_rng.seed = seed_value
 	if _engine != null:
 		var first := not bool(_engine.call("active"))
@@ -657,7 +657,8 @@ func has_dubstep_engine() -> bool:
 ## Start (or switch) the live dubstep score. mood tints the intensity only.
 func play_dubstep(scene_key: String = "stage", mood: String = "") -> void:
 	var variant: int = int(DUB_SCENES.get(scene_key, 0))
-	var bpm: float = float(DUB_BPM.get(scene_key, 140.0))
+	# Random tempo drift (V4): no two entries of a scene at the same bpm.
+	var bpm: float = float(DUB_BPM.get(scene_key, 140.0)) + float(_rng.randi_range(-4, 4))
 	_scene_key = scene_key
 	_scene_mood = mood
 	_last_theme = StringName(scene_key)
@@ -685,7 +686,7 @@ func play_dubstep(scene_key: String = "stage", mood: String = "") -> void:
 		"warm": base = 0.5
 	dub_intensity = base
 	if not same:
-		_dub.call("dub_start", variant, bpm, float(music_seed ^ hash(scene_key)), float(SAMPLE_RATE))
+		_dub.call("dub_start", variant, bpm, float((music_seed ^ hash(scene_key) ^ _rng.randi()) & 0x7fffffff), float(SAMPLE_RATE))
 	_dub.call("dub_set_intensity", base, 0.8 if same else 0.4)
 	_ensure_playback()
 
@@ -823,7 +824,9 @@ func _dub_stream(key: String, energy: float) -> AudioStream:
 		return null
 	var buf := PackedVector2Array()
 	buf.resize(frames)
-	var written: int = int(_dub.call("render_dub_sfx", kind, buf, float(bucket) / 4.0))
+	# Takes after the first are rendered at a jittered energy too (V4).
+	var e := clampf(float(bucket) / 4.0 + (0.0 if take == 0 else _rng.randf_range(-0.12, 0.12)), 0.0, 1.0)
+	var written: int = int(_dub.call("render_dub_sfx", kind, buf, e))
 	if written <= 0:
 		return null
 	var mono := PackedFloat32Array()
