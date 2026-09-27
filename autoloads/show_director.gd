@@ -51,6 +51,14 @@ const MOD_EDGE := {
 ## the choir pads without replaying the tune.
 var _pattern: Array = []
 
+# Async scene animations can finish after rollback/load has restored GameState.
+# Never let those old continuations commit into the newly restored timeline.
+var _state_epoch: int = 0
+
+
+func _is_current(epoch: int, st: Node) -> bool:
+	return epoch == _state_epoch and is_instance_valid(st) and st.is_inside_tree() and stage() == st
+
 
 func _ready() -> void:
 	# GameState is an earlier autoload; this is safe deferred either way.
@@ -109,6 +117,7 @@ func _find_balloon(node: Node) -> Node:
 
 ## Wipe the show state and the stage furniture. Call once, on the cold open.
 func begin_show() -> void:
+	_state_epoch += 1
 	var gs := _gs()
 	if gs != null:
 		gs.show_round = 0
@@ -257,8 +266,11 @@ func throw_gem_round() -> void:
 	var st := stage()
 	if gs == null or st == null:
 		return
+	var epoch := _state_epoch
 	var faces: Array = await st.throw_gems(gs.rng)
-	if faces.size() != 2:
+	if not _is_current(epoch, st) or faces.size() != 2:
+		return
+	if int(faces[0]) < 0 or int(faces[0]) >= ShowStageScript.PARTS.size() or int(faces[1]) < 0 or int(faces[1]) >= ShowStageScript.MODS.size():
 		return
 	gs.show_part_face = int(faces[0])
 	gs.show_mod_face = int(faces[1])
@@ -273,9 +285,14 @@ func swap_mod_gem() -> void:
 	var st := stage()
 	if gs == null or st == null:
 		return
+	if int(gs.show_cheers) <= 0:
+		return
+	var epoch := _state_epoch
 	gs.show_cheers = int(gs.show_cheers) - 1
 	gs.rerolls_used = int(gs.rerolls_used) + 1
 	var face: int = await st.rethrow_gem(1, gs.rng)
+	if not _is_current(epoch, st) or int(face) < 0 or int(face) >= ShowStageScript.MODS.size():
+		return
 	gs.show_mod_face = int(face)
 	gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
 	await apply_mods()
@@ -326,16 +343,21 @@ func run_challenge() -> void:
 	var st := stage()
 	if gs == null or st == null:
 		return
+	var epoch := _state_epoch
 	var need := clampi(int(gs.show_round), 1, 3)
 	var score := total_for(int(gs.show_round))
 	gs.last_roll = float(score)
 	gs.last_success = score >= need
 	await st.play_challenge(int(gs.show_round), bool(gs.last_success), _pattern)
+	if not _is_current(epoch, st):
+		return
 	if gs.last_success:
 		gs.show_stars = int(gs.show_stars) + 1
 	st.set_stars(int(gs.show_stars))
 	var star_index := int(gs.show_stars) - 1 if gs.last_success else int(gs.show_stars)
 	await st.fly_star(bool(gs.last_success), star_index)
+	if not _is_current(epoch, st):
+		return
 	st.clear_props()
 	gs.show_props_round = 0
 
@@ -356,6 +378,7 @@ func _on_state_restored() -> void:
 ## Rebuild the visible show from GameState — used after rollback, save-load
 ## and the panic screen. Nothing animates; everything is simply true again.
 func sync_from_state() -> void:
+	_state_epoch += 1
 	var gs := _gs()
 	var st := stage()
 	if gs == null or st == null:
