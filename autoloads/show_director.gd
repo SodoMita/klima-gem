@@ -6,34 +6,45 @@ extends Node
 ## the panic screen re-dress the whole show for free. On every GameState
 ## restore this controller rebuilds the stage from that state — instantly,
 ## without replaying the choreography.
+##
+## You play AS Aurora. Ren hosts (voice only, never rendered); Aurora is the
+## only portrait on the stage and every choice is her action. Trial success
+## is deterministic: her action stats plus the gems' situational edge, no
+## dice. The gems themselves are physics-random: the stones leave her hand
+## under seeded impulses and whatever face lands front-most is the word.
 
 const ShowStageScript := preload("res://scenes/show_stage/show_stage.gd")
 
-const ROLL_BASE := 0.5    # a fair coin at zero edge
+const ROLL_BASE := 0.5    # a fair coin at zero edge (odds display only)
 const ROLL_STEP := 0.16   # each +/-1 of combined edge moves the odds this much
 
 ## How each body part leans each trial: [crossing, bells, choir].
+## Every word is mixed: each helps (+1) at least one trial and hinders (-1)
+## at least one other. Nothing is generally good or bad — the same HANDS
+## that fumble the floating stones catch the bells, and HEAVY that sinks the
+## crossing steadies the aim. Columns sum to zero: every trial is fair.
 const PART_EDGE := {
-	"HANDS": [0, 1, 0],
-	"EYES": [1, 0, 1],
-	"LEGS": [1, 0, 0],
-	"VOICE": [0, 0, 1],
-	"HAIR": [-1, 0, 0],
-	"BACK": [0, -1, 0],
-	"HEART": [0, 0, 1],
-	"SKIN": [-1, 0, -1],
+	"HANDS": [-1, 1, 0],
+	"EYES": [1, -1, 1],
+	"LEGS": [1, 0, -1],
+	"VOICE": [-1, 0, 1],
+	"HAIR": [0, -1, 1],
+	"BACK": [1, -1, 0],
+	"HEART": [0, 1, -1],
+	"SKIN": [-1, 1, -1],
 }
 
-## How each modification leans each trial.
+## How each modification leans each trial. Same rule: every shapeshift is an
+## upside somewhere and a downside somewhere else.
 const MOD_EDGE := {
-	"GIANT": [0, 1, 0],
-	"TINY": [-1, -1, 0],
+	"GIANT": [-1, 1, 0],
+	"TINY": [1, -1, 0],
 	"STICKY": [-1, 1, 0],
 	"BOUNCY": [1, -1, 0],
-	"GLASS": [0, 0, -1],
-	"MAGNET": [0, 1, 0],
-	"HEAVY": [-1, 0, -1],
-	"GLOWING": [1, 0, 1],
+	"GLASS": [0, -1, 1],
+	"MAGNET": [0, 1, -1],
+	"HEAVY": [-1, 1, -1],
+	"GLOWING": [1, -1, 1],
 }
 
 ## Visual-only randomness for the choir melody. Not saved: a restore rebuilds
@@ -128,8 +139,8 @@ func challenge_name(round_no: int) -> String:
 	return ShowStageScript.CHALLENGE_NAMES[idx]
 
 
-## Combined word edge for a trial: negative is a disadvantage, positive an
-## advantage, zero a fair draw.
+## Combined word edge for a trial: what the gems say about this trial.
+## Situational only — every word helps somewhere and hinders somewhere.
 func edge_for(round_no: int) -> int:
 	var gs := _gs()
 	if gs == null or str(gs.show_part) == "" or str(gs.show_mod) == "":
@@ -140,11 +151,35 @@ func edge_for(round_no: int) -> int:
 	return part_edge + mod_edge
 
 
+## What Aurora's own actions contribute to a trial: the stats she built by
+## playing. The Crossing tests composure (bond with Ren) and confidence
+## (trust); Bell Barrage tests confidence and punch (power); the Echo Choir
+## tests bond and memory (insight). Words set the situation, actions decide.
+func action_edge(round_no: int) -> int:
+	var gs := _gs()
+	if gs == null:
+		return 0
+	match clampi(round_no, 1, 3):
+		1:
+			return int(gs.get_bond("ren")) + int(gs.trust)
+		2:
+			return int(gs.trust) + int(gs.power)
+		3:
+			return int(gs.get_bond("ren")) + int(gs.insight)
+	return 0
+
+
+## The full account for a trial: gems plus actions. This is what the trial
+## is decided on — no dice anywhere.
+func total_for(round_no: int) -> int:
+	return edge_for(round_no) + action_edge(round_no)
+
+
 func outlook_for(round_no: int) -> String:
-	var edge := edge_for(round_no)
-	if edge > 0:
+	var total := total_for(round_no)
+	if total > 0:
 		return "advantage"
-	if edge < 0:
+	if total < 0:
 		return "disadvantage"
 	return "even"
 
@@ -159,8 +194,10 @@ func outlook_word(round_no: int) -> String:
 	return "a fair draw"
 
 
+## Display odds for tests/debug. The show itself does not roll: trials are
+## decided deterministically by total_for() against the trial number.
 func success_chance(round_no: int) -> float:
-	return clampf(ROLL_BASE + ROLL_STEP * float(edge_for(round_no)), 0.15, 0.85)
+	return clampf(ROLL_BASE + ROLL_STEP * float(total_for(round_no)), 0.15, 0.85)
 
 
 # ------------------------------------------------------------------ actors
@@ -210,20 +247,27 @@ func _spawn_actor(alias: String, tex_key: String, at: Vector3, height: float) ->
 
 # ------------------------------------------------------------ gem ceremony
 
-## Pick both words with the story RNG, then stage the whole throw.
+## Throw both gems and read what the stones say. Nothing is pre-rolled: the
+## stage throws with impulses drawn from the story RNG, the bodies land where
+## physics puts them, and the faces that land front-most become the words.
+## Same seed, same throw parameters, same landing — deterministic, but the
+## words come from the simulation, never from a randi_range(0, 7).
 func throw_gem_round() -> void:
 	var gs := _gs()
 	var st := stage()
 	if gs == null or st == null:
 		return
-	gs.show_part_face = gs.rng.randi_range(0, 7)
-	gs.show_mod_face = gs.rng.randi_range(0, 7)
+	var faces: Array = await st.throw_gems(gs.rng)
+	if faces.size() != 2:
+		return
+	gs.show_part_face = int(faces[0])
+	gs.show_mod_face = int(faces[1])
 	gs.show_part = ShowStageScript.PARTS[gs.show_part_face]
 	gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
-	await st.throw_gems(str(gs.show_part), int(gs.show_part_face), str(gs.show_mod), int(gs.show_mod_face))
 
 
-## Spend a crowd cheer: the modification gem goes back in the air.
+## Spend a crowd cheer: the modification gem goes back in the air, and the
+## new word is whatever face lands front-most this time.
 func swap_mod_gem() -> void:
 	var gs := _gs()
 	var st := stage()
@@ -231,9 +275,9 @@ func swap_mod_gem() -> void:
 		return
 	gs.show_cheers = int(gs.show_cheers) - 1
 	gs.rerolls_used = int(gs.rerolls_used) + 1
-	gs.show_mod_face = gs.rng.randi_range(0, 7)
+	var face := await st.rethrow_gem(1, gs.rng)
+	gs.show_mod_face = int(face)
 	gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
-	await st.rethrow_gem(1, int(gs.show_mod_face), str(gs.show_mod))
 	await apply_mods()
 
 
@@ -271,16 +315,21 @@ func build_challenge(round_no: int) -> void:
 	await st.get_tree().create_timer(0.7).timeout
 
 
-## Decide with the seeded roll, then perform the result, award the star, and
-## tear the props back down. The stage is clean when this returns.
+## Decide without dice, then perform the result, award the star, and tear the
+## props back down. The stage is clean when this returns. Success is Aurora's
+## actions plus the gems' situational edge, against the trial number: trial 1
+## needs a total of 1, trial 2 needs 2, trial 3 needs 3. The same choices
+## with the same words always clear or miss the same way — the show is won
+## by playing, not by rolling.
 func run_challenge() -> void:
 	var gs := _gs()
 	var st := stage()
 	if gs == null or st == null:
 		return
-	var chance := success_chance(int(gs.show_round))
-	gs.last_roll = gs.rng.randf()
-	gs.last_success = gs.last_roll < chance
+	var need := clampi(int(gs.show_round), 1, 3)
+	var score := total_for(int(gs.show_round))
+	gs.last_roll = float(score)
+	gs.last_success = score >= need
 	await st.play_challenge(int(gs.show_round), bool(gs.last_success), _pattern)
 	if gs.last_success:
 		gs.show_stars = int(gs.show_stars) + 1

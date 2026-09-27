@@ -42,7 +42,9 @@ func _ready() -> void:
 	await _wait(0.9)
 	await _measure_and_shoot("04_guest")
 	var stage := _stage()
-	await stage.throw_gems("EYES", 1, "GLOWING", 7)
+	# Physics-random ceremonial throw through the director, so GameState
+	# carries the landed words and the chip below shows them truthfully.
+	await director.throw_gem_round()
 	await _wait(0.4)
 	await _measure_and_shoot("05_gems_settled")
 	for gi in stage._gems.size():

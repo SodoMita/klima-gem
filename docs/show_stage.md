@@ -32,7 +32,7 @@ has to read therefore has to land above it.
   screen rectangle of each, draws them on the PNG, and flags anything that
   leaves the frame or crosses the balloon's top edge.
 
-## 2. The throw is physics
+## 2. The throw is physics — and the stones decide the words
 
 `project.godot` used to switch physics off entirely
 (`physics/3d/physics_engine="Dummy"`). The gems were carried to their marks by
@@ -43,21 +43,25 @@ a tween. Now:
 - The platform, the altar head and a safety net far below the house floor are
   `StaticBody3D` with real collision shapes.
 - `ShowStage._arc_velocity()` solves the ballistic problem for a given flight
-  time, and `throw_gems()` launches each gem with `throw_with_velocity()` — an
-  impulse, gravity, spin from `angular_velocity`. It arcs, tumbles, bounces
+  time, and `throw_gems(rng)` launches each gem with `throw_with_velocity()` —
+  an impulse, gravity, spin from `angular_velocity`. It arcs, tumbles, bounces
   off the platform and comes to rest. `wait_until_rest()` watches the body
   until it settles.
-- Only then does the show take over: `lift_to()` freezes the body, lifts it
-  onto its mark and turns the rolled face to the camera. That is choreography,
-  and it says so.
+- Nothing is pre-rolled. The landing spot, flight time and spin come from the
+  story RNG, and whatever face lands front-most — read with
+  `front_face_for_azimuth()` — **is** the word. Only then does the show take
+  over: `lift_to()` freezes the body, lifts it onto its mark keeping that face
+  to the camera. That is choreography, and it says so.
 - The two gems are on collision layer 2 with mask 1, i.e. they collide with
   the world and never with each other. Two hero props shoving each other off
   their marks is chaos, not drama.
+- `throw_gems_fixed()` / `rethrow_gem_fixed()` exist only for tests and framing
+  shots that need a specific word on camera. Gameplay never calls them.
 
 `tests/stage_integrity_test.gd` asserts the engine is not `Dummy`, that a gem
 is a rigid body with a hull, that a body launched upward rises and then falls
-under gravity, and that a full ceremonial throw leaves both gems standing on
-their marks.
+under gravity, and that a full physics-random throw reads two legal faces and
+leaves both gems standing on their marks.
 
 ## 3. Every word is welded to the facet it names
 
@@ -107,6 +111,24 @@ dialogue file and fails on any unescaped one.
   balloon is parented to the current scene. Both are fixed, and the integrity
   test asserts exactly one portrait, under `World3D/Characters`, standing on
   her mark and inside the camera frame.
+
+## 6. You play AS Aurora; actions decide, words situate
+
+- Aurora is the protagonist and the only portrait on the stage. Ren hosts —
+  voice only, never rendered. Every choice is her action, and
+  `GameState.player_name` is `"Aurora"`.
+- Trial success has no dice. Each trial is decided by her **actions** (the
+  stats her choices built) plus the gems' **situational edge**, against the
+  trial number: trial 1 needs a total of 1, trial 2 needs 2, trial 3 needs 3.
+  The Crossing tests bond + trust, Bell Barrage tests trust + power, the Echo
+  Choir tests bond + insight. Same choices with the same words always clear or
+  miss the same way.
+- No word is generally good or bad. Every body part and every modification
+  helps (+1) at least one trial and hinders (−1) at least one other; the edge
+  columns sum to zero, so every trial is fair. A downside in one trial is an
+  upside in another — read the board and play to it.
+- The one crowd cheer still buys a re-throw of the modification gem, and the
+  new word is whatever face the stones land on this time.
 
 ## Verifying by running
 

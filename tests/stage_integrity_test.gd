@@ -212,9 +212,16 @@ func _test_gem_throw_is_physics() -> void:
 	check(fell < peak, "and gravity brings it back down (%.2f < %.2f)" % [fell, peak])
 	check(gem.linear_velocity.length() > 0.0 or gem.sleeping, "the body is being integrated by the physics server")
 
-	# A full ceremonial throw must put both gems on their marks.
+	# A full ceremonial throw is physics-random: no faces are requested, the
+	# stones decide, and both still come home to their marks.
 	stage.clear_gems()
-	await stage.throw_gems("EYES", 1, "GLOWING", 7)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4242
+	var faces: Array = await stage.throw_gems(rng)
+	check(faces.size() == 2, "the throw reads two faces off the landing")
+	if faces.size() == 2:
+		check(int(faces[0]) >= 0 and int(faces[0]) < 8, "the part face is a legal face (%s)" % faces[0])
+		check(int(faces[1]) >= 0 and int(faces[1]) < 8, "the mod face is a legal face (%s)" % faces[1])
 	check(stage._gems.size() == 2, "two gems come back")
 	for i in stage._gems.size():
 		var g: FlatTopGem = stage._gems[i]
@@ -222,6 +229,13 @@ func _test_gem_throw_is_physics() -> void:
 		check(g.settled, "gem %d reports itself settled" % i)
 		check(g.global_position.distance_to(slot) < 0.12,
 			"gem %d stands on its mark within a hand's width (%.2f)" % [i, g.global_position.distance_to(slot)])
+	if stage._gems.size() == 2 and faces.size() == 2:
+		check(stage._gems[0].front_face() == int(faces[0]) or stage._gems[0].front_face() == -1,
+			"the part gem shows the face it landed on")
+	# The deterministic staging helper still exists for framing shots.
+	stage.clear_gems()
+	await stage.throw_gems_fixed(1, 7)
+	check(stage._gems.size() == 2, "the fixed staging throw brings two gems")
 	stage.queue_free()
 	await get_tree().process_frame
 

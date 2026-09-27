@@ -8,7 +8,7 @@ signal mind_read_unlocked(unlocked: bool)
 ## Emitted at the end of restore(); the Klima Gem stage re-dresses itself on it.
 signal state_restored
 
-@export var player_name: String = "Ren"
+@export var player_name: String = "Aurora"
 @export var trust: int = 0
 @export var insight: int = 0
 @export var power: int = 0
@@ -61,7 +61,12 @@ func _reseed() -> void:
 
 
 func can_read_mind(character_id: String) -> bool:
-	if character_id.to_lower() == "aurora" and get_bond("aurora") >= 5:
+	# You play AS Aurora: a deep bond with Ren (or, for old saves, the
+	# legacy aurora key) opens the quiet channel to the host's unspoken words.
+	var who := character_id.to_lower()
+	if who == "ren" and get_bond("ren") >= 5:
+		return true
+	if who == "aurora" and (get_bond("aurora") >= 5 or get_bond("ren") >= 5):
 		return true
 	if insight >= 10:
 		return true
@@ -77,7 +82,7 @@ func add_bond(character_id: String, amount: int) -> void:
 	var new_value: int = get_bond(character_id) + amount
 	bond[character_id] = new_value
 	bond_changed.emit(character_id, new_value)
-	if character_id == "aurora" and new_value >= 5:
+	if character_id in ["aurora", "ren"] and new_value >= 5:
 		mind_read_unlocked.emit(true)
 
 
@@ -138,7 +143,7 @@ func snapshot() -> Dictionary:
 
 
 func restore(data: Dictionary) -> void:
-	player_name = str(data.get("player_name", "Ren"))
+	player_name = str(data.get("player_name", "Aurora"))
 	trust = int(data.get("trust", 0))
 	insight = int(data.get("insight", 0))
 	power = int(data.get("power", 0))

@@ -145,7 +145,7 @@ custom_minimum_size = Vector2(460, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.86, 0.98, 0.92)
 theme_override_font_sizes/font_size = 17
-text = "Два кристалла, три испытания: гость бросает — сцена решает"
+text = "Два кристалла, три испытания: ты — Аврора, ты бросаешь — сцена решает"
 horizontal_alignment = 1
 autowrap_mode = 2
 

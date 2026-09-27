@@ -684,24 +684,67 @@ func _arc_velocity(from: Vector3, to: Vector3, flight: float) -> Vector3:
 	return Vector3(horizontal.x, vy, horizontal.y)
 
 
-## The signature throw. Both gems leave the guest's hand as real rigid bodies
-## under an impulse, tumble across the stage, bounce off the platform, and
-## come to rest — and only then does the show lift them onto their marks and
-## turn the rolled face to the camera. Words are already decided; this stages
-## them.
-func throw_gems(part_word: String, part_face: int, mod_word: String, mod_face: int) -> void:
+## The signature throw, physics-random. Both gems leave the guest's hand as
+## real rigid bodies under impulses drawn from [param rng] — landing spot,
+## flight time and spin all vary — tumble across the stage, bounce off the
+## platform, and come to rest. Whatever face lands front-most IS the word:
+## the show reads it off the settled stone, lifts the gem onto its mark
+## keeping that face to the camera, and returns [part_face, mod_face].
+## Nothing is pre-rolled; the stones decide.
+func throw_gems(rng: RandomNumberGenerator) -> Array:
 	clear_gems()
-	# The word lists sit on the faces in order; the announced face is the roll.
+	# The word lists sit on the faces in order.
 	# Shapeshift (modification) gem hangs on the LEFT, body-part gem on the RIGHT.
 	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
 
 	# The body part goes first, thrown long across the stage; it gets its own
 	# landing, its own reveal, and its own word before the second stone flies.
+	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng)
+	await get_tree().create_timer(0.25).timeout
+	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng)
+	await get_tree().create_timer(0.3).timeout
+	return [part_face, mod_face]
+
+
+## Deterministic staging for tests and framing shots: a real impulse throw
+## that lands, then lifts the REQUESTED faces to the camera. Gameplay never
+## calls this — the show calls throw_gems() and reads the landing.
+func throw_gems_fixed(part_face: int, mod_face: int) -> void:
+	clear_gems()
+	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
+	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
 	await _throw_one(gem_part, LAND_PART, part_face, true)
 	await get_tree().create_timer(0.25).timeout
 	await _throw_one(gem_mod, LAND_MOD, mod_face, false)
 	await get_tree().create_timer(0.3).timeout
+
+
+## One full physics-random throw: leave the hand under a seeded impulse,
+## land, rest, READ the face that landed front-most, lift onto the mark
+## keeping it, flash it, present the word, and fly it to its slot.
+## Returns the face index the stones chose.
+func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: RandomNumberGenerator) -> int:
+	var from := aurora_hand() + (Vector3(0.16, 0.04, -0.06) if is_part else Vector3(-0.14, 0.08, -0.02))
+	_pulse_lights(2.2)
+	# Every throw is its own throw: the landing spot, the flight time and the
+	# spin come from the story RNG, so the same seed replays the same night
+	# while no two stones in one night fly alike.
+	var flight := clampf((1.0 if is_part else 0.78) + rng.randf_range(-0.12, 0.12), 0.55, 1.25)
+	var target := land + Vector3(rng.randf_range(-0.55, 0.55), 0.0, rng.randf_range(-0.35, 0.35))
+	var spin := Vector3(rng.randf_range(5.0, 9.0), rng.randf_range(7.0, 12.0), rng.randf_range(3.0, 6.0))
+	if not is_part:
+		spin = spin * -0.8
+	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin)
+	await gem.wait_until_rest(3.2)
+	_pulse_lights(1.9)
+	var cam_az := _camera_azimuth()
+	var face := gem.front_face_for_azimuth(cam_az)
+	await gem.lift_to(GEM_SLOT_PART if is_part else GEM_SLOT_MOD, face, cam_az, 1.05)
+	await gem.flash_face(face)
+	await gem.flash_reveal()
+	await present_word(gem, face, is_part)
+	return face
 
 
 ## One full throw: leave the hand, land, rest, lift onto the mark, flash the
@@ -853,8 +896,20 @@ func gem_center() -> Vector3:
 	return (GEM_SLOT_PART + GEM_SLOT_MOD) * 0.5
 
 
-## Quick re-throw of just the modification gem (the producer's mercy).
-func rethrow_gem(which: int, face: int, word: String) -> void:
+## Quick physics-random re-throw of one gem (the producer's mercy): it goes
+## back in the air under a fresh seeded impulse and the new word is whatever
+## face lands front-most. Returns the face the stones chose.
+func rethrow_gem(which: int, rng: RandomNumberGenerator) -> int:
+	if which < 0 or which >= _gems.size() or not is_instance_valid(_gems[which]):
+		return -1
+	var gem := _gems[which]
+	var is_part := which == 0
+	return await _throw_one_physics(gem, LAND_PART if is_part else LAND_MOD, is_part, rng)
+
+
+## Deterministic single re-throw for tests: lands, then lifts the REQUESTED
+## face. Gameplay never calls this.
+func rethrow_gem_fixed(which: int, face: int) -> void:
 	if which < 0 or which >= _gems.size() or not is_instance_valid(_gems[which]):
 		return
 	var gem := _gems[which]
