@@ -24,6 +24,16 @@ class_name StageDirector extends Node
 ##   #nla=track:clip:FROM-TO?opts      NLA-style clip play with crossfade,
 ##                                     loop, speed and frame range
 ##   #nla_stop=track                   stop a track
+##   #sprite3d=key:alias?path=Node3D&height=1.8&pos=x y z&anchor=bottom|center
+##            &yaw=deg&modulate=hex|rgba
+##                                     stand a portrait in a 3D scene as a
+##                                     quad that faces the camera by rotating
+##                                     only around the vertical axis (vertex
+##                                     shader); key "none" removes it
+##   #place3d=alias:x y z[?height=1.8] place the quad by transform
+##   #place3d=alias:copy=NodePath      copy an existing 3D object's global
+##                                     transform (position + scale; its yaw
+##                                     becomes the billboard facing offset)
 ##
 ## #tween properties: position, x, y, z (3D), rotation (degrees), scale,
 ## modulate, alpha, self_modulate, self_alpha, global_position - or any real
@@ -51,6 +61,7 @@ signal tag_rejected(tag: String, reason: String)
 ## Tag prefixes the balloon hands to this director.
 const MOTION_PREFIXES: PackedStringArray = [
 	"tween=", "tween_stop=", "set=", "shake=", "nla=", "nla_stop=", "nla_track=", "target=",
+	"sprite3d=", "place3d=",
 ]
 
 const TRANSITIONS := {
@@ -95,6 +106,14 @@ var _ranged: Array = []
 var _looping: Dictionary = {}
 ## Players that already have the loop hook connected: instance id -> true.
 var _finish_hooked: Dictionary = {}
+## Sprite3DQuads spawned by `#sprite3d=`: alias -> quad. Rollback frees them
+## all and the replayed tags recreate the ones that belong to the story so far.
+var _spawned: Dictionary = {}
+## Resolves a `#sprite3d=` key to a portrait texture; the balloon wires this
+## to its own `sprites` dictionary so the director stays scene-agnostic.
+var texture_resolver: Callable
+
+const SPRITE3D_QUAD := preload("res://scenes/motion/sprite_3d_quad.gd")
 
 
 ## Bind the director to the node relative paths resolve against, and seed
@@ -133,6 +152,10 @@ func apply_tag(tag: String, instant: bool = false) -> bool:
 		return _apply_nla_stop(tag)
 	if tag.begins_with("nla="):
 		return _apply_nla(tag, instant)
+	if tag.begins_with("sprite3d="):
+		return _apply_sprite3d(tag)
+	if tag.begins_with("place3d="):
+		return _apply_place3d(tag)
 	if tag.begins_with("target="):
 		return _apply_register(tag, false)
 	return false
@@ -436,6 +459,11 @@ func _apply_tween_stop(tag: String) -> bool:
 	var node: Node = resolve_target(tag.substr(tag.find("=") + 1))
 	if node == null:
 		return _reject(tag, "unknown target")
+	_kill_tweens_for(node)
+	return _accept(tag)
+
+
+func _kill_tweens_for(node: Node) -> void:
 	var prefix: String = "%d:" % node.get_instance_id()
 	for key: String in _tweens.keys():
 		if key.begins_with(prefix):
@@ -443,7 +471,6 @@ func _apply_tween_stop(tag: String) -> bool:
 			if is_instance_valid(tween):
 				tween.kill()
 			_tweens.erase(key)
-	return _accept(tag)
 
 
 #endregion
@@ -659,6 +686,108 @@ func _apply_nla_stop(tag: String) -> bool:
 #endregion
 
 
+#region Sprite3D quads
+
+
+## Spawn (or replace) a Y-billboard portrait quad in a 3D scene.
+func spawn_quad(alias: String, tex: Texture2D, parent: Node3D, height: float, anchor_bottom: bool, pos: Variant = null) -> Sprite3DQuad:
+	remove_quad(alias)
+	var quad: Sprite3DQuad = SPRITE3D_QUAD.new()
+	quad.name = "Sprite3D_%s" % alias
+	parent.add_child(quad)
+	quad.world_height = height
+	quad.bottom_anchored = anchor_bottom
+	quad.texture = tex
+	if pos is Vector3:
+		quad.position = pos
+	_spawned[alias] = quad
+	_targets[alias] = quad
+	return quad
+
+
+## Remove a spawned quad; tweens on it die with it.
+func remove_quad(alias: String) -> void:
+	if _spawned.has(alias):
+		var quad: Node = _spawned[alias]
+		if is_instance_valid(quad):
+			_kill_tweens_for(quad)
+			quad.queue_free()
+		_spawned.erase(alias)
+	if _targets.get(alias) is Sprite3DQuad:
+		_targets.erase(alias)
+
+
+## #sprite3d=key:alias?path=Node3D&height=1.8&pos=x y z&anchor=bottom|center
+##            &yaw=deg&modulate=hex|rgba  -  key "none" removes the quad.
+func _apply_sprite3d(tag: String) -> bool:
+	var parsed: Array = _split_options(tag.substr(tag.find("=") + 1))
+	var fields: PackedStringArray = str(parsed[0]).split(":", true, 1)
+	var opts: Dictionary = parsed[1]
+	var key: String = fields[0].strip_edges()
+	var alias: String = (fields[1] if fields.size() > 1 else key).strip_edges()
+	if alias == "":
+		return _reject(tag, "sprite3d needs key:alias")
+	if key == "none":
+		remove_quad(alias)
+		return _accept(tag)
+	if not texture_resolver.is_valid():
+		return _reject(tag, "no texture resolver is attached")
+	var tex: Variant = texture_resolver.call(key)
+	if not (tex is Texture2D):
+		return _reject(tag, "unknown sprite3d key '%s'" % key)
+	var parent: Node3D = null
+	if opts.has("path"):
+		parent = _find_by_path(str(opts.path)) as Node3D
+	if parent == null:
+		var scene: Node = get_tree().current_scene if get_tree() != null else null
+		parent = scene as Node3D
+	if parent == null:
+		return _reject(tag, "sprite3d needs a Node3D parent (path=... or a 3D current scene)")
+	var pos: Variant = _parse_value(str(opts.pos), Vector3.ZERO) if opts.has("pos") else null
+	var quad := spawn_quad(alias, tex, parent, float(opts.get("height", 1.8)), str(opts.get("anchor", "bottom")) != "center", pos)
+	if opts.has("yaw"):
+		quad.yaw_offset_deg = float(opts.yaw)
+	if opts.has("modulate"):
+		var tinted: Variant = _parse_value(str(opts.modulate), quad.modulate)
+		if tinted is Color:
+			quad.modulate = tinted
+	return _accept(tag)
+
+
+## #place3d=alias:x y z[?height=1.8]          - place by transform
+## #place3d=alias:copy=NodePath[?height=1.8]  - copy an existing object's
+## global transform (position + scale; its yaw becomes the facing offset).
+func _apply_place3d(tag: String) -> bool:
+	var parsed: Array = _split_options(tag.substr(tag.find("=") + 1))
+	var fields: PackedStringArray = str(parsed[0]).split(":", true, 1)
+	if fields.size() != 2:
+		return _reject(tag, "expected alias:x y z or alias:copy=NodePath")
+	var node: Node = resolve_target(fields[0])
+	if node == null or not (node is Node3D):
+		return _reject(tag, "place3d needs a registered Node3D target")
+	var rest: String = fields[1].strip_edges()
+	var opts: Dictionary = parsed[1]
+	if rest.begins_with("copy="):
+		var source: Node = _find_by_path(rest.substr(5).strip_edges())
+		if not (source is Node3D):
+			return _reject(tag, "no Node3D at the copy path")
+		if node is Sprite3DQuad:
+			(node as Sprite3DQuad).copy_transform_from(source)
+		else:
+			node.global_transform = (source as Node3D).global_transform
+	else:
+		var to: Variant = _parse_value(rest, Vector3.ZERO)
+		if not (to is Vector3):
+			return _reject(tag, "cannot read that position")
+		node.global_position = to
+	if opts.has("height") and node is Sprite3DQuad:
+		node.world_height = float(opts.height)
+	return _accept(tag)
+
+
+#endregion
+
+
 #region Rollback
 
 
@@ -666,6 +795,11 @@ func _apply_nla_stop(tag: String) -> bool:
 ## on its captured rest state. Playback stays wherever the reset found it;
 ## [method replay_tags] re-dresses the stage right after.
 func reset_all() -> void:
+	# Rollback frees every spawned quad; the replayed tags recreate exactly
+	# the ones the story so far asked for.
+	for alias: String in _spawned.keys():
+		remove_quad(alias)
+	_spawned.clear()
 	for key: String in _tweens.keys():
 		var tween: Tween = _tweens[key]
 		if is_instance_valid(tween):

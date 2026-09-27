@@ -44,6 +44,13 @@ const DisplayScale = preload("res://scenes/display_scale.gd")
 ##                                     play a clip with crossfade, loop and
 ##                                     frame range (hold = pause at end)
 ##   #nla_stop=track                   stop a track
+##   #sprite3d=key:alias?path=World3D&height=1.8
+##                                     stand a portrait in a 3D scene as a
+##                                     quad that faces the camera by rotating
+##                                     only around the vertical axis
+##   #place3d=alias:x y z / alias:copy=NodePath
+##                                     place that quad by transform, or by
+##                                     copying an existing 3D object
 
 
 ## The dialogue resource (only needed when dropping the balloon into a scene manually).
@@ -443,6 +450,8 @@ func _ready() -> void:
 			"box": dialogue_box,
 			"stage": balloon.get_node_or_null("Stage"),
 		})
+		# #sprite3d= keys resolve against the same portraits as #sprite=.
+		motion.texture_resolver = _resolve_motion_texture
 	_refresh_stats()
 	_setup_key_bindings()
 	_prepare_sliders()
@@ -813,6 +822,11 @@ func _speaker_slot_for_sprite(spec: String, speaker: String) -> String:
 	if parts.size() == 1 or parts[1] == "left":
 		return "left"
 	return "right"
+
+
+## Portrait lookup for the StageDirector's `#sprite3d=` tags.
+func _resolve_motion_texture(key: String) -> Texture2D:
+	return sprites.get(key)
 
 
 ## Play the voiced clip for a line on the Voice bus; lines without a clip

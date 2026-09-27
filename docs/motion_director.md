@@ -150,6 +150,49 @@ animating disjoint bones) — each track keeps its own clip and range. For
 weighted blending of clips that animate the *same* properties, register an
 `AnimationTree` and let the engine blend.
 
+## `#sprite3d=` — portraits standing in a 3D scene
+
+The same portraits used by `#sprite=` can stand in a 3D scene as quads. The
+quad always faces the camera **by rotating only around the world Y axis** —
+a vertex shader (`scenes/motion/sprite_3d_billboard.gdshader`) rebuilds the
+model-view matrix from a yaw-locked basis, so characters turn toward the
+viewer like people do and never tilt with camera pitch.
+
+```
+[#sprite3d=aurora_serious:aurora?path=World3D/Characters&height=1.7]
+[#place3d=aurora:1.2 0 -2.5]
+[#place3d=aurora:copy=World3D/Markers/AuroraSpot]
+[#tween=aurora:position=0 0 -4:1.2:cubic:in_out]      ← regular tweens work
+[#sprite3d=none:aurora]
+```
+
+`#sprite3d=<key>:<alias>[?options]`
+
+| Option | Meaning |
+|---|---|
+| `path=NodePath` | the `Node3D` to parent the quad under (default: the current scene when it is 3D; a 2D scene rejects the tag with a warning) |
+| `height=1.8` | world-space height in meters; width follows the texture aspect |
+| `pos=x y z` | spawn position |
+| `anchor=bottom\|center` | origin at the feet (default) or the middle |
+| `yaw=deg` | facing offset on top of the billboard aim |
+| `modulate=hex\|rgba` | tint, same grammar as `#tween=` colours |
+
+`key=none` removes the quad. Keys resolve against the balloon's `sprites`
+dictionary — the exact portraits `#sprite=` uses.
+
+`#place3d=<alias>:<x> <y> <z>[?height=1.8]` places by transform.
+`#place3d=<alias>:copy=<NodePath>` **copies an existing 3D object's global
+transform**: position and scale land on the quad, and the source's yaw
+becomes the billboard facing offset — drop a `Marker3D` where a character
+should stand, aim it, and the portrait adopts the placement while still
+turning to the camera.
+
+Spawned quads are motion-tag citizens: `#tween=`/`#shake=`/`#set=` move them,
+rollback frees them and the replayed tags recreate exactly the ones the
+story so far asked for, and they sort against the 3D world (depth-writing;
+`alpha_scissor` on the node gives hard edges for intersecting geometry)
+while staying behind the 2D dialogue UI, exactly like `#bg=`/`#sprite=`.
+
 ## Rollback, saves and the panic screen
 
 Every motion tag a line applies is stored on its backlog entry. Rolling back

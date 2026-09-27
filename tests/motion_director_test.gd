@@ -259,8 +259,70 @@ func _run_tests() -> void:
 	await _wait(0.7)
 	check_close(cube2d.position.x, 50.0, "yoyo loops returned to the start value")
 
+	await _sprite3d_tests()
 	await _balloon_integration()
 	await _wait(0.1)
+
+
+## 3D sprite quads: spawn by tag, place by transform, copy an existing
+## object's transform, rollback free/recreate, removal.
+func _sprite3d_tests() -> void:
+	print("== sprite3d / place3d ==")
+	var world := Node3D.new()
+	world.name = "World3D"
+	rig.add_child(world)
+	var spot := Node3D.new()
+	spot.name = "Spot"
+	world.add_child(spot)
+	spot.position = Vector3(2, 0, -3)
+	spot.scale = Vector3(1.5, 1.5, 1.5)
+	spot.rotation_degrees = Vector3(0, 45, 0)
+	motion.texture_resolver = func(_key: String) -> Texture2D:
+		var tex := PlaceholderTexture2D.new()
+		tex.size = Vector2(100, 200)
+		return tex
+	check(_tag("sprite3d=hero:quad1?path=TestRoot/World3D&height=2.0"), "sprite3d spawn accepted")
+	var quad: Node = motion.resolve_target("quad1")
+	check(quad is Sprite3DQuad, "spawned a Sprite3DQuad")
+	if quad == null:
+		return
+	check(quad.get_parent() == world, "parented under the given Node3D")
+	check(is_equal_approx((quad as Sprite3DQuad).world_height, 2.0), "world height applied")
+	var mesh: QuadMesh = (quad as MeshInstance3D).mesh as QuadMesh
+	check(mesh != null, "quad mesh built")
+	check(is_equal_approx(mesh.size.y, 2.0), "mesh height matches world height")
+	check(is_equal_approx(mesh.size.x, 1.0), "mesh width follows the 0.5 texture aspect")
+	check(is_equal_approx(mesh.center_offset.y, 1.0), "bottom anchor lifts the quad by half its height")
+	var material: ShaderMaterial = (quad as MeshInstance3D).material_override as ShaderMaterial
+	check(material != null and material.shader != null, "billboard material + shader attached")
+	check(_tag("place3d=quad1:1 2 3"), "place3d by transform accepted")
+	check(quad.global_position.distance_to(Vector3(1, 2, 3)) < 0.01, "place3d moved the quad")
+	check(_tag("place3d=quad1:copy=TestRoot/World3D/Spot"), "place3d copy accepted")
+	check(quad.global_position.distance_to(Vector3(2, 0, -3)) < 0.01, "copy took the source position")
+	check_close(quad.scale.y, 1.5, "copy took the source scale")
+	check_close((quad as Sprite3DQuad).yaw_offset_deg, 45.0, "copy took the source yaw as facing offset", 0.5)
+	check(not _tag("place3d=ghostquad:1 2 3"), "place3d on unknown alias rejected")
+	check(not _tag("place3d=cube:1 2 3"), "place3d on a non-3D target rejected")
+	# A 3D sprite can itself be tweened through the regular motion tags.
+	check(_tag("tween=quad1:x=5:0.1"), "3D quad accepts regular tweens")
+	await _wait(0.3)
+	check_close(quad.global_position.x, 5.0, "quad tween landed")
+	# Rollback: reset frees spawned quads, replay recreates them.
+	motion.reset_all()
+	check(quad.is_queued_for_deletion(), "reset_all freed the spawned quad")
+	check(motion.resolve_target("quad1") == null, "spawned alias unregistered on reset")
+	motion.replay_tags([
+		"sprite3d=hero:quad1?path=TestRoot/World3D&height=2.0",
+		"place3d=quad1:copy=TestRoot/World3D/Spot",
+	])
+	var quad2: Node = motion.resolve_target("quad1")
+	check(quad2 is Sprite3DQuad and quad2 != quad, "replay recreated the quad")
+	if quad2 != null:
+		check(quad2.global_position.distance_to(Vector3(2, 0, -3)) < 0.01, "replay restored the copied transform")
+	check(_tag("sprite3d=none:quad1"), "sprite3d=none accepted")
+	check(motion.resolve_target("quad1") == null, "removed quad unregistered")
+	await get_tree().process_frame
+	check(not is_instance_valid(quad2) or (quad2 as Node).is_queued_for_deletion(), "removed quad is freed")
 
 
 ## The real balloon: MotionDirector node wiring, built-in aliases and the

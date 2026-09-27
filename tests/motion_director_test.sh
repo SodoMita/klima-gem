@@ -26,4 +26,10 @@ if grep -q "MOTION TESTS: FAIL" /tmp/chrono-nexus-motion.log; then
 	echo "ERROR: StageDirector motion tests reported failures."
 	exit 1
 fi
+# The sprite quad ships a spatial shader; a parse error must fail the build.
+if grep -qiE "shader error|failed to (parse|compile)|shader_compile" /tmp/chrono-nexus-motion.log; then
+	echo "ERROR: shader errors while running the motion tests."
+	grep -iE "shader error|failed to (parse|compile)|shader_compile" /tmp/chrono-nexus-motion.log | head -5
+	exit 1
+fi
 echo "OK: StageDirector motion tests passed."

@@ -40,8 +40,11 @@ Beyond `#bg=`/`#sprite=`/`#focus=`, the balloon carries a **StageDirector**
 in the scene (`#tween=`, `#set=`), shake the stage (`#shake=`), and run
 NLA-style animation tracks — crossfaded clips, loops and frame ranges on any
 `AnimationPlayer`, state-machine travel on any `AnimationTree` (`#nla=`,
-`#nla_track=`, `#nla_stop=`). Aurora floats on a `#tween=...?yoyo&loops=0`
-hover and the rift yanks the screen with `#shake=stage`. Motion tags are
+`#nla_track=`, `#nla_stop=`), and stand portraits in 3D scenes as quads that
+face the camera by rotating only around the vertical axis (`#sprite3d=`,
+placed by transform or by copying any 3D object — `#place3d=`). Aurora floats
+on a `#tween=...?yoyo&loops=0` hover and the rift yanks the screen with
+`#shake=stage`. Motion tags are
 snapshotted into the backlog, so rollback and save slots put tweened objects
 exactly where the story left them. Full tag grammar:
 [docs/motion_director.md](docs/motion_director.md); headless suite:
