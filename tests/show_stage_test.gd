@@ -116,7 +116,59 @@ func _run_tests() -> void:
 	check(director.stack_word("GIANT").begins_with("x3"), "x3 stack reads mastered")
 	var parts3 := parts_only + int((director.PART_EDGE["BACK"] as Array)[0])
 	check(director.edge_for(1) == parts3 + 3, "a mastered GIANT is +1 per part even where it used to hurt")
+	# --- stack audit: replacement, single-part x2, persistence (K9) --------
+	# Re-rolling the same part REPLACES its shift in the body map.
+	gs.show_body_mods = {"HANDS": "GIANT", "LEGS": "GIANT"}
+	gs.show_mod_counts = {}
+	gs.show_part = "HANDS"
+	gs.show_mod = "TINY"
+	check(director.mod_stacks().get("GIANT", 0) == 1, "re-rolled part leaves the old stack (GIANT x1)")
+	check(director.mod_stacks().get("TINY", 0) == 1, "re-rolled part carries its new shift (TINY x1)")
+	# A x2 on a SINGLE part doubles once: HANDS part edge + GIANT (-1) x2.
 	gs.show_body_mods = {}
+	gs.show_mod_counts = {"GIANT": 2}
+	gs.show_part = "HANDS"
+	gs.show_mod = "GIANT"
+	var hands_only := int((director.PART_EDGE["HANDS"] as Array)[0])
+	check(director.edge_for(1) == hands_only - 2, "single-part x2 doubles its one copy")
+	# Parts persist through a snapshot too (counts are covered below); and a
+	# rewind to before the second stamping drops the count back to x1.
+	gs.show_body_mods = {"LEGS": "GIANT"}
+	gs.show_mod_counts = {"GIANT": 1}
+	var kept_snap: Dictionary = gs.snapshot()
+	gs.show_body_mods = {}
+	gs.show_mod_counts = {}
+	gs.show_part = ""
+	gs.show_mod = ""
+	gs.restore(kept_snap)
+	check(director.mod_stacks().get("GIANT", 0) == 2, "a restored body keeps parts + counts (x2)")
+	gs.show_body_mods = {}
+	gs.show_mod_counts = {"GIANT": 1}
+	gs.show_part = "HANDS"
+	gs.show_mod = "GIANT"
+	var early_snap: Dictionary = gs.snapshot()
+	gs.show_mod_counts = {"GIANT": 2}
+	gs.restore(early_snap)
+	check(director.mod_stacks().get("GIANT", 0) == 1, "rewound body drops the second stamping (x1)")
+	gs.show_body_mods = {}
+	gs.show_mod_counts = {}
+	gs.show_last_stamp = ""
+	gs.show_part = "HANDS"
+	gs.show_mod = "GIANT"
+	gs.show_round = 1
+	await director.apply_mods()
+	gs.show_round = 2
+	await director.apply_mods()
+	check(director.mod_stacks().get("GIANT", 0) == 2, "GIANT on the same part twice is a x2 stack")
+	await director.apply_mods()
+	check(int(gs.show_mod_counts.get("GIANT", 0)) == 2, "re-running the same stamp does not count it again")
+	var snap_stack: Dictionary = gs.snapshot()
+	gs.show_mod_counts = {}
+	gs.restore(snap_stack)
+	check(int(gs.show_mod_counts.get("GIANT", 0)) == 2, "stack counts survive snapshot/restore")
+	gs.show_body_mods = {}
+	gs.show_mod_counts = {}
+	gs.show_last_stamp = ""
 	gs.show_part = "HANDS"
 	gs.show_mod = "GIANT"
 	gs.show_round = 3

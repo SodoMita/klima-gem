@@ -60,6 +60,10 @@ var _spin_speed := 2.6
 var _wobble_time := 0.0
 var _hover_tween: Tween = null
 var _front_face := -1
+## During the under-view reveal this holds the result being presented (a
+## sector 0..7 or TOP_FACE): its twin words stay lit while every other word
+## on the stone dims to a ghost, so the audience reads ONE word. -1 = off.
+var reveal_face := -1
 ## Damping the stone takes on once it has touched the world: free flight is
 ## a clean ballistic arc under plain gravity, and only a stone that is
 ## already rolling on the glass is asked to stop quickly.
@@ -359,12 +363,18 @@ func _fade_faces() -> void:
 	labels.append_array(crown_labels)
 	if is_instance_valid(top_label):
 		labels.append(top_label)
-	for label in labels:
+	for li in labels.size():
+		var label := labels[li]
 		var n := (label.global_basis.z).normalized()
 		var to_cam := (cam.global_position - label.global_position).normalized()
 		# Faces turned away vanish; anything the camera can see at all
 		# keeps its word, fading in as the face squares up.
 		var a := clampf((n.dot(to_cam) - 0.02) / 0.26, 0.0, 1.0)
+		if reveal_face >= 0:
+			var lit := (label == top_label and reveal_face == TOP_FACE) \
+				or (li < face_labels.size() + crown_labels.size() and li % SIDES == reveal_face)
+			if not lit:
+				a = minf(a, 0.10)
 		var c := word_color
 		c.a = a
 		label.modulate = c

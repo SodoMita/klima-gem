@@ -129,10 +129,13 @@ func begin_show() -> void:
 		if not pin_seed and gs.has_method("fresh_seed"):
 			gs.fresh_seed()
 		gs.show_body_mods = {}
+		gs.show_mod_counts = {}
+		gs.show_last_stamp = ""
 		gs.show_round = 0
 		gs.show_ren_key = ""
 		gs.show_aurora_key = ""
 		gs.show_stars = 0
+		gs.show_scored_round = 0
 		gs.show_cheers = 1
 		gs.show_part = ""
 		gs.show_mod = ""
@@ -199,6 +202,13 @@ func mod_stacks() -> Dictionary:
 	for part in mods:
 		var mod := str(mods[part])
 		stacks[mod] = int(stacks.get(mod, 0)) + 1
+	# Applications outrank parts: GIANT stamped on HANDS twice is a x2 even
+	# though only one part carries it now.
+	var gs := _gs()
+	if gs != null and "show_mod_counts" in gs:
+		var counts: Dictionary = gs.show_mod_counts
+		for mod in counts:
+			stacks[str(mod)] = maxi(int(stacks.get(str(mod), 0)), int(counts[mod]))
 	return stacks
 
 
@@ -439,6 +449,15 @@ func apply_mods() -> void:
 	if gs == null or st == null:
 		return
 	gs.show_body_mods = body_mods()
+	# Count the stamp once: the same line re-run by a rewind or a mercy
+	# swap to a different word must not double it, but a mercy swap IS a
+	# new stamp and a shift landing on the same part again still counts.
+	var stamp := "%s|%s|%d|%d" % [str(gs.show_part), str(gs.show_mod), int(gs.show_round), int(gs.rerolls_used)]
+	if str(gs.show_mod) != "" and str(gs.show_last_stamp) != stamp:
+		gs.show_last_stamp = stamp
+		var counts: Dictionary = (gs.show_mod_counts as Dictionary).duplicate()
+		counts[str(gs.show_mod)] = int(counts.get(str(gs.show_mod), 0)) + 1
+		gs.show_mod_counts = counts
 	gs.show_outlook = outlook_for(int(gs.show_round))
 	if replaying():
 		return
@@ -489,15 +508,21 @@ func run_challenge() -> void:
 	var score := total_for(int(gs.show_round))
 	gs.last_roll = float(score)
 	gs.last_success = score >= need
+	# A rollback re-runs the mutations of the line it lands on; without this
+	# the same trial would award its star twice and the win count would not
+	# go back when the player jumped to an earlier choice.
+	var already_scored := int(gs.show_scored_round) == need
 	if replaying():
-		if gs.last_success:
+		gs.show_scored_round = need
+		if gs.last_success and not already_scored:
 			gs.show_stars = int(gs.show_stars) + 1
 		gs.show_props_round = 0
 		return
 	await st.play_challenge(int(gs.show_round), bool(gs.last_success), _pattern)
 	if not _is_current(epoch, st):
 		return
-	if gs.last_success:
+	gs.show_scored_round = need
+	if gs.last_success and not already_scored:
 		gs.show_stars = int(gs.show_stars) + 1
 	st.set_stars(int(gs.show_stars))
 	var star_index := int(gs.show_stars) - 1 if gs.last_success else int(gs.show_stars)
