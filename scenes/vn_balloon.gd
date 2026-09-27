@@ -1090,7 +1090,9 @@ func rollback_to(index: int) -> void:
 		game_state.restore(entry.state)
 
 	_restoring = true
-	var line: DialogueLine = await dialogue_resource.get_next_dialogue_line(entry.id, temporary_game_states)
+	var line: DialogueLine = null
+	if dialogue_resource != null:
+		line = await dialogue_resource.get_next_dialogue_line(entry.id, temporary_game_states)
 	# Fetching the line again re-runs any mutation that sits between the
 	# jump target and the line (Dialogue Manager resolves `do` lines on the
 	# way), and an async show beat can still be writing into GameState. The
