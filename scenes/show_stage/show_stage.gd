@@ -88,7 +88,10 @@ const LAND_MOD := Vector3(-0.55, STAGE_TOP, 1.2)
 ## rests on straight through the glass.
 const BOX_LIFT := 1.1
 const BOX_CENTER := Vector3(0.0, STAGE_TOP + BOX_LIFT, 1.2)
-const UNDERVIEW_DIST := 0.85
+## Under-view camera distance from the resting word. At 0.85 the stone
+## (a metre across) overflowed the frame and the word clipped; 1.3 frames
+## the whole gem with the result word centred.
+const UNDERVIEW_DIST := 1.3
 const UNDERVIEW_HOLD := 1.4
 const BOX_SIZE := Vector3(3.0, 1.4, 1.8)
 ## Longest the show waits for a stone to stop on its own.
@@ -520,6 +523,7 @@ func _underview(gem: FlatTopGem, face: int, epoch: int) -> void:
 	var label := gem.resting_label(face)
 	if _camera == null or label == null:
 		return
+	gem.reveal_face = face
 	var lb := label.global_basis.orthonormalized()
 	var target := label.global_position
 	var eye := target + lb.z * UNDERVIEW_DIST
@@ -534,6 +538,8 @@ func _underview(gem: FlatTopGem, face: int, epoch: int) -> void:
 	_cam_tween.tween_interval(UNDERVIEW_HOLD)
 	_cam_tween.tween_property(_camera, "global_transform", home, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	await _cam_tween.finished
+	if is_instance_valid(gem):
+		gem.reveal_face = -1
 	if epoch != _gem_epoch and _camera != null:
 		_camera.global_transform = home
 
