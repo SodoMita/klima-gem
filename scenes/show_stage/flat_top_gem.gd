@@ -31,8 +31,8 @@ const WORD_FIT := 0.60
 const WORD_HEIGHT_LIMIT := 0.28
 
 @export var girdle_radius := 0.5
-@export var table_radius := 0.26
-@export var crown_height := 0.17
+@export var table_radius := 0.11
+@export var crown_height := 0.22
 @export var pavilion_height := 0.44
 @export var gem_color := Color(0.55, 0.85, 1.0, 0.62)
 @export var word_color := Color(0.94, 0.99, 1.0)
