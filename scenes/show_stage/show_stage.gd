@@ -231,8 +231,10 @@ func aurora_hand() -> Vector3:
 ## leaves it parented until the end of the frame, so a rebuild in the same
 ## frame (rollback, save-load, a jump from the story map) adds a second node
 ## with the same name and the stage wears two of everything. Detach, then free.
-func _free_now(node: Node) -> void:
-	if not is_instance_valid(node):
+func _free_now(node) -> void:
+	# Untyped on purpose: a typed Node parameter refuses a freed instance
+	# with an error before the validity check can run.
+	if node == null or not is_instance_valid(node):
 		return
 	if node.get_parent() != null:
 		node.get_parent().remove_child(node)
@@ -1267,8 +1269,14 @@ func _show_result(success: bool) -> void:
 	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(0.7)
 	tw.tween_property(_stamp, "modulate:a", 0.0, 0.5)
-	tw.finished.connect(_free_now.bind(_stamp))
+	tw.finished.connect(_fade_out_stamp.bind(_stamp))
 	_pulse_lights(2.6 if success else 1.2)
+
+
+func _fade_out_stamp(stamp) -> void:
+	if stamp == _stamp:
+		_stamp = null
+	_free_now(stamp)
 
 
 ## A star flies from the pedestal to the pips on the star cloth (or a dud

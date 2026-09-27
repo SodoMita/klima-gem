@@ -257,7 +257,7 @@ func enter_ren() -> void:
 	if gs != null:
 		gs.show_ren_key = "ren"
 	var st := stage()
-	if st != null and st.has_method("host_entrance"):
+	if st != null and st.has_method("host_entrance") and not replaying():
 		st.host_entrance()
 
 
@@ -272,6 +272,8 @@ func set_aurora_expression(emotion: String, fresh := false) -> void:
 	var gs := _gs()
 	if gs != null:
 		gs.show_aurora_key = key
+	if replaying():
+		return
 	_spawn_actor("aurora", key, ShowStageScript.AURORA_MARK, ShowStageScript.AURORA_BASE_HEIGHT)
 	var st := stage()
 	if not fresh and st != null and gs != null and not body_mods().is_empty():
@@ -305,6 +307,15 @@ func throw_gem_round() -> void:
 	if gs == null or st == null:
 		return
 	var epoch := _state_epoch
+	if replaying():
+		# Off-screen jump: no flight, no cue, no reward ceremony. The faces
+		# are drawn from the story RNG so the replayed night is still a
+		# night, and the stage is re-dressed once when the replay lands.
+		gs.show_part_face = gs.rng.randi_range(0, ShowStageScript.PARTS.size() - 1)
+		gs.show_mod_face = gs.rng.randi_range(0, ShowStageScript.MODS.size() - 1)
+		gs.show_part = ShowStageScript.PARTS[gs.show_part_face]
+		gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
+		return
 	var faces: Array = await st.throw_gems(gs.rng)
 	if not _is_current(epoch, st) or faces.size() != 2:
 		return
@@ -328,6 +339,11 @@ func swap_mod_gem() -> void:
 	var epoch := _state_epoch
 	gs.show_cheers = int(gs.show_cheers) - 1
 	gs.rerolls_used = int(gs.rerolls_used) + 1
+	if replaying():
+		gs.show_mod_face = gs.rng.randi_range(0, ShowStageScript.MODS.size() - 1)
+		gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
+		await apply_mods()
+		return
 	var face: int = await st.rethrow_gem(1, gs.rng)
 	if not _is_current(epoch, st) or int(face) < 0 or int(face) >= ShowStageScript.MODS.size():
 		if int(face) < 0 and _is_current(epoch, st):
@@ -348,6 +364,8 @@ func apply_mods() -> void:
 		return
 	gs.show_body_mods = body_mods()
 	gs.show_outlook = outlook_for(int(gs.show_round))
+	if replaying():
+		return
 	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor(), gs.show_body_mods)
 	st.apply_body_mods(gs.show_body_mods)
 	await st.get_tree().create_timer(0.9).timeout
@@ -361,16 +379,20 @@ func build_challenge(round_no: int) -> void:
 	var st := stage()
 	if gs == null or st == null:
 		return
-	st.clear_props()
-	match clampi(round_no, 1, 3):
-		1: st.build_crossing()
-		2: st.build_bells()
-		3: st.build_choir()
 	gs.show_props_round = clampi(round_no, 1, 3)
 	_pattern = []
 	var rounds := 5
 	for i in rounds:
 		_pattern.append(gs.rng.randi_range(0, 3))
+	if replaying():
+		# Props are choreography: a silent replay only walks the RNG and
+		# remembers the round, or the set is built and torn down per line.
+		return
+	st.clear_props()
+	match clampi(round_no, 1, 3):
+		1: st.build_crossing()
+		2: st.build_bells()
+		3: st.build_choir()
 	await st.get_tree().create_timer(0.7).timeout
 
 
@@ -390,6 +412,11 @@ func run_challenge() -> void:
 	var score := total_for(int(gs.show_round))
 	gs.last_roll = float(score)
 	gs.last_success = score >= need
+	if replaying():
+		if gs.last_success:
+			gs.show_stars = int(gs.show_stars) + 1
+		gs.show_props_round = 0
+		return
 	await st.play_challenge(int(gs.show_round), bool(gs.last_success), _pattern)
 	if not _is_current(epoch, st):
 		return
@@ -407,8 +434,41 @@ func run_challenge() -> void:
 ## Golden rain for a perfect show.
 func finale_confetti() -> void:
 	var st := stage()
-	if st != null:
+	if st != null and not replaying():
 		st.confetti_burst()
+
+
+# ------------------------------------------------------------ silent replay
+
+## True while the balloon is replaying the story to itself — a jump from
+## the story map / choice list, a replay-from-start travel, a rewrite
+## probe. Mutations run again off-screen at full speed, so the show must not
+## throw stones, wait for the player's hand, hand out rewards, or build and
+## strike props. State still moves; choreography is skipped; the stage is
+## re-dressed from the finished state once the replay lands.
+func replaying() -> bool:
+	var balloon := _balloon()
+	if balloon == null:
+		return false
+	# A story-map / route jump, or the "next choice" fast-forward: both run
+	# the lines between here and there off-screen, so both skip the show.
+	if ("_silent_travel" in balloon) and bool(balloon.get("_silent_travel")):
+		return true
+	if ("_seeking_choice" in balloon) and bool(balloon.get("_seeking_choice")):
+		return true
+	return false
+
+
+var _was_replaying := false
+
+
+func _process(_delta: float) -> void:
+	var now := replaying()
+	if now == _was_replaying:
+		return
+	_was_replaying = now
+	if not now:
+		sync_from_state()
 
 
 # ---------------------------------------------------------------- restores
