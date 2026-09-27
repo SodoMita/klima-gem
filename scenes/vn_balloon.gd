@@ -2,7 +2,7 @@ class_name VNBalloon extends CanvasLayer
 const RouteTravel = preload("res://scenes/route_graph/route_graph_travel.gd")
 const PanicScript = preload("res://scenes/panic_screen.gd")
 const DisplayScale = preload("res://scenes/display_scale.gd")
-## Chrono Nexus balloon, adapted from the vn_dialogue_demo scene.
+## Klima Gem balloon, adapted from the vn_dialogue_demo scene.
 ##
 ## Glass chrome (translucent panels, cyan edges, per-speaker name color)
 ## replaces the demo's gold classical trim. Typewriter ticks are intentionally
@@ -88,9 +88,9 @@ const DisplayScale = preload("res://scenes/display_scale.gd")
 @export var panic_action: StringName = &"dialogue_panic"
 
 ## Directory holding the arbitrary number of save slots. Namespaced under
-## `user://chrono_nexus/` so Chrono Nexus never shares files with the
-## vn_dialogue_demo balloon this UI was adapted from.
-@export var saves_dir: String = "user://chrono_nexus/saves"
+## `user://klima_gem/` so the show keeps its files namespaced away from
+## the vn_dialogue_demo balloon this UI was adapted from.
+@export var saves_dir: String = "user://klima_gem/saves"
 
 ## How many seconds each typed character takes (overridden by saved settings).
 @export var seconds_per_step: float = 0.018
@@ -345,11 +345,11 @@ var _sprite_base_sides: Dictionary = {}
 var save_menu_mode: String = "save"
 ## Game-specific namespace: the demo's `user://settings.json` / `user://seen.json`
 ## / `user://saves` layout stays untouched over in vn_dialogue_demo.
-var _settings_path: String = "user://chrono_nexus/settings.json"
+var _settings_path: String = "user://klima_gem/settings.json"
 
 ## Lines the player has already seen (persistent, for skip-seen-only).
 var _seen_ids: Dictionary = {}
-var _seen_path: String = "user://chrono_nexus/seen.json"
+var _seen_path: String = "user://klima_gem/seen.json"
 ## Whether the line currently on screen was seen before it was shown.
 var _current_was_seen: bool = false
 
@@ -2537,7 +2537,7 @@ func _panic_open() -> bool:
 
 func _panic_can_swap() -> bool:
 	var current := get_tree().current_scene
-	# Chrono Nexus boots from main.tscn (the demo balloon used vn_scene.tscn).
+	# The show boots from main.tscn (the demo balloon used vn_scene.tscn).
 	return current != null and current.scene_file_path == "res://main.tscn"
 
 

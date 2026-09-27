@@ -32,8 +32,13 @@ const STAGE_TOP := 0.5
 const AURORA_MARK := Vector3(1.05, STAGE_TOP, 0.9)
 const REN_MARK := Vector3(-1.15, STAGE_TOP, 1.1)
 const AURORA_BASE_HEIGHT := 1.72
-const GEM_SLOT_L := Vector3(-0.44, 1.78, 2.0)
-const GEM_SLOT_R := Vector3(0.44, 1.78, 2.0)
+## Gem stations: the shapeshift (modification) gem hangs on the LEFT, the
+## body-part gem on the RIGHT. Their settled words fly onward to the
+## presentation slots, same sides, higher up.
+const GEM_SLOT_MOD := Vector3(-0.44, 1.78, 2.0)
+const GEM_SLOT_PART := Vector3(0.44, 1.78, 2.0)
+const PRESENT_POS_MOD := Vector3(-1.62, 2.55, 2.0)
+const PRESENT_POS_PART := Vector3(1.62, 2.55, 2.0)
 const PIP_BASE := Vector3(-3.62, 3.42, 3.02)
 const PIP_STEP := Vector3(0.42, 0.0, 0.06)
 
@@ -42,6 +47,8 @@ var ren_quad: Node3D = null
 
 var _cosmetic := RandomNumberGenerator.new()
 var _gems: Array[FlatTopGem] = []
+var _plaque_mod: Node3D = null
+var _plaque_part: Node3D = null
 var _props: Node3D = null
 var _chip: Node3D = null
 var _chip_label: Label3D = null
@@ -83,6 +90,10 @@ func _process(delta: float) -> void:
 	if is_instance_valid(_chip):
 		_chip.rotation.y += 0.9 * delta
 		_chip.position.y = _chip_home.y + 0.05 * sin(_chip_time * 1.6)
+	for plaque in [_plaque_mod, _plaque_part]:
+		if is_instance_valid(plaque) and plaque.has_meta("home") and plaque.get_meta("landed"):
+			var home: Vector3 = plaque.get_meta("home")
+			plaque.position.y = home.y + 0.04 * sin(_chip_time * 1.8 + (0.0 if plaque == _plaque_part else 1.7))
 	_tick_confetti(delta)
 
 
@@ -442,6 +453,8 @@ func clear_gems() -> void:
 		if is_instance_valid(gem):
 			gem.queue_free()
 	_gems.clear()
+	_clear_plaque(true)
+	_clear_plaque(false)
 
 
 ## The signature throw: two gems arc from the guest's hand to the pedestal,
@@ -451,39 +464,133 @@ func throw_gems(part_word: String, part_face: int, mod_word: String, mod_face: i
 	clear_gems()
 	var from := aurora_hand()
 	# The word lists sit on the faces in order; the announced face is the roll.
-	var gem_a := _make_gem(GEM_SLOT_L, Color(0.5, 0.85, 1.0, 0.62), PARTS)
-	var gem_b := _make_gem(GEM_SLOT_R, Color(1.0, 0.55, 0.85, 0.62), MODS)
-	gem_a.position = from + Vector3(-0.1, 0.0, 0.0)
-	gem_b.position = from + Vector3(0.14, 0.0, 0.0)
+	# Shapeshift (modification) gem hangs on the LEFT, body-part gem on the RIGHT.
+	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
+	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
+	gem_part.position = from + Vector3(0.14, 0.0, 0.0)
+	gem_mod.position = from + Vector3(-0.1, 0.0, 0.0)
 
-	gem_a.start_spinning(5.2)
-	gem_b.start_spinning(4.4)
+	gem_part.start_spinning(5.2)
+	gem_mod.start_spinning(4.4)
 	# Both arcs run at once; the flight time is the same for the pair.
-	gem_a.launch(from + Vector3(-0.1, 0.0, 0.0), GEM_SLOT_L, 2.0, 0.95)
-	gem_b.launch(from + Vector3(0.14, 0.0, 0.0), GEM_SLOT_R, 2.0, 0.95)
+	gem_part.launch(from + Vector3(0.14, 0.0, 0.0), GEM_SLOT_PART, 2.0, 0.95)
+	gem_mod.launch(from + Vector3(-0.1, 0.0, 0.0), GEM_SLOT_MOD, 2.0, 0.95)
 	await get_tree().create_timer(0.95).timeout
 
 	_pulse_lights(2.4)
-	gem_a.start_spinning(2.6)
-	gem_b.start_spinning(2.1)
+	gem_part.start_spinning(2.6)
+	gem_mod.start_spinning(2.1)
 	await get_tree().create_timer(0.55).timeout
 
-	await gem_a.settle_facing(part_face, _camera_azimuth(), 1.25)
-	await gem_a.flash_reveal()
-	await get_tree().create_timer(0.45).timeout
+	# The body part reads first: settle, flash, and its word steps out of the
+	# stone as a glowing copy that flies to the RIGHT presentation slot.
+	await gem_part.settle_facing(part_face, _camera_azimuth(), 1.25)
+	await gem_part.flash_reveal()
+	await present_word(gem_part, part_face, true)
+	await get_tree().create_timer(0.35).timeout
 
-	await gem_b.settle_facing(mod_face, _camera_azimuth(), 1.25)
-	await gem_b.flash_reveal()
+	# Then the shapeshift settles on the LEFT, its word flying to the LEFT
+	# presentation slot.
+	await gem_mod.settle_facing(mod_face, _camera_azimuth(), 1.25)
+	await gem_mod.flash_reveal()
+	await present_word(gem_mod, mod_face, false)
 	await get_tree().create_timer(0.3).timeout
 
 
 ## Instant version for rollback / saves: gems appear already settled.
 func place_gems_settled(part_word: String, part_face: int, mod_word: String, mod_face: int) -> void:
 	clear_gems()
-	var gem_a := _make_gem(GEM_SLOT_L, Color(0.5, 0.85, 1.0, 0.62), PARTS)
-	var gem_b := _make_gem(GEM_SLOT_R, Color(1.0, 0.55, 0.85, 0.62), MODS)
-	gem_a.rotation.y = FlatTopGem.face_azimuth(part_face) - _camera_azimuth()
-	gem_b.rotation.y = FlatTopGem.face_azimuth(mod_face) - _camera_azimuth()
+	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
+	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
+	gem_part.rotation.y = FlatTopGem.face_azimuth(part_face) - _camera_azimuth()
+	gem_mod.rotation.y = FlatTopGem.face_azimuth(mod_face) - _camera_azimuth()
+	place_word_plaque(PARTS[part_face], true)
+	place_word_plaque(MODS[mod_face], false)
+
+
+## The glowing copy of a settled word, presented high beside the stage.
+## [param is_part] true = body part (right slot), false = shapeshift (left).
+func present_word(gem: FlatTopGem, face: int, is_part: bool) -> void:
+	var plaque := _make_word_plaque(gem.word_at(face), is_part)
+	add_child(plaque)
+	var from: Vector3 = gem.face_labels[face].global_position
+	var to := PRESENT_POS_PART if is_part else PRESENT_POS_MOD
+	plaque.global_position = from
+	plaque.scale = Vector3.ONE * 0.22
+	var tw := create_tween()
+	tw.tween_method(_plaque_arc.bind(plaque, from, to), 0.0, 1.0, 0.85)
+	tw.parallel().tween_property(plaque, "scale", Vector3.ONE, 0.85)
+	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	await tw.finished
+	if is_instance_valid(plaque):
+		plaque.set_meta("home", to)
+		plaque.set_meta("landed", true)
+	if is_part:
+		_plaque_part = plaque
+	else:
+		_plaque_mod = plaque
+
+
+func _plaque_arc(t: float, plaque: Node3D, from: Vector3, to: Vector3) -> void:
+	if is_instance_valid(plaque):
+		plaque.global_position = from.lerp(to, t) + Vector3.UP * (0.22 * sin(PI * t))
+
+
+## Instant variant for restores: the word simply hangs in its slot.
+func place_word_plaque(word: String, is_part: bool) -> void:
+	_clear_plaque(is_part)
+	var plaque := _make_word_plaque(word, is_part)
+	add_child(plaque)
+	plaque.position = PRESENT_POS_PART if is_part else PRESENT_POS_MOD
+	plaque.set_meta("home", plaque.position)
+	plaque.set_meta("landed", true)
+	if is_part:
+		_plaque_part = plaque
+	else:
+		_plaque_mod = plaque
+
+
+func _clear_plaque(is_part: bool) -> void:
+	var plaque := _plaque_part if is_part else _plaque_mod
+	if is_instance_valid(plaque):
+		plaque.queue_free()
+	if is_part:
+		_plaque_part = null
+	else:
+		_plaque_mod = null
+
+
+## A word plaque: the glowing copy of the rolled word plus its additive halo.
+func _make_word_plaque(word: String, is_part: bool) -> Node3D:
+	var root := Node3D.new()
+	root.name = "WordPlaque"
+	var label := Label3D.new()
+	label.text = word
+	label.font = FlatTopGemScript._font()
+	label.font_size = 170
+	label.pixel_size = 0.0016
+	label.outline_size = 36
+	label.render_priority = 3
+	if is_part:
+		label.modulate = Color(0.82, 0.97, 1.0)
+		label.outline_modulate = Color(0.16, 0.72, 1.0)
+	else:
+		label.modulate = Color(1.0, 0.86, 0.97)
+		label.outline_modulate = Color(1.0, 0.46, 0.85)
+	root.add_child(label)
+	var halo := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.5, 0.5)
+	halo.mesh = quad
+	halo.position = Vector3(0, 0, -0.02)
+	var hm := StandardMaterial3D.new()
+	hm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	hm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	hm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	hm.albedo_color = Color(0.25, 0.6, 0.9, 0.22) if is_part else Color(0.85, 0.35, 0.7, 0.22)
+	halo.material_override = hm
+	root.add_child(halo)
+	return root
 
 
 func _camera_azimuth() -> float:
@@ -494,7 +601,7 @@ func _camera_azimuth() -> float:
 
 
 func gem_center() -> Vector3:
-	return (GEM_SLOT_L + GEM_SLOT_R) * 0.5
+	return (GEM_SLOT_PART + GEM_SLOT_MOD) * 0.5
 
 
 ## Quick re-throw of just the modification gem (the producer's mercy).
@@ -502,11 +609,13 @@ func rethrow_gem(which: int, face: int, word: String) -> void:
 	if which < 0 or which >= _gems.size() or not is_instance_valid(_gems[which]):
 		return
 	var gem := _gems[which]
+	var is_part := which == 0
 	var from := aurora_hand()
 	gem.start_spinning(6.0)
-	await gem.launch(from, GEM_SLOT_R if which == 1 else GEM_SLOT_L, 1.5, 0.8)
+	await gem.launch(from, GEM_SLOT_PART if is_part else GEM_SLOT_MOD, 1.5, 0.8)
 	await gem.settle_facing(face, _camera_azimuth(), 1.0)
 	await gem.flash_reveal()
+	await present_word(gem, face, is_part)
 
 
 # --------------------------------------------------------- modification chip

@@ -35,7 +35,7 @@ func _panel_size() -> Vector2i:
 
 ## The stored preference: what the next launch will open with.
 func _saved_pref() -> Vector2i:
-	var path := "user://chrono_nexus/settings.json"
+	var path := "user://klima_gem/settings.json"
 	if not FileAccess.file_exists(path):
 		return Vector2i.ZERO
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))

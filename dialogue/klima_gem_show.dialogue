@@ -55,11 +55,11 @@ else:
 do set_aurora_expression("serious")
 Ren: Two gems. Eight words each. One body, about to be renegotiated. [#sfx=open]
 do throw_gem_round()
-Ren: They hover... they slow... the flat tops settle, and the stage reads them out! First — the body!
+Ren: The flat tops settle... and the words step OUT of the stone, glowing! Read them with me — first, the body!
 Ren: {{show_part}}!
 [#sfx=confirm]
 do set_aurora_expression("surprised")
-Ren: And the modification...
+Ren: And the shapeshift that tags along with it...
 Ren: {{show_mod}}!
 [#sfx=confirm]
 Ren: By decree of two rocks: {{show_part}} x {{show_mod}}. The show accepts. Reality complies.

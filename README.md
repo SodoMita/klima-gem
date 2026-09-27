@@ -1,6 +1,6 @@
 # Klima gem
 
-A Godot **4.7** visual novel. The dialogue UI is the classical balloon from [vn_dialogue_demo](https://github.com/SodoMita/vn_dialogue_demo) (Nathan Hoad's Dialogue Manager), restyled for Chrono Nexus: translucent glass panels, cyan edges, per-speaker name colors, a stat strip, and a title card over the nexus still. Dialogic is not used.
+A Godot **4.7** game. The dialogue UI is the classical balloon from [vn_dialogue_demo](https://github.com/SodoMita/vn_dialogue_demo) (Nathan Hoad's Dialogue Manager), restyled for the Klima Gem show: translucent glass panels, cyan edges, per-speaker name colors, a stat strip, and a glass title card standing in front of the live 3D studio. Dialogic is not used.
 
 Typewriter **sounds** are removed. Lines still reveal character by character; they do not tick.
 
@@ -58,7 +58,6 @@ exactly where the story left them. Full tag grammar:
 - `dialogue/klima_gem_show.dialogue` — the booted story: the Klima Gem show. Stage tags: `#bg=`, `#sprite=key:left|right`, `#focus=`, `#music=`, `#sfx=`; show mutations resolve against the `ShowDirector` autoload.
 - `scenes/show_stage/show_stage.tscn` + `show_stage.gd` — the 3D television studio, built procedurally from geometry; owns gems, the modification chip, trial props, star pips, stamps, confetti.
 - `scenes/show_stage/flat_top_gem.gd` — the Klima Gem itself: an octagonal-girdle diamond with a fully flat top and a word on every pavilion face.
-- `dialogue/chrono_nexus.dialogue` — the Chrono Nexus branch of the story; also where the motion tags are demonstrated (`#tween=`, `#set=`, `#shake=`, `#nla=`, `#target=`, `#nla_track=`, `#sprite3d=`, `#place3d=`); full grammar in docs/motion_director.md.
 - `scenes/motion/stage_director.gd` — the StageDirector: tweens, shakes and NLA tracks for any 2D/3D scene object, authored as the `MotionDirector` node in the balloon.
 - `autoloads/game_state.gd` — trust, insight, power, bonds. Choices mutate these; rollback restores them.
 - `Sprites/` — original portraits. `assets/characters/` — the same art, trimmed so it fits the left/right slots.

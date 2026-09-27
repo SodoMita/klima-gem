@@ -17,7 +17,7 @@ set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GODOT_BIN="${GODOT_BIN:-/home/user/.local/bin/godot}"
 SCREENS="${SCREENS:-1920x1080 1366x768}"
-TITLE="Chrono Nexus"
+TITLE="Klima gem"
 
 if [ ! -x "$GODOT_BIN" ]; then
 	echo "ERROR: Godot not found at $GODOT_BIN (set GODOT_BIN)." >&2
@@ -38,7 +38,7 @@ echo "Using Godot: $GODOT_BIN ($("$GODOT_BIN" --version))"
 # $HOME/.local/share/godot/app_userdata/<project name>/.
 SANDBOX="$(mktemp -d)"
 trap 'rm -rf "$SANDBOX"' EXIT
-SETTINGS_DIR="$SANDBOX/.local/share/godot/app_userdata/$TITLE/chrono_nexus"
+SETTINGS_DIR="$SANDBOX/.local/share/godot/app_userdata/$TITLE/klima_gem"
 
 failures=0
 

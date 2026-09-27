@@ -19,11 +19,11 @@ static func keep_ratio(window_size: Vector2) -> float:
 
 
 static func read_settings() -> Dictionary:
-	# Chrono Nexus keeps its settings namespaced away from the demo balloon
+	# The show keeps its settings namespaced away from the demo balloon
 	# this UI was adapted from.
-	if not FileAccess.file_exists("user://chrono_nexus/settings.json"):
+	if not FileAccess.file_exists("user://klima_gem/settings.json"):
 		return {}
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("user://chrono_nexus/settings.json"))
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("user://klima_gem/settings.json"))
 	return parsed if parsed is Dictionary else {}
 
 

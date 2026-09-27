@@ -19,7 +19,8 @@ var director: Node
 
 
 func _ready() -> void:
-	get_tree().create_timer(240.0).timeout.connect(_on_watchdog)
+	# Real-time watchdog: SceneTreeTimer honours time_scale otherwise.
+	get_tree().create_timer(240.0, true, false, true).timeout.connect(_on_watchdog)
 	Engine.time_scale = 10.0
 	_build_rig()
 	await _run_tests()
@@ -36,6 +37,11 @@ func _on_watchdog() -> void:
 	printerr("SHOW TESTS: watchdog timeout")
 	print("SHOW TESTS: FAIL (watchdog)")
 	get_tree().quit(1)
+
+
+func check_vec_close(actual: Vector3, expected: Vector3, label: String, eps := 0.08) -> void:
+	var ok := actual.is_equal_approx(expected) or (absf(actual.x - expected.x) <= eps and absf(actual.z - expected.z) <= eps and absf(actual.y - expected.y) <= eps + 0.05)
+	check(ok, "%s (%s ~ %s)" % [label, actual, expected])
 
 
 func check(condition: bool, label: String) -> void:
@@ -109,6 +115,18 @@ func _run_tests() -> void:
 		check(live_gems[0].face_labels.size() == 8, "gem A wears eight word labels")
 		check(live_gems[1].face_labels[0].text != "", "gem B labels carry text")
 		check(live_gems[0].words[0] == "HANDS" and live_gems[0].words[7] == "SKIN", "gem A word order is stable")
+		check_vec_close(live_gems[0].position, ShowStageScript.GEM_SLOT_PART, "body-part gem hangs on the RIGHT")
+		check_vec_close(live_gems[1].position, ShowStageScript.GEM_SLOT_MOD, "shapeshift gem hangs on the LEFT")
+
+	# --- the glowing word presentation ---------------------------------------
+	check(is_instance_valid(stage._plaque_part), "body-part word is presented")
+	check(is_instance_valid(stage._plaque_mod), "shapeshift word is presented")
+	if is_instance_valid(stage._plaque_part):
+		check(stage._plaque_part.get_child(0).text == str(gs.show_part), "right plaque carries the part word")
+		check_vec_close((stage._plaque_part as Node3D).global_position, ShowStageScript.PRESENT_POS_PART, "part word hangs in the RIGHT slot")
+	if is_instance_valid(stage._plaque_mod):
+		check(stage._plaque_mod.get_child(0).text == str(gs.show_mod), "left plaque carries the shapeshift word")
+		check_vec_close((stage._plaque_mod as Node3D).global_position, ShowStageScript.PRESENT_POS_MOD, "shapeshift word hangs in the LEFT slot")
 
 	# --- modification application -------------------------------------------
 	await director.apply_mods()
@@ -155,10 +173,13 @@ func _run_tests() -> void:
 	director.begin_show()
 	await get_tree().create_timer(0.2).timeout
 	check(stage._gems.size() == 0, "gems cleared before restore")
+	check(stage._plaque_part == null and stage._plaque_mod == null, "word plaques cleared before restore")
 	# ...then restore and demand the show back.
 	gs.restore(snap)
 	await get_tree().create_timer(0.2).timeout
 	check(stage._gems.size() == 2, "restore brings both gems back settled")
+	check(is_instance_valid(stage._plaque_part) and stage._plaque_part.get_child(0).text == str(gs.show_part), "restore re-presents the part word")
+	check(is_instance_valid(stage._plaque_mod) and stage._plaque_mod.get_child(0).text == str(gs.show_mod), "restore re-presents the shapeshift word")
 	check(is_instance_valid(stage._chip), "restore brings the chip back")
 	check(stage._props.get_child_count() > 0, "restore rebuilds the standing trial props")
 	check((stage.aurora_quad == null) or (stage.aurora_quad as Node3D).global_position.is_equal_approx(ShowStageScript.AURORA_MARK), "guest stands on her mark after restore")

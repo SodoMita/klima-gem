@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless smoke test for the Chrono Nexus Godot project.
+# Headless smoke test for the Klima Gem Godot project.
 # Runs the project in headless mode and checks for any script errors,
 # parse failures, or missing-resource warnings. Exits non-zero on any
 # failure so it can run in CI.
@@ -98,12 +98,20 @@ if grep -q "Typewriter sound" scenes/vn_balloon.tscn || grep -q "typing_tick" sc
 	echo "ERROR: typewriter sound is still wired up."
 	exit 1
 fi
-if ! grep -q "CHRONO NEXUS" scenes/vn_balloon.tscn; then
-	echo "ERROR: Chrono Nexus UI mark is missing from the balloon."
+if ! grep -q "KLIMA GEM" scenes/vn_balloon.tscn; then
+	echo "ERROR: Klima Gem UI mark is missing from the balloon."
 	exit 1
 fi
-if [ ! -f dialogue/chrono_nexus.dialogue ]; then
-	echo "ERROR: story dialogue is missing."
+if [ ! -f dialogue/klima_gem_show.dialogue ]; then
+	echo "ERROR: show dialogue is missing."
+	exit 1
+fi
+if ! grep -q "klima_gem_show.dialogue" main.gd; then
+	echo "ERROR: main.gd does not boot the show dialogue."
+	exit 1
+fi
+if ls dialogue/*.dialogue 2>/dev/null | grep -qv klima_gem_show; then
+	echo "ERROR: dialogue files from the old game are still present."
 	exit 1
 fi
 echo "OK: balloon, story, and no typewriter ticks."

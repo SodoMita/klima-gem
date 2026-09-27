@@ -1,7 +1,6 @@
-[gd_scene format=3 uid="uid://df6g3f7ks8sju"]
+[gd_scene load_steps=7 format=3 uid="uid://df6g3f7ks8sju"]
 
 [ext_resource type="Script" uid="uid://qyg0bakcoedf" path="res://main.gd" id="1_main"]
-[ext_resource type="Texture2D" uid="uid://cao4hs88e08tp" path="res://bgs/nexus_chamber.jpg" id="2_nexus"]
 [ext_resource type="FontFile" uid="uid://ctxcxi25fm0pu" path="res://assets/fonts/DejaVuSerif.ttf" id="3_serif"]
 [ext_resource type="FontFile" uid="uid://ex3s7gibjgfb" path="res://assets/fonts/DejaVuSerif-Bold.ttf" id="4_bold"]
 [ext_resource type="PackedScene" path="res://scenes/show_stage/show_stage.tscn" id="5_stage"]
@@ -86,34 +85,13 @@ corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
-[sub_resource type="BoxMesh" id="BoxMesh_je1nv"]
-
-[sub_resource type="Sky" id="Sky_rrh6l"]
-
-[sub_resource type="Environment" id="Environment_je1nv"]
-background_mode = 2
-sky = SubResource("Sky_rrh6l")
-
 [node name="Main" type="Node" unique_id=182449774]
 script = ExtResource("1_main")
 
 [node name="TitleLayer" type="CanvasLayer" parent="." unique_id=1625491531]
 layer = 20
 
-[node name="TitleArt" type="TextureRect" parent="TitleLayer" unique_id=744191579]
-visible = false
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-texture = ExtResource("2_nexus")
-expand_mode = 1
-stretch_mode = 6
-
 [node name="Scrim" type="ColorRect" parent="TitleLayer" unique_id=76956351]
-visible = false
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -144,7 +122,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.86, 1, 0.8)
 theme_override_fonts/font = ExtResource("4_bold")
 theme_override_font_sizes/font_size = 13
-text = "ПРЯМОЙ ЭФИР ИЗ РАЗЛОМА"
+text = "ПРЯМОЙ ЭФИР"
 horizontal_alignment = 1
 
 [node name="Title" type="Label" parent="TitleLayer/Center/Card/VBox" unique_id=2052285640]
@@ -152,7 +130,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.93, 0.96, 1, 1)
 theme_override_fonts/font = ExtResource("4_bold")
 theme_override_font_sizes/font_size = 46
-text = "Узел Времени"
+text = "КЛИМА ГЕМ"
 horizontal_alignment = 1
 
 [node name="Rule" type="ColorRect" parent="TitleLayer/Center/Card/VBox" unique_id=735500104]
@@ -167,7 +145,7 @@ custom_minimum_size = Vector2(460, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.86, 0.98, 0.92)
 theme_override_font_sizes/font_size = 17
-text = "Идём вперёд, даже наступая на свои следы в Узле Времени"
+text = "Два кристалла, три испытания: гость бросает — сцена решает"
 horizontal_alignment = 1
 autowrap_mode = 2
 
@@ -178,7 +156,7 @@ theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_hot")
 theme_override_styles/hover = SubResource("StyleBoxFlat_hot")
 theme_override_styles/focus = SubResource("StyleBoxFlat_hot")
-text = "Очнуться"
+text = "В эфир!"
 
 [node name="Hint" type="Label" parent="TitleLayer/Center/Card/VBox" unique_id=546668314]
 layout_mode = 2
@@ -190,18 +168,6 @@ autowrap_mode = 2
 
 [node name="3d" type="Node" parent="." unique_id=895882631]
 
-[node name="Camera3D" type="Camera3D" parent="3d" unique_id=935417269]
-transform = Transform3D(0.9988484, 0.003346788, -0.047861278, 0, 0.9975641, 0.06975651, 0.047978148, -0.069676176, 0.99641526, 0.042844802, 0.15171345, 2.5510657)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="3d" unique_id=1332674332]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
-mesh = SubResource("BoxMesh_je1nv")
-
-[node name="WorldEnvironment" type="WorldEnvironment" parent="3d" unique_id=1149244819]
-environment = SubResource("Environment_je1nv")
-
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="3d" unique_id=2042085964]
-transform = Transform3D(-0.55279803, -0.6959537, -0.45832598, -0.22461036, -0.40520793, 0.8862035, -0.80247396, 0.5928364, 0.067679726, 0, 0, 0)
-directional_shadow_mode = 0
+[node name="ShowStage" parent="3d" instance=ExtResource("5_stage")]
 
 [connection signal="pressed" from="TitleLayer/Center/Card/VBox/BeginButton" to="." method="_on_begin_pressed"]
