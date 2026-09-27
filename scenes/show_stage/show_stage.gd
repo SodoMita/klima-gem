@@ -76,6 +76,13 @@ func _ready() -> void:
 	add_to_group("show_stage")
 	_cosmetic.seed = 20260927
 	_build_environment()
+	# Where standing portraits live (Y-billboard quads are parented here).
+	var world := Node3D.new()
+	world.name = "World3D"
+	add_child(world)
+	var chars := Node3D.new()
+	chars.name = "Characters"
+	world.add_child(chars)
 	_build_hall()
 	_build_set()
 	_build_truss_and_lights()
