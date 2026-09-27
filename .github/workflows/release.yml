@@ -19,9 +19,9 @@ on:
   workflow_dispatch:
     inputs:
       skip_tests:
-        description: "Skip the headless smoke test before exporting"
+        description: "Accepted for compatibility; the suite runs in Godot CI, not here"
         type: boolean
-        default: false
+        default: true
       publish_itch:
         description: "Push the build to itch.io"
         type: boolean
@@ -111,32 +111,24 @@ jobs:
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Klima Gem release version: $VERSION"
 
-      # Report-only: the full headless suite is long (and main's Godot CI is red
-      # on this runner), so an unfinished suite is surfaced as a warning instead
-      # of blocking a ship. The export below is the real gate.
-      - name: Verify project (headless smoke test, report only)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_tests == false }}
-        continue-on-error: true
-        timeout-minutes: 12
-        shell: bash
-        env:
-          GODOT_BIN: /tmp/godot-bin/godot
-        run: |
-          set -uo pipefail
-          timeout --foreground 660 bash tests/run_headless.sh \
-            || echo "::warning title=Headless suite::tests/run_headless.sh did not finish green — exporting anyway."
-
-      - name: Import project resources
+      # tests/run_headless.sh is deliberately NOT part of this workflow: on a
+      # GitHub runner it does not terminate (a child keeps the log pipe open),
+      # which stalled two earlier runs even under `timeout`. It stays in Godot
+      # CI for main. Here the gate is the export below: the import pass parses
+      # every script and the export fails on missing resources.
+      - name: Import project resources (parses every script)
         shell: bash
         run: |
           set -euo pipefail
-          "$GODOT_BIN" --headless --import
+          timeout --foreground 900 "$GODOT_BIN" --headless --import
 
       - name: Export release bundles
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: bash scripts/export_release.sh all
+        run: |
+          set -euo pipefail
+          timeout --foreground 1800 bash scripts/export_release.sh all
 
       - name: Package release artifacts
         shell: bash

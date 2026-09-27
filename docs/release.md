@@ -18,12 +18,13 @@ itch.io also receives desktop channels: `linux` and `windows`.
 `.github/workflows/release.yml` runs on every push to a `build/**` branch, on
 `v*` tags, and on manual dispatch. Jobs:
 
-1. **build** — installs Godot 4.7 + export templates (cached), runs
-   `tests/run_headless.sh` bounded by `timeout 660` and **report-only**
-   (`continue-on-error`): the suite is long and main's Godot CI is red on this
-   runner, so a red suite warns instead of blocking a ship. The export itself
-   is the gate. Then imports the project and runs
-   `scripts/export_release.sh all`:
+1. **build** — installs Godot 4.7 + export templates (cached), imports the
+   project under `timeout 900` (that pass parses every script and reports
+   missing resources), then runs `scripts/export_release.sh all` under
+   `timeout 1800`. `tests/run_headless.sh` is intentionally **not** called
+   here: on a GitHub runner it never terminates (a child keeps the log pipe
+   open) and stalled two runs, so it stays with Godot CI for `main`. The export
+   is the gate:
    * `build/web` — Web export (GL compatibility; the project's renderer).
      The GDExtensions (`scene_score`, `audio_gen`) ship no wasm libraries, so
      the browser build uses `AudioDirector`'s GDScript mixer fallback.
