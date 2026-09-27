@@ -231,6 +231,19 @@ func aurora_hand() -> Vector3:
 
 # ---------------------------------------------------------------- stage build
 
+## Free a node NOW as far as the scene tree is concerned. queue_free() alone
+## leaves the node parented until the end of the frame, so a rebuild in the
+## same frame (a rollback, a save-load, a jump back from the story map) adds
+## a second node with the same name — Godot renames it to "ModCard2" and the
+## stage ends up wearing two of everything. Detach first, then release.
+func _free_now(node: Node) -> void:
+	if not is_instance_valid(node):
+		return
+	if node.get_parent() != null:
+		node.get_parent().remove_child(node)
+	node.queue_free()
+
+
 func _mesh_instance(mesh: Mesh, mat: StandardMaterial3D, parent: Node = self) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
@@ -1166,7 +1179,9 @@ func _clear_plaque(is_part: bool) -> void:
 ## A word plaque: the glowing copy of the rolled word plus its additive halo.
 func _make_word_plaque(word: String, is_part: bool) -> Node3D:
 	var root := Node3D.new()
-	root.name = "WordPlaque"
+	# Distinct names per side: two plaques with the same name in one frame
+	# is how a restore ends up with "WordPlaque2" hanging over the stage.
+	root.name = "WordPlaquePart" if is_part else "WordPlaqueMod"
 	var label := Label3D.new()
 	label.text = word
 	label.font = FlatTopGemScript._font()
@@ -1345,8 +1360,7 @@ func mod_art(mod: String) -> Texture2D:
 ## Raise the modification card: the case-specific CG for this shapeshift,
 ## on a lit frame at the guest's shoulder.
 func show_mod_card(mod: String) -> void:
-	if is_instance_valid(_mod_card):
-		_mod_card.queue_free()
+	_free_now(_mod_card)
 	_mod_card = null
 	var tex := mod_art(mod)
 	if tex == null:
@@ -1378,8 +1392,7 @@ func show_mod_card(mod: String) -> void:
 
 
 func clear_mod_card() -> void:
-	if is_instance_valid(_mod_card):
-		_mod_card.queue_free()
+	_free_now(_mod_card)
 	_mod_card = null
 
 
@@ -1414,8 +1427,7 @@ func apply_mod_chip(part: String, mod: String, at: Vector3) -> void:
 ## has been given, stacked beside her mark. Body modifications are permanent
 ## in this show, so the audience must be able to count them.
 func apply_mod_rail(mods: Array) -> void:
-	if is_instance_valid(_mod_rail):
-		_mod_rail.queue_free()
+	_free_now(_mod_rail)
 	_mod_rail = null
 	var live: Array = []
 	for m in mods:
@@ -1485,7 +1497,13 @@ func apply_aurora_fx(part: String, mod: String) -> void:
 		_aurora_bob.kill()
 		_aurora_bob = null
 	if mod == "BOUNCY" and is_instance_valid(aurora_quad):
-		var home_y: float = (aurora_quad as Node3D).position.y
+		# The home height is remembered on the quad: reading the CURRENT y
+		# while a previous bob is mid-flight walks the portrait upward a
+		# little on every restore.
+		if not aurora_quad.has_meta("bob_home"):
+			aurora_quad.set_meta("bob_home", (aurora_quad as Node3D).position.y)
+		var home_y: float = float(aurora_quad.get_meta("bob_home"))
+		(aurora_quad as Node3D).position.y = home_y
 		_aurora_bob = create_tween()
 		_aurora_bob.tween_property(aurora_quad, "position:y", home_y + 0.22, 0.42)
 		_aurora_bob.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
@@ -1860,8 +1878,7 @@ func _spawn_note(at: Vector3) -> void:
 # ------------------------------------------------------------------ results
 
 func _show_result(success: bool) -> void:
-	if is_instance_valid(_stamp):
-		_stamp.queue_free()
+	_free_now(_stamp)
 	_stamp = _label("CLEAR!" if success else "MISS...", 150, Color(1.0, 0.85, 0.3) if success else Color(0.65, 0.75, 0.95), Color(0.03, 0.05, 0.12, 0.95), 0.008)
 	_stamp.name = "ResultStamp"
 	_stamp.position = Vector3(0, 2.75, 1.4)
@@ -1907,8 +1924,8 @@ func fly_star(earned: bool, star_index: int) -> void:
 
 ## Golden rain for a perfect show.
 func confetti_burst() -> void:
-	if is_instance_valid(_confetti):
-		_confetti.queue_free()
+	_free_now(_confetti)
+	_confetti = null
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	var piece := BoxMesh.new()
@@ -1952,7 +1969,7 @@ func _tick_confetti(delta: float) -> void:
 		)
 		mm.set_instance_transform(i, t)
 	if _confetti_time > 9.0:
-		_confetti.queue_free()
+		_free_now(_confetti)
 		_confetti = null
 
 
@@ -1975,6 +1992,5 @@ func reset_show() -> void:
 	clear_mod_chip()
 	set_stars(0)
 	reset_aurora_fx()
-	if is_instance_valid(_stamp):
-		_stamp.queue_free()
-		_stamp = null
+	_free_now(_stamp)
+	_stamp = null

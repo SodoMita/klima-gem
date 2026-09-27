@@ -93,6 +93,10 @@ func _run() -> void:
 			inside = false
 	ok(inside, "upper-face words sit on the crown band")
 	ok(gem.top_label.position.y >= gem.crown_height, "table stamp lies on the flat top")
+	# The label probe was never part of the show's own gem list.
+	stage.remove_child(gem)
+	gem.queue_free()
+	await get_tree().process_frame
 
 	# 5. Case-specific CG art for every shapeshift, packed lossless WebP.
 	for mod in ShowStageScript.MODS:
@@ -113,6 +117,30 @@ func _run() -> void:
 		var idx := AudioServer.get_bus_index("Music")
 		ok(idx != -1 and absf(AudioServer.get_bus_volume_db(idx) - linear_to_db(0.5)) < 0.01,
 			"a slider percent lands on the bus in dB")
+
+	# 6b. Restores must not duplicate the dressing. Rebuilding twice inside
+	# ONE frame is exactly what a rollback, a save-load or a jump back from
+	# the story map does; queue_free() alone leaves the old node parented and
+	# Godot renames the new one ("ModCard2"), doubling the set.
+	for i in 3:
+		stage.apply_mod_chip("EYES", "GLOWING", stage.chip_anchor())
+		stage.apply_mod_rail(["EYES:GLOWING", "HANDS:MAGNET"])
+		stage.place_word_plaque("EYES", true)
+		stage.place_word_plaque("GLOWING", false)
+		stage.place_gems_settled("EYES", 1, "GLOWING", 7)
+	await get_tree().process_frame
+	var counts := {}
+	for child in stage.get_children():
+		var base := String(child.name).rstrip("0123456789")
+		counts[base] = int(counts.get(base, 0)) + 1
+	for key in ["ModCard", "ModRail", "ModChip", "WordPlaquePart", "WordPlaqueMod"]:
+		ok(int(counts.get(key, 0)) <= 1, "no duplicated %s after three same-frame restores (%d)" % [key, int(counts.get(key, 0))])
+	ok(stage._gems.size() == 2, "still exactly two gems after repeated restores")
+	var gem_nodes := 0
+	for child in stage.get_children():
+		if child is FlatTopGem:
+			gem_nodes += 1
+	ok(gem_nodes == 2, "and only two gem nodes in the scene (%d)" % gem_nodes)
 
 	# 7. Fairness: a throw starts in a random attitude, so no facet is the
 	# floor-facing one by construction.
