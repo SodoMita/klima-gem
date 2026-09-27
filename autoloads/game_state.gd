@@ -50,8 +50,11 @@ var bond: Dictionary = {}
 
 func _ready() -> void:
 	_reseed()
-	# Dialogue Manager is a later autoload, so the first reseed cannot see it yet.
-	call_deferred("_reseed")
+	# Dialogue Manager is a later autoload, so the first reseed cannot see it
+	# yet. Seed ONLY its stream on the retry: re-seeding rng here resets the
+	# whole story stream, which (when the deferred call lands mid-frame) made
+	# two gem throws in one round draw identical numbers and land identically.
+	call_deferred("_reseed_dialogue")
 
 
 ## A new show gets a new seed: throws are never the same night twice. The
@@ -61,6 +64,12 @@ func fresh_seed() -> void:
 	r.randomize()
 	story_seed = int(r.randi() & 0x7fffffff)
 	_reseed()
+
+
+func _reseed_dialogue() -> void:
+	var manager := get_tree().root.get_node_or_null("DialogueManager")
+	if manager != null and manager.has_method("reseed_randomizer"):
+		manager.reseed_randomizer(story_seed)
 
 
 func _reseed() -> void:

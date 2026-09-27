@@ -161,17 +161,31 @@ func _run_tests() -> void:
 							all_in = false
 			check(all_in and max_off < 0.02, "gem %d: every word in its facet plane (%.3f off) and inside the facet bounds" % [gi, max_off])
 		check(live_gems[0].words[0] == "HANDS" and live_gems[0].words[7] == "SKIN", "gem A word order is stable")
-		# A finished round leaves each gem dollied forward at its reveal mark,
-		# tipped toward the house camera; the slot is only the throw's landing.
-		check(live_gems[0].global_position.distance_to(ShowStageScript.GEM_SLOT_PART) < 0.12, "body-part gem is presented on the RIGHT")
-		check(live_gems[1].global_position.distance_to(ShowStageScript.GEM_SLOT_MOD) < 0.12, "shapeshift gem is presented on the LEFT")
-		# The presented face looks straight into the house camera.
+		# The stone is never lifted or turned: it rests where physics left it,
+		# inside the closed glass box, and the rolled word is the face it
+		# rests ON — read from below through the box's floating glass floor.
 		for gi2 in 2:
 			var g2: FlatTopGem = live_gems[gi2]
 			var face2 := int(gs.show_part_face) if gi2 == 0 else int(gs.show_mod_face)
-			var lab2 := g2.label_for(face2)
-			var to_cam2: Vector3 = (stage.camera().global_position - lab2.global_position).normalized()
-			check(lab2.global_basis.z.normalized().dot(to_cam2) > 0.97, "gem %d: rolled word faces the camera" % gi2)
+			check(g2.freeze and g2.settled, "gem %d froze where it landed" % gi2)
+			check(g2.resting_face() == face2, "gem %d rests with the rolled word down (rolled %d, rests on %d)" % [gi2, face2, g2.resting_face()])
+			var rel := g2.global_position - ShowStageScript.BOX_CENTER
+			var half := ShowStageScript.BOX_SIZE * 0.5
+			check(absf(rel.x) <= half.x + 0.01 and absf(rel.y) <= half.y + 0.01 and absf(rel.z) <= half.z + 0.01,
+				"gem %d rests inside the closed glass box at %s" % [gi2, g2.global_position])
+			check(g2.global_position.y > ShowStageScript.STAGE_TOP + 0.5,
+				"gem %d rests on the glass floor in the air, not on the platform" % gi2)
+			# The word is legible from below: its label faces DOWN (toward an
+			# under-view camera) and its up-vector reads upright from there.
+			var lab2: Label3D = g2.label_for(face2)
+			var n2: Vector3 = lab2.global_basis.z.normalized()
+			check(n2.y < -0.45, "gem %d: rolled word points down through the glass floor (%.2f)" % [gi2, n2.y])
+			var eye := lab2.global_position + n2 * ShowStageScript.UNDERVIEW_DIST
+			eye.y = clampf(eye.y, ShowStageScript.STAGE_TOP + 0.12, ShowStageScript.BOX_CENTER.y - 0.25)
+			var up2: Vector3 = lab2.global_basis.y
+			up2.y = 0.0
+			check(up2.length() < 0.6 or absf(up2.normalized().dot(n2.cross(Vector3.UP))) > 0.7,
+				"gem %d: rolled word is not mirrored from below" % gi2)
 
 	# --- the glowing word presentation ---------------------------------------
 	check(is_instance_valid(stage._plaque_part), "body-part word is presented")
