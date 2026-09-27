@@ -32,6 +32,9 @@ signal state_restored
 @export var show_mod_face: int = -1
 @export var show_outlook: String = ""
 @export var show_props_round: int = 0
+## Which trial has already been scored. Rolling back restores this, so a line
+## whose mutations run again on the way back cannot award a second win.
+@export var show_scored_round: int = 0
 @export var show_ren_key: String = ""
 @export var show_aurora_key: String = ""
 @export var rerolls_used: int = 0
@@ -146,6 +149,7 @@ func snapshot() -> Dictionary:
 		"show_mod_face": show_mod_face,
 		"show_outlook": show_outlook,
 		"show_props_round": show_props_round,
+		"show_scored_round": show_scored_round,
 		"show_ren_key": show_ren_key,
 		"show_aurora_key": show_aurora_key,
 		"rerolls_used": rerolls_used,
@@ -183,6 +187,7 @@ func restore(data: Dictionary) -> void:
 	show_mod_face = int(data.get("show_mod_face", -1))
 	show_outlook = str(data.get("show_outlook", ""))
 	show_props_round = int(data.get("show_props_round", 0))
+	show_scored_round = int(data.get("show_scored_round", 0))
 	show_ren_key = str(data.get("show_ren_key", ""))
 	show_aurora_key = str(data.get("show_aurora_key", ""))
 	rerolls_used = int(data.get("rerolls_used", 0))

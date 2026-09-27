@@ -133,6 +133,7 @@ func begin_show() -> void:
 		gs.show_ren_key = ""
 		gs.show_aurora_key = ""
 		gs.show_stars = 0
+		gs.show_scored_round = 0
 		gs.show_cheers = 1
 		gs.show_part = ""
 		gs.show_mod = ""
@@ -443,15 +444,21 @@ func run_challenge() -> void:
 	var score := total_for(int(gs.show_round))
 	gs.last_roll = float(score)
 	gs.last_success = score >= need
+	# A rollback re-runs the mutations of the line it lands on; without this
+	# the same trial would award its star twice and the win count would not
+	# go back when the player jumped to an earlier choice.
+	var already_scored := int(gs.show_scored_round) == need
 	if replaying():
-		if gs.last_success:
+		gs.show_scored_round = need
+		if gs.last_success and not already_scored:
 			gs.show_stars = int(gs.show_stars) + 1
 		gs.show_props_round = 0
 		return
 	await st.play_challenge(int(gs.show_round), bool(gs.last_success), _pattern)
 	if not _is_current(epoch, st):
 		return
-	if gs.last_success:
+	gs.show_scored_round = need
+	if gs.last_success and not already_scored:
 		gs.show_stars = int(gs.show_stars) + 1
 	st.set_stars(int(gs.show_stars))
 	var star_index := int(gs.show_stars) - 1 if gs.last_success else int(gs.show_stars)
