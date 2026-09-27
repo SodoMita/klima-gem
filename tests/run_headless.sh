@@ -154,6 +154,13 @@ echo ""
 echo "=== Step 10: Klima Gem stage integrity tests ==="
 bash tests/stage_integrity_test.sh
 
+# Step 10a-mm: decorative MultiMeshes (star cloth, audience, glowsticks) must
+# never serialize garbage transform buffers again — the "exploded 3D scene"
+# regression. See tests/multimesh_sanity_test.gd for the story.
+echo ""
+echo "=== Step 10a-mm: MultiMesh sanity tests ==="
+bash tests/multimesh_sanity_test.sh
+
 # Step 10b: Aurora's transformations are FULL-BODY sprites, not icon cards.
 # Verify all variants are transparent lossless WebP and that changing an
 # expression, restoring or applying a later shift keeps one Aurora on stage.
