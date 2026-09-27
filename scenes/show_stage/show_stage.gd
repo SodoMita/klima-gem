@@ -380,7 +380,6 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 	# Released inside the closed box, up under the lid on Aurora's side, with
 	# a random orientation, a random shove and a random spin. Nothing about
 	# the result is chosen: the stone decides by the face it comes to rest on.
-	var half := BOX_SIZE * 0.5
 	# The player's hand: where the cursor points is where the stone is
 	# aimed, and how long the button is held is how hard it flies. The
 	# release instant and the cursor position are mixed into the impulse
@@ -388,30 +387,7 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 	var cue := await _await_throw_cue(is_part, epoch)
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return -1
-	var r := RandomNumberGenerator.new()
-	r.seed = int(rng.randi()) ^ int(cue.get("entropy", 0))
-	var power: float = float(cue.get("power", 1.0))
-	var from := BOX_CENTER + Vector3(
-		r.randf_range(0.35, 0.8) * half.x, BOX_SIZE.y - 0.3, r.randf_range(-0.5, 0.5) * half.z)
-	var target: Vector3
-	if cue.has("aim"):
-		var aim: Vector3 = cue["aim"]
-		target = Vector3(
-			clampf(aim.x, BOX_CENTER.x - half.x + 0.25, BOX_CENTER.x + half.x - 0.25),
-			BOX_CENTER.y,
-			clampf(aim.z, BOX_CENTER.z - half.z + 0.2, BOX_CENTER.z + half.z - 0.2))
-	else:
-		target = Vector3(
-			r.randf_range(-0.8, 0.3) * half.x, BOX_CENTER.y, BOX_CENTER.z + r.randf_range(-0.6, 0.6) * half.z)
-	# Harder throw: shorter flight (a flatter, faster arc) and more spin.
-	var flight := maxf(r.randf_range(0.34, 0.48) / power, 0.24)
-	var spin_max := 18.0 * power
-	var spin := Vector3(r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max))
-	var q := Quaternion(r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1))
-	_fast_settle(gem)
-	if q.length() < 0.01:
-		q = Quaternion.IDENTITY
-	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin, Basis(q.normalized()))
+	launch_gem(gem, rng, cue)
 	# Wait on the STAGE rather than on the body: on rewind the body is
 	# freed, and a suspended method on it would resume into a dead instance.
 	await _wait_throw_rest(gem, epoch)
@@ -462,6 +438,37 @@ func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch:
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return
 	await present_word(gem, face, is_part)
+
+
+## The launch itself: draw the impulse from [param rng] XOR the cue's
+## entropy, aim at the cue's point (or a random one), and let go. Shared by
+## the show and the fairness probe so both throw the very same way.
+func launch_gem(gem: FlatTopGem, rng: RandomNumberGenerator, cue: Dictionary = {}) -> void:
+	var half := BOX_SIZE * 0.5
+	var r := RandomNumberGenerator.new()
+	r.seed = int(rng.randi()) ^ int(cue.get("entropy", 0))
+	var power: float = float(cue.get("power", 1.0))
+	var from := BOX_CENTER + Vector3(
+		r.randf_range(0.35, 0.8) * half.x, BOX_SIZE.y - 0.3, r.randf_range(-0.5, 0.5) * half.z)
+	var target: Vector3
+	if cue.has("aim"):
+		var aim: Vector3 = cue["aim"]
+		target = Vector3(
+			clampf(aim.x, BOX_CENTER.x - half.x + 0.25, BOX_CENTER.x + half.x - 0.25),
+			BOX_CENTER.y,
+			clampf(aim.z, BOX_CENTER.z - half.z + 0.2, BOX_CENTER.z + half.z - 0.2))
+	else:
+		target = Vector3(
+			r.randf_range(-0.8, 0.3) * half.x, BOX_CENTER.y, BOX_CENTER.z + r.randf_range(-0.6, 0.6) * half.z)
+	# Harder throw: shorter flight (a flatter, faster arc) and more spin.
+	var flight := maxf(r.randf_range(0.34, 0.48) / power, 0.24)
+	var spin_max := 18.0 * power
+	var spin := Vector3(r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max))
+	var q := Quaternion(r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1))
+	_fast_settle(gem)
+	if q.length() < 0.01:
+		q = Quaternion.IDENTITY
+	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin, Basis(q.normalized()))
 
 
 ## Open the player's throw cue over the case (or skip it when throws are

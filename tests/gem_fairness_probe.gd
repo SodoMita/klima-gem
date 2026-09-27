@@ -19,13 +19,19 @@ func _initialize() -> void:
 		await process_frame
 		var t0 := Time.get_ticks_msec()
 		var half := ShowStage.BOX_SIZE * 0.5
-		var from := ShowStage.BOX_CENTER + Vector3(rng.randf_range(0.35, 0.8) * half.x, ShowStage.BOX_SIZE.y - 0.3, rng.randf_range(-0.5, 0.5) * half.z)
-		var q := Quaternion(rng.randf_range(-1,1), rng.randf_range(-1,1), rng.randf_range(-1,1), rng.randf_range(-1,1)).normalized()
-		g.throw_with_velocity(from, Vector3(rng.randf_range(-3, -1), rng.randf_range(0, 2), rng.randf_range(-1, 1)), Vector3(rng.randf_range(-14,14), rng.randf_range(-14,14), rng.randf_range(-14,14)), Basis(q))
+		# The very same launch the show uses, with a fake player cue: a
+		# random aim on the glass and a random hold.
+		var cue := {
+			"aim": ShowStage.BOX_CENTER + Vector3(rng.randf_range(-1.0, 1.0) * half.x, 0.0, rng.randf_range(-1.0, 1.0) * half.z),
+			"power": rng.randf_range(0.8, 1.5),
+			"entropy": rng.randi(),
+		}
+		st.launch_gem(g, rng, cue)
 		await st._wait_throw_rest(g, st._gem_epoch)
 		var f := g.resting_face()
 		var inside := absf(g.global_position.x - ShowStage.BOX_CENTER.x) < half.x + 0.05 and absf(g.global_position.z - ShowStage.BOX_CENTER.z) < half.z + 0.05
 		tally[f] = int(tally.get(f, 0)) + 1
 		print("throw ", n, " face ", f, " inside ", inside, " sleeping ", g.sleeping, " ms ", Time.get_ticks_msec() - t0)
+	var out := 0
 	print("TALLY ", tally)
 	quit()
