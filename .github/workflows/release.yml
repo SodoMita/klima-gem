@@ -1,0 +1,276 @@
+name: Release
+
+# Klima Gem release pipeline.
+#
+# Pushes to a `build/*` branch (or a manual dispatch) produce:
+#   1. a Web export deployed to GitHub Pages  -> https://sodomita.github.io/klima-gem/
+#   2. the same Web export pushed to itch.io  -> https://delatel.itch.io/klima-gem (html5 channel)
+#   3. Linux + Windows desktop bundles pushed to itch.io (linux/windows channels)
+#   4. a GitHub Release carrying the web zip and both desktop bundles
+#
+# Secrets: BUTLER_API_KEY (itch.io API key used by butler).
+
+on:
+  push:
+    branches:
+      - "build/**"
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: "Skip the headless smoke test before exporting"
+        type: boolean
+        default: false
+      publish_itch:
+        description: "Push the build to itch.io"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: "4.7-stable"
+  GODOT_BIN: /tmp/godot-bin/godot
+  ITCH_TARGET: delatel/klima-gem
+
+jobs:
+  build:
+    name: Export web + desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Cache Godot ${{ env.GODOT_VERSION }}
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/godot-bin/godot
+            /tmp/godot-templates
+          key: ${{ runner.os }}-godot-4.7-release-templates
+
+      - name: Install Godot ${{ env.GODOT_VERSION }} + export templates
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/godot-bin /tmp/godot-templates
+          cd /tmp/godot-bin
+          curl -fsSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -oq godot.zip
+          mv "Godot_v${GODOT_VERSION}_linux.x86_64" godot
+          chmod +x godot
+          ./godot --version
+          cd /tmp/godot-templates
+          curl -fsSL -o templates.tpz \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+          unzip -oq templates.tpz
+          rm -f templates.tpz
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/4.7.stable"
+          mkdir -p "$TEMPLATE_DIR"
+          cp -f templates/* "$TEMPLATE_DIR/"
+          ls "$TEMPLATE_DIR" | head -20
+
+      - name: Restore Godot from cache
+        if: steps.cache-godot.outputs.cache-hit == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x "$GODOT_BIN"
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/4.7.stable"
+          mkdir -p "$TEMPLATE_DIR"
+          cp -f /tmp/godot-templates/templates/* "$TEMPLATE_DIR/"
+          "$GODOT_BIN" --version
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(cat version.txt 2>/dev/null || echo 0.0.0)"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${BASE}-dev15.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Klima Gem release version: $VERSION"
+
+      - name: Verify project (headless smoke test)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_tests == false }}
+        shell: bash
+        env:
+          GODOT_BIN: /tmp/godot-bin/godot
+        run: bash tests/run_headless.sh
+
+      - name: Import project resources
+        shell: bash
+        run: "$GODOT_BIN" --headless --import
+
+      - name: Export release bundles
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bash scripts/export_release.sh all
+
+      - name: Package release artifacts
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          (cd build/web && zip -qr "../../dist/klima-gem-web-${VERSION}.zip" .)
+          (cd build/linux && zip -qr "../../dist/klima-gem-linux-${VERSION}.zip" .)
+          (cd build/windows && zip -qr "../../dist/klima-gem-windows-${VERSION}.zip" .)
+          ls -lh dist
+
+      - name: Upload web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+          retention-days: 14
+
+      - name: Upload linux bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: build/linux
+          retention-days: 14
+
+      - name: Upload windows bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: build/windows
+          retention-days: 14
+
+      - name: Upload release zips
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-zips
+          path: dist
+          retention-days: 14
+          if-no-files-found: error
+
+  pages:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Download web bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+  itch:
+    name: Publish to itch.io
+    needs: build
+    if: ${{ github.event_name == 'push' || inputs.publish_itch != false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check butler credentials
+        id: creds
+        shell: bash
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          if [ -n "${BUTLER_API_KEY:-}" ]; then
+            echo "have_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_key=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=itch.io skipped::BUTLER_API_KEY secret is not set."
+          fi
+
+      - name: Download bundles
+        if: steps.creds.outputs.have_key == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-build"
+          path: bundles
+
+      - name: Install butler
+        if: steps.creds.outputs.have_key == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -oq butler.zip
+          chmod +x butler
+          ./butler -V
+
+      - name: butler push (html5, linux, windows)
+        if: steps.creds.outputs.have_key == 'true'
+        shell: bash
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          ./butler push bundles/web-build "${ITCH_TARGET}:html5" --userversion "${VERSION}"
+          ./butler push bundles/linux-build "${ITCH_TARGET}:linux" --userversion "${VERSION}"
+          ./butler push bundles/windows-build "${ITCH_TARGET}:windows" --userversion "${VERSION}"
+          echo "itch.io: https://delatel.itch.io/klima-gem (version ${VERSION})"
+
+  release:
+    name: GitHub Release
+    needs: [build, pages, itch]
+    if: always() && needs.build.result == 'success' && needs.pages.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release zips
+        uses: actions/download-artifact@v4
+        with:
+          name: release-zips
+          path: dist
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          NOTES="$(printf 'Klima Gem %s\n\nPlay in the browser: https://sodomita.github.io/klima-gem/\nitch.io: https://delatel.itch.io/klima-gem\n\nBuilt from %s (%s) by the release pipeline.\n' "$VERSION" "$GITHUB_SHA" "$GITHUB_REF_NAME")"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip --clobber
+          else
+            gh release create "$TAG" dist/*.zip \
+              --title "Klima Gem $VERSION" \
+              --notes "$NOTES" \
+              --target "$GITHUB_SHA" \
+              $( [[ "${GITHUB_REF}" == refs/tags/v* ]] || echo --prerelease )
+          fi
