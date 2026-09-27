@@ -211,7 +211,10 @@ func _build_mesh() -> void:
 	mat.emission = gem_color * 0.55
 	mat.emission_energy_multiplier = 0.7
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.cull_mode = BaseMaterial3D.CULL_BACK
+	# A glass stone is seen through: the far facets show through the near
+	# ones, so both sides of every face are drawn (back-face culling made
+	# the gem read as a hollow, single-sided shell).
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	body.material_override = mat
 	body.mesh = mesh
 	add_child(body)
@@ -314,12 +317,14 @@ func _make_face_label(text: String, corners: Array[Vector3], is_crown: bool) -> 
 
 func _make_top_label(text: String) -> Label3D:
 	var label := _new_label(text)
-	# Fit the word's rectangle inside the table octagon's inscribed circle.
-	var r_in := table_radius * cos(PI / float(SIDES)) * 0.92
+	# Fit the word across the table: as wide as the octagon's inscribed
+	# circle, no taller than the table is deep. (The table is small so a
+	# table rest stays rare; the word uses all of it.)
+	var r_in := table_radius * cos(PI / float(SIDES)) * 0.96
 	var sz := _font().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.font_size)
 	var ink_w := sz.x + 2.0 * label.outline_size
 	var ink_h := sz.y + 2.0 * label.outline_size
-	label.pixel_size = 2.0 * r_in / sqrt(ink_w * ink_w + ink_h * ink_h)
+	label.pixel_size = minf(2.0 * r_in / maxf(ink_w, 1.0), 2.0 * r_in * 0.9 / maxf(ink_h, 1.0))
 	label.transform = Transform3D(TOP_BASIS, Vector3(0.0, crown_height + WORD_LIFT, 0.0))
 	add_child(label)
 	return label
@@ -339,7 +344,9 @@ func _fade_faces() -> void:
 	for label in labels:
 		var n := (label.global_basis.z).normalized()
 		var to_cam := (cam.global_position - label.global_position).normalized()
-		var a := clampf((n.dot(to_cam) - 0.12) / 0.3, 0.0, 1.0)
+		# Faces turned away vanish; anything the camera can see at all
+		# keeps its word, fading in as the face squares up.
+		var a := clampf((n.dot(to_cam) - 0.02) / 0.26, 0.0, 1.0)
 		var c := word_color
 		c.a = a
 		label.modulate = c

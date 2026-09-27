@@ -24,6 +24,7 @@ class_name ShowStage extends Node3D
 ## under an impulse. See [method throw_gems].
 
 const FlatTopGemScript := preload("res://scenes/show_stage/flat_top_gem.gd")
+const ThrowCueScript := preload("res://scenes/show_stage/throw_cue.gd")
 
 ## Eight side words, then the word on the flat table (index 8 = TOP_FACE).
 const PARTS: PackedStringArray = ["HANDS", "EYES", "LEGS", "VOICE", "HAIR", "BACK", "HEART", "SKIN", "MILK"]
@@ -94,6 +95,13 @@ const BOX_SIZE := Vector3(3.0, 1.4, 1.8)
 const REST_TIMEOUT := 14.0
 ## Gem geometry scale on stage (a 1 m stone swallowed the frame).
 const GEM_SCALE := 0.62
+## How long the show waits for the player's hand before throwing for them.
+const THROW_CUE_TIMEOUT := 8.0
+
+## The player throws: aim with the cursor / finger / stick, hold for power.
+## Off under a headless display (tests) — then the impulse is drawn from the
+## story RNG alone. Tests may force it either way.
+var interactive_throws := true
 
 ## Below this line the dialogue balloon covers the frame, so nothing the
 ## audience has to read may be placed there.
@@ -130,6 +138,9 @@ var _chip_home := Vector3.ZERO
 var _set_root: Node3D = null
 var _camera: Camera3D = null
 var _cam_tween: Tween = null
+var _throw_cue: ThrowCue = null
+## The last cue the player gave (aim, power, manual) — for tests and HUD.
+var last_throw_cue: Dictionary = {}
 
 
 func _ready() -> void:
@@ -141,6 +152,10 @@ func _ready() -> void:
 	if _camera != null:
 		_camera.make_current()
 	_key_light = get_node_or_null("KeyLight") as OmniLight3D
+	interactive_throws = DisplayServer.get_name() != "headless"
+	_throw_cue = ThrowCueScript.new()
+	_throw_cue.name = "ThrowCue"
+	add_child(_throw_cue)
 	_set_root = get_node_or_null("Set") as Node3D
 	_props = get_node_or_null("Props") as Node3D
 	if _props == null:
@@ -366,14 +381,34 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 	# a random orientation, a random shove and a random spin. Nothing about
 	# the result is chosen: the stone decides by the face it comes to rest on.
 	var half := BOX_SIZE * 0.5
+	# The player's hand: where the cursor points is where the stone is
+	# aimed, and how long the button is held is how hard it flies. The
+	# release instant and the cursor position are mixed into the impulse
+	# generator, so no seed can pre-decide a throw the player makes.
+	var cue := await _await_throw_cue(is_part, epoch)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return -1
+	var r := RandomNumberGenerator.new()
+	r.seed = int(rng.randi()) ^ int(cue.get("entropy", 0))
+	var power: float = float(cue.get("power", 1.0))
 	var from := BOX_CENTER + Vector3(
-		rng.randf_range(0.35, 0.8) * half.x, BOX_SIZE.y - 0.3, rng.randf_range(-0.5, 0.5) * half.z)
-	var target := Vector3(
-		rng.randf_range(-0.8, 0.3) * half.x, BOX_CENTER.y, BOX_CENTER.z + rng.randf_range(-0.6, 0.6) * half.z)
-	var flight := rng.randf_range(0.28, 0.45)
-	var spin := Vector3(rng.randf_range(-24.0, 24.0), rng.randf_range(-24.0, 24.0), rng.randf_range(-24.0, 24.0))
+		r.randf_range(0.35, 0.8) * half.x, BOX_SIZE.y - 0.3, r.randf_range(-0.5, 0.5) * half.z)
+	var target: Vector3
+	if cue.has("aim"):
+		var aim: Vector3 = cue["aim"]
+		target = Vector3(
+			clampf(aim.x, BOX_CENTER.x - half.x + 0.25, BOX_CENTER.x + half.x - 0.25),
+			BOX_CENTER.y,
+			clampf(aim.z, BOX_CENTER.z - half.z + 0.2, BOX_CENTER.z + half.z - 0.2))
+	else:
+		target = Vector3(
+			r.randf_range(-0.8, 0.3) * half.x, BOX_CENTER.y, BOX_CENTER.z + r.randf_range(-0.6, 0.6) * half.z)
+	# Harder throw: shorter flight (a flatter, faster arc) and more spin.
+	var flight := r.randf_range(0.30, 0.42) / power
+	var spin_max := 18.0 * power
+	var spin := Vector3(r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max))
+	var q := Quaternion(r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1))
 	_fast_settle(gem)
-	var q := Quaternion(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1))
 	if q.length() < 0.01:
 		q = Quaternion.IDENTITY
 	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin, Basis(q.normalized()))
@@ -427,6 +462,22 @@ func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch:
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return
 	await present_word(gem, face, is_part)
+
+
+## Open the player's throw cue over the case (or skip it when throws are
+## not interactive). Returns the cue dictionary, {} when nothing was asked.
+func _await_throw_cue(is_part: bool, epoch: int) -> Dictionary:
+	if not interactive_throws or _throw_cue == null or not is_inside_tree():
+		return {}
+	_throw_cue.camera = _camera
+	_throw_cue.floor_center = BOX_CENTER
+	_throw_cue.half_extent = Vector2(BOX_SIZE.x * 0.5 - 0.25, BOX_SIZE.z * 0.5 - 0.2)
+	var text := "AIM + HOLD TO THROW THE %s GEM" % ("BODY" if is_part else "SHIFT")
+	var cue: Dictionary = await _throw_cue.wait(text, THROW_CUE_TIMEOUT)
+	if epoch != _gem_epoch:
+		return {}
+	last_throw_cue = cue
+	return cue
 
 
 ## Fly fast, stop fast: heavy damping and a dull bounce so a stone that has
