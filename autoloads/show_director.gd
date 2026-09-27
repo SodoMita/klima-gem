@@ -67,10 +67,10 @@ func _gs() -> Node:
 	return get_node_or_null("/root/GameState")
 
 
-func stage() -> Node3D:
+func stage() -> ShowStage:
 	if get_tree() == null:
 		return null
-	return get_tree().get_first_node_in_group("show_stage") as Node3D
+	return get_tree().get_first_node_in_group("show_stage") as ShowStage
 
 
 func _motion() -> Node:
