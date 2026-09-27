@@ -1,3 +1,4 @@
+# NOTE: this is just a placehold and test script, people will rewrite it
 # KLIMA GEM — the show, played AS Aurora.
 # Ren hosts (a voice on the microphone, never rendered). You ARE Aurora: the
 # only portrait on the stage, and every choice is her action. She throws two
@@ -6,6 +7,7 @@
 # enforces. Three trials; every word helps somewhere and hinders somewhere,
 # and each trial is decided by her actions plus the gems — no dice. Banter is
 # seeded and throws are seeded physics, so the same night always replays.
+# NOTE: this is 
 using GameState
 using ShowDirector
 
