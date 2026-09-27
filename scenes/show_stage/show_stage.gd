@@ -583,6 +583,7 @@ func place_gems_settled(part_word: String, part_face: int, mod_word: String, mod
 ## The glowing copy of a settled word, presented high beside the stage.
 ## [param is_part] true = body part (right slot), false = shapeshift (left).
 func present_word(gem: FlatTopGem, face: int, is_part: bool) -> void:
+	_clear_plaque(is_part)
 	var plaque := _make_word_plaque(gem.word_at(face), is_part)
 	add_child(plaque)
 	var src := gem.resting_label(face)
@@ -645,7 +646,11 @@ func _make_word_plaque(word: String, is_part: bool) -> Node3D:
 	label.font_size = 170
 	label.pixel_size = 0.0009
 	label.outline_size = 30
-	label.render_priority = 3
+	# Always drawn over the gem's own words and anything else on stage
+	# (human 96): no depth test, top render priority.
+	label.render_priority = 10
+	label.no_depth_test = true
+	label.outline_render_priority = 9
 	if is_part:
 		label.modulate = Color(0.82, 0.97, 1.0)
 		label.outline_modulate = Color(0.16, 0.72, 1.0)
@@ -662,6 +667,7 @@ func _make_word_plaque(word: String, is_part: bool) -> Node3D:
 	hm.shader = _halo_shader()
 	hm.set_shader_parameter("glow_color", Color(0.30, 0.72, 1.0) if is_part else Color(0.95, 0.42, 0.80))
 	hm.set_shader_parameter("strength", 0.34)
+	hm.render_priority = 8
 	halo.material_override = hm
 	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(halo)
@@ -674,7 +680,7 @@ func _halo_shader() -> Shader:
 	var sh := Shader.new()
 	sh.code = """
 shader_type spatial;
-render_mode blend_add, unshaded, cull_disabled, depth_draw_never, shadows_disabled;
+render_mode blend_add, unshaded, cull_disabled, depth_draw_never, depth_test_disabled, shadows_disabled;
 uniform vec4 glow_color : source_color = vec4(0.3, 0.7, 1.0, 1.0);
 uniform float strength : hint_range(0.0, 1.0) = 0.3;
 void fragment() {
@@ -709,6 +715,8 @@ func rethrow_gem(which: int, rng: RandomNumberGenerator) -> int:
 		return -1
 	var gem := _gems[which]
 	var is_part := which == 0
+	# A re-roll takes the old word down before the stone flies (human 95).
+	_clear_plaque(is_part)
 	return await _throw_one_physics(gem, LAND_PART if is_part else LAND_MOD, is_part, rng, _gem_epoch)
 
 
