@@ -9,9 +9,9 @@ using ShowDirector
 
 ~ show_start
 do begin_show()
-A hush, and then the light finds it: a round stage under a proscenium of cold neon, a cloth of slow stars, and a sign that says KLIMA GEM. Below the apron, an audience of silhouettes holds its glowsticks like candles. [#bg=none, #sprite=none:left, #sprite=none:right, #music=festival]
+A hush, and then the light finds it\: a round stage under a proscenium of cold neon, a cloth of slow stars, and a sign that says KLIMA GEM. Below the apron, an audience of silhouettes holds its glowsticks like candles. [#bg=none, #sprite=none:left, #sprite=none:right, #music=festival]
 do enter_ren()
-Ren: Good evening, good evening — every dimension currently tuned in! You are live at the Klima Gem stage, and I am Ren: your host, your referee, and — by default, because nobody else applied — the funniest man in this reality.
+Ren: Good evening, good evening — every dimension currently tuned in! You are live at the Klima Gem stage, and I am Ren\: your host, your referee, and — by default, because nobody else applied — the funniest man in this reality.
 Ren: New viewers, here is the entire rulebook. This show has one prop and no mercy. The gems.
 Ren: Each gem is cut flat on top and worded on every slanted face — eight words apiece. My guest throws two of them.
 Ren: The first gem names a body part. The second names a modification. Body part meets modification... and reality, obligingly, agrees.
@@ -36,11 +36,11 @@ Ren: Guest's hands on the gems. Crowd, hold your hearts. THROW!
 ~ round_intro
 do next_round()
 if show_round == 1:
-	Ren: Trial one of three: {{challenge_name(show_round)}}. The floor is about to stop being a floor.
+	Ren: Trial one of three\: {{challenge_name(show_round)}}. The floor is about to stop being a floor.
 elif show_round == 2:
-	Ren: Trial two of three: {{challenge_name(show_round)}}. Precision round. The props have feelings and none of them are kind.
+	Ren: Trial two of three\: {{challenge_name(show_round)}}. Precision round. The props have feelings and none of them are kind.
 else:
-	Ren: The final trial: {{challenge_name(show_round)}}. Everything from here on is memory and nerve.
+	Ren: The final trial\: {{challenge_name(show_round)}}. Everything from here on is memory and nerve.
 	Aurora: My palms are sweating and I don't even have palms right now. Metaphorically sweating!
 do build_challenge(show_round)
 if show_round == 1:
@@ -94,7 +94,7 @@ else:
 	Ren: A fair draw! No favor, no curse — just nerve versus design.
 	%2 Aurora: Balanced. Like a good gem. Like ME. Balanced!
 	%3 Aurora: An honest roll! Do honest rolls get applause, or just quiet respect?
-Ren: The stage is set, the words are worn. Tonight's odds for my guest: {{outlook_word(show_round)}}. Roll them!
+Ren: The stage is set, the words are worn. Tonight's odds for my guest\: {{outlook_word(show_round)}}. Roll them!
 => trial
 
 ~ trial
@@ -136,14 +136,14 @@ Ren: And that's the show... well. That's the show on the scorecard. The scorecar
 
 ~ finale
 do set_aurora_expression("serious")
-The stage stands empty again: props struck, gems dimmed to embers on their pedestal. Only the sign and the slow stars keep working overtime.
+The stage stands empty again\: props struck, gems dimmed to embers on their pedestal. Only the sign and the slow stars keep working overtime.
 if show_stars == 3:
 	do set_aurora_expression("gorgeous")
 	do finale_confetti()
 	Ren: THREE STARS! A PERFECT SHOW! I have hosted one hundred and nine of these and I have seen this exactly never!
 	Golden rain falls over the round stage, catching in her light like the whole sky decided to audition for her.
 	Aurora: Three for three. My {{show_part}} is still modified, by the way. The modification stays until the credits. It's in the contract.
-	Ren: Then stand there, exactly like that, being a {{show_part}} of {{show_mod}} — because that is the most Klimа Gem image this stage has ever produced.
+	Ren: Then stand there, exactly like that, being a {{show_part}} of {{show_mod}} — because that is the most Klima Gem image this stage has ever produced.
 elif show_stars == 2:
 	do set_aurora_expression("happy")
 	Ren: TWO STARS out of three! A fine show! A strong show! The kind of show that gets a second season and a slightly bigger cannon!
@@ -157,7 +157,7 @@ else:
 if show_stars >= 1 and can_read_mind("aurora"):
 	A quiet channel opens — the resonance the Nexus leaves between you two, the one that lets you hear her when her bond runs deep enough.
 	Aurora: (What he isn't saying into the microphone is that he watched every throw like it mattered. That's the prize I'm taking home.)
-Ren: For my guest tonight — Aurora of the Chrono Nexus: {{show_stars}} stars, {{rerolls_used}} mercies spent, and one stage that will remember her {{show_part}}.
+Ren: For my guest tonight — Aurora of the Chrono Nexus\: {{show_stars}} stars, {{rerolls_used}} mercies spent, and one stage that will remember her {{show_part}}.
 do set_aurora_expression("happy")
 Aurora: Same stage next season?
 Ren: Same stage. New words. Maybe fewer cannon-related injuries.
