@@ -35,10 +35,10 @@ const AURORA_BASE_HEIGHT := 1.72
 ## Gem stations: the shapeshift (modification) gem hangs on the LEFT, the
 ## body-part gem on the RIGHT. Their settled words fly onward to the
 ## presentation slots, same sides, higher up.
-const GEM_SLOT_MOD := Vector3(-0.68, 1.78, 2.0)
-const GEM_SLOT_PART := Vector3(0.68, 1.78, 2.0)
-const PRESENT_POS_MOD := Vector3(-1.62, 2.55, 2.0)
-const PRESENT_POS_PART := Vector3(1.62, 2.55, 2.0)
+const GEM_SLOT_MOD := Vector3(-0.78, 2.55, 2.0)
+const GEM_SLOT_PART := Vector3(0.78, 2.55, 2.0)
+const PRESENT_POS_MOD := Vector3(-1.92, 2.7, 2.0)
+const PRESENT_POS_PART := Vector3(1.92, 2.7, 2.0)
 const PIP_BASE := Vector3(-3.62, 3.42, 3.02)
 const PIP_STEP := Vector3(0.42, 0.0, 0.06)
 
@@ -574,7 +574,7 @@ func _make_word_plaque(word: String, is_part: bool) -> Node3D:
 	var label := Label3D.new()
 	label.text = word
 	label.font = FlatTopGemScript._font()
-	label.font_size = 170
+	label.font_size = 150
 	label.pixel_size = 0.0016
 	label.outline_size = 36
 	label.render_priority = 3

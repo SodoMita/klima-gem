@@ -2,9 +2,23 @@
 
 A Godot **4.7** game. The dialogue UI is the classical balloon from [vn_dialogue_demo](https://github.com/SodoMita/vn_dialogue_demo) (Nathan Hoad's Dialogue Manager), restyled for the Klima Gem show: translucent glass panels, cyan edges, per-speaker name colors, a stat strip, and a glass title card standing in front of the live 3D studio. Dialogic is not used.
 
+## The Klima Gem show
+
+The booted story is the **Klima Gem** television show, staged on a real 3D set (`scenes/show_stage/show_stage.tscn`) built entirely from Godot geometry — raised round platform with a glowing rim, proscenium pillars and header that sit inside the broadcast frame, violet curtains, a star cloth with the neon sign, a lighting truss with visible spot cones, and an audience of silhouettes with glowsticks at the apron. No painted backdrop anywhere; the camera is a fixed broadcast sight-line, and Aurora and Ren stand on the set as Y-billboard portrait quads.
+
+Ren presents. Aurora, the guest, throws **two Klima Gems** — diamonds cut **flat on top** (an octagonal table where the octahedron's point used to be), with a word on every slanted face (`scenes/show_stage/flat_top_gem.gd`, words rendered as `Label3D`; exactly one face-word is drawn at a time — the one looking at the camera). The first gem names a **body part** (`HANDS EYES LEGS VOICE HAIR BACK HEART SKIN`), the second a **shapeshift / modification** (`GIANT TINY STICKY BOUNCY GLASS MAGNET HEAVY GLOWING`). The gems arc from her hand, tumble, and settle; the settled **bottom word is copied into a glowing version** (Label3D + additive halo) that tweens up to its presentation position — **left = the shapeshift, right = the body part** — where it hangs over the stage. The rolled pairing is stamped onto the guest — a floating chip beside her plus portrait effects (tint, scale, bounce) — and the pairing tilts the odds of each trial through per-word edge tables (`autoloads/show_director.gd`). Three trials follow, and the stage dresses and strikes the props for each on cue:
+
+1. **The Crossing** — a tear opens in the floor; four floating stones are the only way over.
+2. **Bell Barrage** — a small cannon lobs orbs at a rack of golden bells.
+3. **Echo Choir** — four podium pads light a melody that must be sung back.
+
+Success is a seeded roll (`GameState.rng`, fixed `story_seed`) against the word odds, so a playthrough is **partially random but fully deterministic**: same seed, same story. The show answers with **choices gated on conditions** — spend the crowd's one cheer to re-throw the modification gem when the odds turn bad, comfort Aurora or play the flop as a bit after a miss, different praise after a clear — plus weighted-random crowd banter and combo-specific lines (`STICKY` `VOICE` has legal consequences). Stars won, words rolled, cheers and mercies all live in `GameState`, so rollback, saves, the story map and the panic screen re-dress the whole studio (`ShowDirector.sync_from_state()` rebuilds gems, plaques, chip, props and stars instantly on every restore).
+
+`bash tests/show_stage_test.sh` (or run_headless.sh step 9) plays the entire show headlessly — gems, trials, restore re-dressing and four seeded branches down to `END`, and guards the dialogue source (zero compile errors required; a stale import once masked a compiler bug, so the suite walks a canary combo to prove the loaded story matches the source). `bash tests/show_render_test.sh` boots the real game under sway headless (pixman + llvmpipe), plays the show, and saves a screenshot at every production beat to `tests/render_samples/show/`.
+
 Typewriter **sounds** are removed. Lines still reveal character by character; they do not tick.
 
-Music is generated live, one score per background, by the SceneScore C extension. It is not a WAV and not a baked loop: a scene change crossfades two live scores, a `#music=` mood adjusts the score that is already playing, and `AudioDirector.reroll()` reseeds plucks that have not been scheduled yet. A classroom, the rift, the grove, and the lab do not share a track. If the library for this machine is missing, the GDScript mixer is the fallback.
+Music is generated live, one score per background, by the SceneScore C extension. It is not a WAV and not a baked loop: a scene change crossfades two live scores, a `#music=` mood adjusts the score that is already playing, and `AudioDirector.reroll()` reseeds plucks that have not been scheduled yet. If the library for this machine is missing, the GDScript mixer is the fallback.
 
 ## Getting started
 
@@ -59,12 +73,13 @@ exactly where the story left them. Full tag grammar:
 - `scenes/show_stage/show_stage.tscn` + `show_stage.gd` — the 3D television studio, built procedurally from geometry; owns gems, the modification chip, trial props, star pips, stamps, confetti.
 - `scenes/show_stage/flat_top_gem.gd` — the Klima Gem itself: an octagonal-girdle diamond with a fully flat top and a word on every pavilion face.
 - `scenes/motion/stage_director.gd` — the StageDirector: tweens, shakes and NLA tracks for any 2D/3D scene object, authored as the `MotionDirector` node in the balloon.
-- `autoloads/game_state.gd` — trust, insight, power, bonds. Choices mutate these; rollback restores them.
+- `autoloads/game_state.gd` — trust, insight, power, bonds, and every show fact (round, stars, cheers, rolled words and faces). Choices mutate these; rollback restores them.
+- `autoloads/show_director.gd` — the show controller dialogue talks to: rolls, the throw ceremony, modification application, trial builds, restore re-dressing.
 - `Sprites/` — original portraits. `assets/characters/` — the same art, trimmed so it fits the left/right slots.
-- `bgs/` — backgrounds, including the nexus still behind the title card.
+- `bgs/` — backgrounds from the previous story, kept for reference; the show does not use them.
 - `addons/scene_score/` — live SceneScore mixer (C GDExtension). Source is in `native/scene_score/`.
 - `addons/dialogue_manager/` — Dialogue Manager 4.1.0.
 
 ## Palette
 
-The glass look lives on the balloon and the title card: navy panels around `Color(0.035, 0.045, 0.11, 0.8)`, cyan borders, and a soft blue shadow. Speaker names tint the name plate (Aurora cyan, Kira amber, Elara green, Selene violet).
+The glass look lives on the balloon and the title card: navy panels around `Color(0.035, 0.045, 0.11, 0.8)`, cyan borders, and a soft blue shadow. Speaker names tint the name plate (Ren cyan, Aurora blue-white). The word plaques follow their gems: pink for the shapeshift, ice-blue for the body part.

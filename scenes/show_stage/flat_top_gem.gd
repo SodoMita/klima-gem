@@ -59,6 +59,27 @@ func _process(delta: float) -> void:
 		# A tiny breathing tilt, so a settled gem still feels alive on camera.
 		rotation.x = 0.055 * sin(_wobble_time * 1.7)
 		rotation.z = 0.045 * sin(_wobble_time * 1.13 + 1.3)
+	_update_label_facing()
+
+
+## Exactly one word is drawn at a time: the face that most looks at the
+## camera. Far-side and neighbour words stay hidden, so nothing ghosts
+## through the stone (depth pre-passes are not reliable under the
+## compatibility renderer) and the words hand over crisply while spinning.
+func _update_label_facing() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var to_cam := (cam.global_position - global_position).normalized()
+	var best := -1
+	var best_dot := 0.25
+	for i in face_labels.size():
+		var facing: float = face_labels[i].global_transform.basis.z.dot(to_cam)
+		if facing > best_dot:
+			best_dot = facing
+			best = i
+	for i in face_labels.size():
+		face_labels[i].visible = i == best
 
 
 func word_at(face: int) -> String:
