@@ -62,7 +62,7 @@ const DUB_BPM: Dictionary = {
 	"stage_suspense": 135.0,
 	"stage_groove": 142.0,
 	"stage_victory": 145.0,
-	"stage_defeat": 110.0,
+	"stage_defeat": 50.0,
 }
 
 ## #music_event= / music_event() names -> AgDubEvent.
