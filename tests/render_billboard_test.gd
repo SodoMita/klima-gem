@@ -75,7 +75,7 @@ func _shot(name: String) -> Shot:
 	for i in range(4):
 		await RenderingServer.frame_post_draw
 	var img: Image = get_viewport().get_texture().get_image()
-	img.save_png("%s/billboard_%s.png" % [out_dir, name])
+	img.save_webp("%s/billboard_%s.webp" % [out_dir, name], false)
 	var cols := {}
 	var tops := {}
 	var plain_cols := {}

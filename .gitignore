@@ -29,3 +29,5 @@ credentials/
 # Sprite pipeline. Rejected generations are local. The matte venv is dev-only.
 characters/**/_wip/
 .venv/
+# Render shots are local artifacts (lossless WebP); never commit them.
+tests/render_samples/

@@ -64,7 +64,7 @@ func _save_state_shot(shot_name: String) -> void:
 	RenderingServer.force_draw()
 	var img := get_viewport().get_texture().get_image()
 	if img != null:
-		img.save_png(ProjectSettings.globalize_path("%s/%s.png" % [OUT_DIR, shot_name]))
+		img.save_webp(ProjectSettings.globalize_path("%s/%s.webp" % [OUT_DIR, shot_name]), false)
 
 
 ## Keep pressing the show forward like an impatient player.

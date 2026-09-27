@@ -261,5 +261,5 @@ func _measure_and_shoot(shot_name: String) -> void:
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
-	img.save_png(ProjectSettings.globalize_path("%s/%s.png" % [OUT_DIR, shot_name]))
+	img.save_webp(ProjectSettings.globalize_path("%s/%s.webp" % [OUT_DIR, shot_name]), false)
 	print("  shot: %s" % shot_name)
