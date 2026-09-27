@@ -1,8 +1,8 @@
 # KLIMA GEM — the show, played AS Aurora.
 # Ren hosts (a voice on the microphone, never rendered). You ARE Aurora: the
 # only portrait on the stage, and every choice is her action. She throws two
-# flat-topped gems, eight words each: the first names a body part, the second
-# names a modification. Whatever face lands front-most is the word the stage
+# flat-topped gems, eight words each: the first names a modification, the
+# second a body part. Whatever face lands front-most is the word the stage
 # enforces. Three trials; every word helps somewhere and hinders somewhere,
 # and each trial is decided by her actions plus the gems — no dice. Banter is
 # seeded and throws are seeded physics, so the same night always replays.
@@ -16,7 +16,7 @@ do enter_ren()
 Ren: Good evening, good evening — every dimension currently tuned in! You are live at the Klima Gem stage, and I am Ren\: your host, your referee, and — by default, because nobody else applied — the funniest man in this reality.
 Ren: New viewers, here is the entire rulebook. This show has one prop and no mercy. The gems.
 Ren: Each gem is cut flat on top and worded on every slanted face — eight words apiece. My guest throws two of them, and whatever face lands front-most is LAW.
-Ren: The first gem names a body part. The second names a modification. Body part meets modification... and reality, obligingly, agrees.
+Ren: The first gem names a modification. The second names a body part. Modification meets body part... and reality, obligingly, agrees.
 Ren: Then we play three trials on this stage. The gems set the situation before every trial — each word helps somewhere and hinders somewhere — and Aurora's actions decide the rest. No dice, no nets. The stage provides the obstacles. The crowd provides the noise.
 Ren: And now — the moment the ratings wait for. From the Chrono Nexus itself, trembling politely at her own mark... my guest... AURORA!
 do aurora_enters()
@@ -61,12 +61,12 @@ do set_aurora_expression("serious")
 Ren: Two gems. Eight words each. One body, about to be renegotiated. [#sfx=open]
 Aurora: My throw. My hands. Here we go.
 do throw_gem_round()
-Ren: The stones land... and the words step OUT of them, glowing! Read them with me — first, the body!
-Ren: {{show_part}}!
+Ren: The stones land... and the words step OUT of them, glowing! Read them with me — first, the shapeshift!
+Ren: {{show_mod}}!
 [#sfx=confirm]
 do set_aurora_expression("surprised")
-Ren: And the shapeshift that tags along with it...
-Ren: {{show_mod}}!
+Ren: And the body it lands on...
+Ren: {{show_part}}!
 [#sfx=confirm]
 Ren: By decree of two rocks\: {{show_part}} x {{show_mod}}. The show accepts. Reality complies.
 do apply_mods()

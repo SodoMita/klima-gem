@@ -331,18 +331,18 @@ func throw_gems(rng: RandomNumberGenerator) -> Array:
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
 	var epoch := _gem_epoch
 
-	# The body part goes first, thrown long across the stage; it gets its own
-	# landing, its own reveal, and its own word before the second stone flies.
+	# The shapeshift (modification) goes first; it gets its own landing, its
+	# own reveal, and its own word before the body-part stone flies.
 	# Every await is epoch-guarded: a rewind clears the gems mid-flight, and
 	# this choreography must stop when its stones are gone.
-	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng, epoch)
-	if epoch != _gem_epoch or part_face < 0:
+	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng, epoch)
+	if epoch != _gem_epoch or mod_face < 0:
 		return []
 	await get_tree().create_timer(0.25).timeout
 	if epoch != _gem_epoch:
 		return []
-	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng, epoch)
-	if epoch != _gem_epoch or mod_face < 0:
+	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng, epoch)
+	if epoch != _gem_epoch or part_face < 0:
 		return []
 	await get_tree().create_timer(0.3).timeout
 	if epoch != _gem_epoch:
@@ -358,13 +358,13 @@ func throw_gems_fixed(part_face: int, mod_face: int) -> void:
 	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
 	var epoch := _gem_epoch
-	await _throw_one(gem_part, LAND_PART, part_face, true, epoch)
+	await _throw_one(gem_mod, LAND_MOD, mod_face, false, epoch)
 	if epoch != _gem_epoch:
 		return
 	await get_tree().create_timer(0.25).timeout
 	if epoch != _gem_epoch:
 		return
-	await _throw_one(gem_mod, LAND_MOD, mod_face, false, epoch)
+	await _throw_one(gem_part, LAND_PART, part_face, true, epoch)
 	if epoch != _gem_epoch:
 		return
 	await get_tree().create_timer(0.3).timeout

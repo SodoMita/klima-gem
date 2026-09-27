@@ -393,9 +393,18 @@ func resting_face() -> int:
 func label_for(face: int) -> Label3D:
 	if face == TOP_FACE:
 		return top_label
-	if face >= 0 and face < crown_labels.size():
-		return crown_labels[face]
-	return null
+	if face < 0 or face >= crown_labels.size():
+		return null
+	# A sector carries its word twice: on the pavilion facet (below the
+	# girdle) and on the crown facet (above it). A stone may rest on either
+	# — the under-view reads whichever of the two is actually lying on the
+	# glass, i.e. the one whose face points down.
+	var crown := crown_labels[face]
+	if face < face_labels.size() and is_inside_tree():
+		var pav := face_labels[face]
+		if pav.global_basis.z.y < crown.global_basis.z.y:
+			return pav
+	return crown
 
 
 ## World basis that turns result [param face] squarely toward a viewer along
@@ -414,7 +423,7 @@ func presentation_basis(face: int, to_viewer: Vector3) -> Basis:
 ## the glass floor — the pose a real throw leaves it in — text pointing away
 ## from the house so it reads upright from below.
 func rest_basis(face: int) -> Basis:
-	var label := label_for(face)
+	var label: Label3D = top_label if face == TOP_FACE else (crown_labels[face] if face >= 0 and face < crown_labels.size() else null)
 	var f: Basis = TOP_BASIS if label == null else label.transform.basis
 	f = f.orthonormalized()
 	var z_t := Vector3.DOWN
