@@ -1329,8 +1329,66 @@ func _glyph_part(part: String, color: Color, parent: Node3D) -> void:
 
 ## The applied modification, floating beside the guest: a bright ring, the
 ## body-part glyph, and the pairing written out underneath.
+## Card art for each shapeshift, generated for this show and stored as packed
+## lossless WebP. The card is raised beside the guest when the pairing is
+## stamped on her, so the audience sees what she was just turned into.
+const MOD_ART_DIR := "res://assets/mods/"
+
+
+func mod_art(mod: String) -> Texture2D:
+	var path := MOD_ART_DIR + mod.to_lower() + ".webp"
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
+
+
+## Raise the modification card: the case-specific CG for this shapeshift,
+## on a lit frame at the guest's shoulder.
+func show_mod_card(mod: String) -> void:
+	if is_instance_valid(_mod_card):
+		_mod_card.queue_free()
+	_mod_card = null
+	var tex := mod_art(mod)
+	if tex == null:
+		return
+	var color: Color = MOD_COLORS.get(mod, Color(0.8, 0.9, 1.0))
+	_mod_card = Node3D.new()
+	_mod_card.name = "ModCard"
+	add_child(_mod_card)
+	var frame := BoxMesh.new()
+	frame.size = Vector3(1.18, 1.18, 0.04)
+	var fmi := _mesh_instance(frame, _mat(Color(0.05, 0.07, 0.16), 0.35, 0.4, color * 0.6, 1.0), _mod_card)
+	fmi.name = "Frame"
+	var art := Sprite3D.new()
+	art.name = "Art"
+	art.texture = tex
+	art.pixel_size = 1.06 / float(maxi(tex.get_width(), 1))
+	art.shaded = false
+	art.position = Vector3(0, 0, 0.03)
+	_mod_card.add_child(art)
+	var caption := _label(mod, 78, color, Color(0.02, 0.04, 0.1, 0.95), 0.0022)
+	caption.name = "Caption"
+	caption.position = Vector3(0, -0.72, 0.03)
+	_mod_card.add_child(caption)
+	_mod_card.position = AURORA_MARK + Vector3(-1.15, 1.55, 0.25)
+	_mod_card.scale = Vector3.ONE * 0.05
+	var tw := create_tween()
+	tw.tween_property(_mod_card, "scale", Vector3.ONE, 0.45)
+	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func clear_mod_card() -> void:
+	if is_instance_valid(_mod_card):
+		_mod_card.queue_free()
+	_mod_card = null
+
+
+var _mod_card: Node3D = null
+
+
 func apply_mod_chip(part: String, mod: String, at: Vector3) -> void:
 	clear_mod_chip()
+	show_mod_card(mod)
 	var color: Color = MOD_COLORS.get(mod, Color(0.8, 0.9, 1.0))
 	_chip = Node3D.new()
 	_chip.name = "ModChip"
@@ -1392,6 +1450,7 @@ var _mod_rail: Node3D = null
 
 
 func clear_mod_chip() -> void:
+	clear_mod_card()
 	if is_instance_valid(_chip):
 		if _chip.get_parent() != null:
 			_chip.get_parent().remove_child(_chip)
@@ -1910,6 +1969,7 @@ func _pulse_lights(peak: float) -> void:
 
 func reset_show() -> void:
 	apply_mod_rail([])
+	clear_mod_card()
 	clear_gems()
 	clear_props()
 	clear_mod_chip()

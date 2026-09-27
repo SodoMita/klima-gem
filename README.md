@@ -132,3 +132,26 @@ The glass look lives on the balloon and the title card: navy panels around `Colo
 - **Body modifications are kept**: `GameState.show_applied_mods` records one
   entry per round and the stage shows a rail of every modification the guest
   is carrying.
+
+### Joker's glass-case pass (feat/joker-glassbox-throw)
+
+- The glass case is **lifted off the platform** on four legs and has its own
+  glass floor pane. When a stone stops, the reveal camera (`UnderCam`) dives
+  under the case and the show reads the face **lying on the glass**
+  (`FlatTopGem.bottom_face()`) — the audience sees the result being read.
+- **Throw physics**: gravity x1.9, linear damp 0.55, angular damp 1.15,
+  bounce 0.18, friction 0.95; flight 0.31–0.34 s with 11–22 rad/s spin of
+  random sign on every axis. Stones fly fast and settle fast.
+- **Manual throw**: `ShowStage.wait_for_throw_cue()` accepts mouse, space or
+  enter, a screen touch, gamepad A/B or the left stick; how long the cue is
+  held becomes the power (0.8x–1.45x). No cue for six seconds and the show
+  throws by itself.
+- **Mixer fix**: the main menu used to ignore the saved volume sliders,
+  because only `vn_balloon` applied them and the title theme plays before any
+  balloon exists. `AudioDirector.apply_saved_volumes()` / `set_bus_percent()`
+  now own the mixer and run at boot and on every return to the title card.
+- **Modification CG art**: `assets/mods/*.webp` (packed lossless WebP, one
+  card per shapeshift) is raised beside the guest when the pairing is applied.
+- `tests/joker_stage_test.sh` (48 checks) and `tests/joker_throw_test.tscn`
+  (9 checks, incl. 24 solo throws spreading over the faces) — run as step 10b
+  of `tests/run_headless.sh`.

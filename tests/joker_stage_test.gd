@@ -94,7 +94,27 @@ func _run() -> void:
 	ok(inside, "upper-face words sit on the crown band")
 	ok(gem.top_label.position.y >= gem.crown_height, "table stamp lies on the flat top")
 
-	# 5. Fairness: a throw starts in a random attitude, so no facet is the
+	# 5. Case-specific CG art for every shapeshift, packed lossless WebP.
+	for mod in ShowStageScript.MODS:
+		ok(stage.mod_art(mod) != null, "modification card art exists for %s" % mod)
+	stage.apply_mod_chip("HANDS", "MAGNET", stage.chip_anchor())
+	await get_tree().process_frame
+	ok(stage.get_node_or_null("ModCard") != null, "the modification card is raised on stage")
+	stage.clear_mod_chip()
+	await get_tree().process_frame
+	ok(stage.get_node_or_null("ModCard") == null or not is_instance_valid(stage._mod_card),
+		"and cleared with the chip")
+
+	# 6. The mixer: the main menu must obey the saved sliders.
+	var audio := get_node_or_null("/root/AudioDirector")
+	ok(audio != null and audio.has_method("apply_saved_volumes"), "AudioDirector owns the saved mixer levels")
+	if audio != null and audio.has_method("set_bus_percent"):
+		audio.set_bus_percent("Music", 50.0)
+		var idx := AudioServer.get_bus_index("Music")
+		ok(idx != -1 and absf(AudioServer.get_bus_volume_db(idx) - linear_to_db(0.5)) < 0.01,
+			"a slider percent lands on the bus in dB")
+
+	# 7. Fairness: a throw starts in a random attitude, so no facet is the
 	# floor-facing one by construction.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
