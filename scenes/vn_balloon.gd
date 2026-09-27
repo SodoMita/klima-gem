@@ -3060,6 +3060,13 @@ func _on_next_choice_pressed() -> void:
 		_toast(tr("Already at a choice"))
 		_refocus_balloon()
 		return
+	# Rolled back: step to the next kept choice with its saved state rather
+	# than re-running the lines in between (V4).
+	for i in range(history_cursor + 1, history.size()):
+		if bool(history[i].get("choices", false)):
+			rollback_to(i)
+			_refocus_balloon()
+			return
 	_seeking_choice = true
 	if is_instance_valid(dialogue_line):
 		if dialogue_label.is_typing:
