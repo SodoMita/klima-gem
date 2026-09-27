@@ -12,8 +12,8 @@ The stage assembles nine semantic layers in this order:
 
 1. `BACK`
 2. `LEGS`
-3. `SKIN`
-4. `MILK` (breast/torso)
+3. `SKIN` → `body.webp` (head, neck, torso substrate)
+4. `MILK` → `breast.webp` (female breast panels only)
 5. `HEART`
 6. `HAIR`
 7. `EYES`
@@ -28,4 +28,5 @@ Every file uses the same transparent 640×960 canvas so replacement art aligns w
 - Keep the visible part in the same location, or update its pivot in `aurora_modular_body.gd`.
 - Export lossless RGBA WebP (`VP8L`), never PNG or opaque JPEG.
 - Paint only the named region in each file. Do not restore full-body plates or masked copies.
+- Keep `body.webp` and `breast.webp` separate: BODY owns the torso substrate; BREAST owns only breast-local contour/highlight pixels. Never combine both into either file.
 - The runtime applies body shifts to the named layer only, so all nine layers must remain independent.

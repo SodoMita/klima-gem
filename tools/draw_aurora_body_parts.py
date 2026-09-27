@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / "assets" / "characters" / "parts" / "aurora"
 WIDTH, HEIGHT = 640, 960
 EXPRESSIONS = ("serious", "surprised", "sad", "happy", "gorgeous")
-PARTS = ("back", "legs", "skin", "milk", "heart", "hair", "eyes", "voice", "hands")
+PARTS = ("back", "legs", "body", "breast", "heart", "hair", "eyes", "voice", "hands")
 
 # Aurora-inspired placeholder palette. These are authored constants, not
 # sampled colors from the old full-body sprites.
@@ -85,7 +85,8 @@ def draw_legs() -> Image.Image:
     return im
 
 
-def draw_skin() -> Image.Image:
+def draw_body() -> Image.Image:
+    """Draw the head, neck and torso base, but never the breast panels."""
     im = canvas()
     d = ImageDraw.Draw(im)
     # Ears, neck and face; facial features live on EYES/VOICE layers.
@@ -95,27 +96,33 @@ def draw_skin() -> Image.Image:
     d.ellipse((409, 230, 446, 314), fill=SKIN_SHADE)
     d.rounded_rectangle((220, 112, 420, 378), radius=91, fill=INK)
     d.rounded_rectangle((232, 124, 408, 366), radius=80, fill=SKIN)
-    d.polygon([(280, 345), (360, 345), (372, 445), (268, 445)], fill=INK)
-    d.polygon([(290, 350), (350, 350), (357, 430), (283, 430)], fill=SKIN)
-    # Small nose is part of base skin and stays stable across expressions.
-    line(d, [(320, 253), (311, 284), (326, 288)], SKIN_SHADE, 7)
-    return im
-
-
-def draw_milk() -> Image.Image:
-    """Draw the MILK/breast and torso layer requested by the gem table."""
-    im = canvas()
-    d = ImageDraw.Draw(im)
-    # Bodice silhouette and two clearly separate breast panels.
+    d.polygon([(280, 345), (360, 345), (372, 432), (268, 432)], fill=INK)
+    d.polygon([(290, 350), (350, 350), (357, 424), (283, 424)], fill=SKIN)
+    # Torso/bodice substrate is BODY. It deliberately has no paired breast
+    # ellipses; those exist only in breast.webp and can transform alone.
     d.polygon([(254, 397), (386, 397), (440, 488), (407, 662), (233, 662),
                (200, 488)], fill=INK)
     d.polygon([(264, 414), (376, 414), (420, 495), (391, 642), (249, 642),
                (220, 495)], fill=SUIT_DARK)
-    d.ellipse((224, 411, 326, 548), fill=SUIT_MID)
-    d.ellipse((314, 411, 416, 548), fill=SUIT_MID)
-    line(d, [(232, 492), (287, 520), (320, 484), (353, 520), (408, 492)], SUIT_LIGHT, 12)
     d.polygon([(254, 557), (386, 557), (376, 631), (264, 631)], fill=SUIT_MID)
     line(d, [(267, 610), (373, 610)], HAIR_LIGHT, 8)
+    # Small nose is part of base body and stays stable across expressions.
+    line(d, [(320, 253), (311, 284), (326, 288)], SKIN_SHADE, 7)
+    return im
+
+
+def draw_breast() -> Image.Image:
+    """Draw only the standalone female breast layer (the MILK gem part)."""
+    im = canvas()
+    d = ImageDraw.Draw(im)
+    # No shoulders, torso, waist, head or limbs belong in this sprite.
+    d.ellipse((218, 405, 328, 552), fill=INK)
+    d.ellipse((312, 405, 422, 552), fill=INK)
+    d.ellipse((229, 416, 321, 541), fill=SUIT_MID)
+    d.ellipse((319, 416, 411, 541), fill=SUIT_MID)
+    line(d, [(235, 488), (286, 516), (320, 482), (354, 516), (405, 488)], SUIT_LIGHT, 12)
+    line(d, [(259, 446), (282, 432)], WHITE, 7)
+    line(d, [(381, 446), (358, 432)], WHITE, 7)
     return im
 
 
@@ -227,8 +234,8 @@ def draw_hands() -> Image.Image:
 BASE_DRAWERS: dict[str, Callable[[], Image.Image]] = {
     "back": draw_back,
     "legs": draw_legs,
-    "skin": draw_skin,
-    "milk": draw_milk,
+    "body": draw_body,
+    "breast": draw_breast,
     "heart": draw_heart,
     "hair": draw_hair,
     "hands": draw_hands,

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://blvvg0i3s1bki"
-path="res://.godot/imported/skin.webp-f7fd947ba990799378fb588f07b51bc2.ctex"
+uid="uid://hoivtr63e4hg"
+path="res://.godot/imported/body.webp-b1bca579fa41142cb84697cf241811aa.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/characters/parts/aurora/skin.webp"
-dest_files=["res://.godot/imported/skin.webp-f7fd947ba990799378fb588f07b51bc2.ctex"]
+source_file="res://assets/characters/parts/aurora/body.webp"
+dest_files=["res://.godot/imported/body.webp-b1bca579fa41142cb84697cf241811aa.ctex"]
 
 [params]
 

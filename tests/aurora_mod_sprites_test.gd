@@ -62,6 +62,9 @@ func _ready() -> void:
 		check(layer != null, "%s has an independent layer" % part)
 		if layer != null:
 			check(layer.texture.resource_path.begins_with("res://assets/characters/parts/aurora/"), "%s uses fresh modular art" % part)
+	check(body.layer("SKIN").texture.resource_path.ends_with("/body.webp"), "SKIN uses the standalone body/torso sprite")
+	check(body.layer("MILK").texture.resource_path.ends_with("/breast.webp"), "MILK uses the standalone breast-only sprite")
+	check(body.layer("SKIN").texture != body.layer("MILK").texture, "body and female breast are separate texture resources")
 
 	# Exhaustively prove that each possible pairing changes its target and
 	# leaves a neighboring body part byte-for-byte equivalent in transform/tint.

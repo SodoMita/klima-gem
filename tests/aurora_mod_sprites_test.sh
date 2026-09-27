@@ -9,7 +9,7 @@ from pathlib import Path
 root = Path('assets/characters/parts/aurora')
 static = sorted(p for p in root.glob('*.webp'))
 expressions = sorted((root / 'expressions').glob('*/*.webp'))
-expected_static = {'back.webp', 'legs.webp', 'skin.webp', 'milk.webp', 'heart.webp', 'hair.webp', 'hands.webp'}
+expected_static = {'back.webp', 'legs.webp', 'body.webp', 'breast.webp', 'heart.webp', 'hair.webp', 'hands.webp'}
 assert {p.name for p in static} == expected_static, f'static layer mismatch: {static}'
 assert len(expressions) == 10, f'expected 5 expressions x EYES/VOICE; got {len(expressions)}'
 assert not list(root.rglob('*.png')), 'modular body must never contain PNG files'

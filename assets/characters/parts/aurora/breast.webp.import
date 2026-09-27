@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bd0g6awqlgt4b"
-path="res://.godot/imported/milk.webp-6cdf98aaca00fe2f1541f0c2acf0b02a.ctex"
+uid="uid://bbygjq702c60"
+path="res://.godot/imported/breast.webp-2f1660726d8a151adaec964aa26a7b7d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/characters/parts/aurora/milk.webp"
-dest_files=["res://.godot/imported/milk.webp-6cdf98aaca00fe2f1541f0c2acf0b02a.ctex"]
+source_file="res://assets/characters/parts/aurora/breast.webp"
+dest_files=["res://.godot/imported/breast.webp-2f1660726d8a151adaec964aa26a7b7d.ctex"]
 
 [params]
 

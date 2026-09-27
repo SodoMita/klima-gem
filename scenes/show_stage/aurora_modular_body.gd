@@ -15,8 +15,9 @@ const EXPRESSIONS: PackedStringArray = ["serious", "surprised", "sad", "happy", 
 const STATIC_TEXTURES := {
 	"BACK": ASSET_ROOT + "back.webp",
 	"LEGS": ASSET_ROOT + "legs.webp",
-	"SKIN": ASSET_ROOT + "skin.webp",
-	"MILK": ASSET_ROOT + "milk.webp",
+	# Game words stay stable; art filenames state what they actually contain.
+	"SKIN": ASSET_ROOT + "body.webp",
+	"MILK": ASSET_ROOT + "breast.webp",
 	"HEART": ASSET_ROOT + "heart.webp",
 	"HAIR": ASSET_ROOT + "hair.webp",
 	"HANDS": ASSET_ROOT + "hands.webp",
