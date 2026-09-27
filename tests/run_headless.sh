@@ -162,9 +162,9 @@ echo ""
 echo "=== Step 11: rendered stage framing ==="
 bash tests/stage_shot.sh
 
-echo ""
-echo "=== All checks passed ==="
-
 # Controller continuations must not commit to a restored timeline.
 echo "=== Show async restore regression ==="
 bash "$ROOT/tests/show_async_state_test.sh"
+
+echo ""
+echo "=== All checks passed ==="
