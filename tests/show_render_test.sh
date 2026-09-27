@@ -37,6 +37,11 @@ if ! ls "$XDG_RUNTIME_DIR"/wayland-1 >/dev/null 2>&1; then
 fi
 
 cd "$ROOT"
+# Reimport first: running the game never refreshes imported artifacts, so a
+# stale .dialogue import would silently play an old story (the stage test's
+# combo-line canary exists to catch exactly that).
+timeout 120 "$GODOT_BIN" --headless --path . --editor --quit >/tmp/godot-import.log 2>&1 || true
+
 rm -rf tests/render_samples/show
 WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 timeout 420 "$GODOT_BIN" --path . \
 	--rendering-driver opengl3 --display-driver wayland \
