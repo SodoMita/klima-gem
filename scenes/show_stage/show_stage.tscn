@@ -256,22 +256,22 @@ friction = 0.8
 bounce = 0.35
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_x7ti2"]
-size = Vector3(0.1, 1.4, 2)
+size = Vector3(0.6, 2.6, 3.2)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_jukuu"]
-size = Vector3(0.1, 1.4, 2)
+size = Vector3(0.6, 2.6, 3.2)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_3p3et"]
-size = Vector3(3, 1.4, 0.1)
+size = Vector3(4.2, 2.6, 0.6)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_a3ui5"]
-size = Vector3(3, 1.4, 0.1)
+size = Vector3(4.2, 2.6, 0.6)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_vii2t"]
-size = Vector3(3.2, 0.1, 2)
+size = Vector3(4.2, 0.6, 3.2)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_d6xxd"]
-size = Vector3(3.2, 0.1, 2)
+size = Vector3(4.2, 0.6, 3.2)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_exixx"]
 transparency = 1
@@ -539,27 +539,27 @@ collision_mask = 0
 physics_material_override = SubResource("PhysicsMaterial_6toon")
 
 [node name="WallLeft" type="CollisionShape3D" parent="ThrowBox" unique_id=201251725]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.55, 0.7, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 0.7, 0)
 shape = SubResource("BoxShape3D_x7ti2")
 
 [node name="WallRight" type="CollisionShape3D" parent="ThrowBox" unique_id=1045455993]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.55, 0.7, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 0.7, 0)
 shape = SubResource("BoxShape3D_jukuu")
 
 [node name="WallBack" type="CollisionShape3D" parent="ThrowBox" unique_id=1874024770]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -0.95)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -1.2)
 shape = SubResource("BoxShape3D_3p3et")
 
 [node name="WallFront" type="CollisionShape3D" parent="ThrowBox" unique_id=360520480]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0.95)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 1.2)
 shape = SubResource("BoxShape3D_a3ui5")
 
 [node name="Lid" type="CollisionShape3D" parent="ThrowBox" unique_id=169581743]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4499999, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
 shape = SubResource("BoxShape3D_vii2t")
 
 [node name="Floor" type="CollisionShape3D" parent="ThrowBox" unique_id=647391938]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
 shape = SubResource("BoxShape3D_d6xxd")
 
 [node name="Glass" type="MeshInstance3D" parent="ThrowBox" unique_id=2001195452]

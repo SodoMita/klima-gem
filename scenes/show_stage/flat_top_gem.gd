@@ -60,6 +60,12 @@ var _spin_speed := 2.6
 var _wobble_time := 0.0
 var _hover_tween: Tween = null
 var _front_face := -1
+## Damping the stone takes on once it has touched the world: free flight is
+## a clean ballistic arc under plain gravity, and only a stone that is
+## already rolling on the glass is asked to stop quickly.
+var settle_linear_damp := 0.0
+var settle_angular_damp := 0.0
+var _touched := false
 var _label_base_pixel_size: Array[float] = []
 
 
@@ -113,6 +119,8 @@ func _apply_physics() -> void:
 		shape = CollisionShape3D.new()
 		shape.shape = hull
 		add_child(shape)
+		contact_monitor = true
+		max_contacts_reported = 4
 		freeze = true
 		# STATIC, not kinematic: a settled gem must never drift. Kinematic
 		# freeze lets the server fight the node (stale velocity tracking
@@ -132,6 +140,16 @@ func _process(delta: float) -> void:
 		rotation.y += _spin_speed * delta
 	_wobble_time += delta
 	_fade_faces()
+
+
+func _physics_process(_delta: float) -> void:
+	if freeze or _touched or settle_linear_damp <= 0.0:
+		return
+	if get_contact_count() > 0:
+		# First contact: from here on the stone is landing, not flying.
+		_touched = true
+		linear_damp = settle_linear_damp
+		angular_damp = settle_angular_damp
 
 
 func _is_body_awake() -> bool:
@@ -393,18 +411,21 @@ func resting_face() -> int:
 func label_for(face: int) -> Label3D:
 	if face == TOP_FACE:
 		return top_label
-	if face < 0 or face >= crown_labels.size():
-		return null
-	# A sector carries its word twice: on the pavilion facet (below the
-	# girdle) and on the crown facet (above it). A stone may rest on either
-	# — the under-view reads whichever of the two is actually lying on the
-	# glass, i.e. the one whose face points down.
-	var crown := crown_labels[face]
-	if face < face_labels.size() and is_inside_tree():
-		var pav := face_labels[face]
-		if pav.global_basis.z.y < crown.global_basis.z.y:
-			return pav
-	return crown
+	if face >= 0 and face < crown_labels.size():
+		return crown_labels[face]
+	return null
+
+
+## The label actually lying on the glass for result [param face]. A sector
+## carries its word twice — pavilion facet below the girdle, crown facet
+## above — and a stone may rest on either; the under-view reads whichever
+## twin points down.
+func resting_label(face: int) -> Label3D:
+	var crown := label_for(face)
+	if face == TOP_FACE or crown == null or face >= face_labels.size() or not is_inside_tree():
+		return crown
+	var pav := face_labels[face]
+	return pav if pav.global_basis.z.y < crown.global_basis.z.y else crown
 
 
 ## World basis that turns result [param face] squarely toward a viewer along
@@ -423,7 +444,7 @@ func presentation_basis(face: int, to_viewer: Vector3) -> Basis:
 ## the glass floor — the pose a real throw leaves it in — text pointing away
 ## from the house so it reads upright from below.
 func rest_basis(face: int) -> Basis:
-	var label: Label3D = top_label if face == TOP_FACE else (crown_labels[face] if face >= 0 and face < crown_labels.size() else null)
+	var label := label_for(face)
 	var f: Basis = TOP_BASIS if label == null else label.transform.basis
 	f = f.orthonormalized()
 	var z_t := Vector3.DOWN
@@ -477,6 +498,10 @@ func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3, orient
 	_kill_hover()
 	spinning = false
 	settled = false
+	_touched = false
+	# In the air: real gravity, next to no drag, so the arc is honest.
+	linear_damp = 0.05
+	angular_damp = 0.1
 	collision_layer = 2
 	collision_mask = 1
 	if is_instance_valid(shape):

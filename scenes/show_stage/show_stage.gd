@@ -404,7 +404,7 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 		target = Vector3(
 			r.randf_range(-0.8, 0.3) * half.x, BOX_CENTER.y, BOX_CENTER.z + r.randf_range(-0.6, 0.6) * half.z)
 	# Harder throw: shorter flight (a flatter, faster arc) and more spin.
-	var flight := r.randf_range(0.30, 0.42) / power
+	var flight := maxf(r.randf_range(0.34, 0.48) / power, 0.24)
 	var spin_max := 18.0 * power
 	var spin := Vector3(r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max))
 	var q := Quaternion(r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1))
@@ -483,8 +483,9 @@ func _await_throw_cue(is_part: bool, epoch: int) -> Dictionary:
 ## Fly fast, stop fast: heavy damping and a dull bounce so a stone that has
 ## spent its energy quits rolling instead of creeping for seconds.
 func _fast_settle(gem: FlatTopGem) -> void:
-	gem.linear_damp = 0.9
-	gem.angular_damp = 2.4
+	# Applied by the gem itself at first contact; the flight stays ballistic.
+	gem.settle_linear_damp = 1.2
+	gem.settle_angular_damp = 2.8
 	var pm := PhysicsMaterial.new()
 	pm.bounce = 0.15
 	pm.friction = 0.95
@@ -495,7 +496,7 @@ func _fast_settle(gem: FlatTopGem) -> void:
 ## head-on, at the face the stone rests on — upright, never mirrored — then
 ## returns to the house shot.
 func _underview(gem: FlatTopGem, face: int, epoch: int) -> void:
-	var label := gem.label_for(face)
+	var label := gem.resting_label(face)
 	if _camera == null or label == null:
 		return
 	var lb := label.global_basis.orthonormalized()
@@ -557,7 +558,7 @@ func place_gems_settled(part_word: String, part_face: int, mod_word: String, mod
 func present_word(gem: FlatTopGem, face: int, is_part: bool) -> void:
 	var plaque := _make_word_plaque(gem.word_at(face), is_part)
 	add_child(plaque)
-	var src := gem.label_for(face)
+	var src := gem.resting_label(face)
 	var from: Vector3 = src.global_position if src != null else gem.global_position
 	var to := PRESENT_POS_PART if is_part else PRESENT_POS_MOD
 	plaque.global_position = from
