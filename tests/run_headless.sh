@@ -147,5 +147,20 @@ echo ""
 echo "=== Step 9: Klima Gem show tests ==="
 bash tests/show_stage_test.sh
 
+# Step 10: The five defects the show was reviewed with must stay fixed:
+# a real physics throw, words welded to the gem facets, escaped dialogue
+# colons, one portrait standing on the stage.
+echo ""
+echo "=== Step 10: Klima Gem stage integrity tests ==="
+bash tests/stage_integrity_test.sh
+
+# Step 11 (optional): the rendered framing check. Boots the real main scene
+# under sway headless + pixman + llvmpipe, walks the show, and measures the
+# projected rectangle of everything the audience has to read. Skips when no
+# rasterizer is available.
+echo ""
+echo "=== Step 11: rendered stage framing ==="
+bash tests/stage_shot.sh
+
 echo ""
 echo "=== All checks passed ==="

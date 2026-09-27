@@ -56,14 +56,39 @@ exactly where the story left them. Full tag grammar:
 - `scenes/panic_screen.tscn` — the panic page, its own scene (`scenes/panic_screen.gd`), restyled here as a black lecture sheet; it can be redesigned without touching the balloon.
 - `scenes/display_scale.gd` — shared window layout: the design canvas stays at the authored 1280×720 and larger windows render it with more pixels (never a window bigger than the screen).
 - `dialogue/klima_gem_show.dialogue` — the booted story: the Klima Gem show. Stage tags: `#bg=`, `#sprite=key:left|right`, `#focus=`, `#music=`, `#sfx=`; show mutations resolve against the `ShowDirector` autoload.
-- `scenes/show_stage/show_stage.tscn` + `show_stage.gd` — the 3D television studio, built procedurally from geometry; owns gems, the modification chip, trial props, star pips, stamps, confetti.
-- `scenes/show_stage/flat_top_gem.gd` — the Klima Gem itself: an octagonal-girdle diamond with a fully flat top and a word on every pavilion face.
+- `scenes/show_stage/show_stage.tscn` + `show_stage.gd` — the 3D television studio, built procedurally from geometry; owns gems, the modification chip, trial props, star pips, stamps, confetti. The camera, the set and every prop are composed so the readable action lands above the dialogue balloon; `docs/show_stage.md` records the rules and the measurements.
+- `scenes/show_stage/flat_top_gem.gd` — the Klima Gem itself: an octagonal-girdle diamond with a fully flat top and a word welded to every pavilion face. It is a `RigidBody3D`: the throw is an impulse, gravity, spin and a real landing, not a tween. Physics is therefore ON (`physics/3d/physics_engine="GodotPhysics3D"`); putting it back to `"Dummy"` makes the gems fall through the set.
 - `scenes/motion/stage_director.gd` — the StageDirector: tweens, shakes and NLA tracks for any 2D/3D scene object, authored as the `MotionDirector` node in the balloon.
 - `autoloads/game_state.gd` — trust, insight, power, bonds. Choices mutate these; rollback restores them.
 - `Sprites/` — original portraits. `assets/characters/` — the same art, trimmed so it fits the left/right slots.
 - `bgs/` — backgrounds, including the nexus still behind the title card.
 - `addons/scene_score/` — live SceneScore mixer (C GDExtension). Source is in `native/scene_score/`.
 - `addons/dialogue_manager/` — Dialogue Manager 4.1.0.
+
+## The show stage
+
+The booted story is the Klima Gem show, staged on a procedural 3D studio inside
+the existing engine — rollback, saves, the panic screen and the story map all
+keep working. Rules worth knowing before touching it:
+
+- **Framing is measured.** `tests/stage_shot.sh` renders the real scene under
+  sway headless and prints the projected screen rectangle of every piece the
+  audience has to read, with the dialogue balloon's top edge drawn on each
+  frame. Compose to that number, not to the editor camera.
+- **The throw is physics.** The gems are `RigidBody3D`; the platform, the altar
+  and a safety net are `StaticBody3D`. Gems collide with the world and never
+  with each other.
+- **Words are welded to facets**, sized to the triangle they sit on, and only
+  the face square to the camera is lit. `_fade_faces()` measures by azimuth —
+  the pavilion normals lean 44° up, so a dot product says every face is front.
+- **A colon inside dialogue text is `\:`.** Dialogue Manager splits a line on
+  the first `": "`, so an unescaped colon promotes narration to a speaker name.
+  Both `tests/stage_integrity_test.sh` and the dialogue lint fail on one.
+- **One sprite stands on this stage**, and it is the guest. Ren presents and is
+  never rendered.
+
+`docs/show_stage.md` has the full account, including the five defects this
+stage was rebuilt around.
 
 ## Palette
 

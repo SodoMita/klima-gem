@@ -69,21 +69,29 @@ func _motion() -> Node:
 	return balloon.get_node_or_null("MotionDirector")
 
 
+## The dialogue balloon is parented to whatever the current scene happens to
+## be, not to /root — so asking /root for "VNBalloon" finds nothing once the
+## game boots (the show ran for a whole review with no portrait on the stage
+## because of exactly this). Search the tree for it instead.
 func _balloon() -> Node:
-	# DialogueManager parents the balloon to the current scene, so look there
-	# first; the root is only a fallback.
 	var tree := get_tree()
-	if tree == null:
+	if tree == null or tree.root == null:
 		return null
-	var scene := tree.current_scene
-	if scene != null:
-		var direct := scene.get_node_or_null("VNBalloon")
-		if direct != null:
-			return direct
-		for child in scene.get_children():
-			if child is VNBalloon:
-				return child
-	return tree.root.get_node_or_null("VNBalloon")
+	var direct := tree.root.get_node_or_null("VNBalloon")
+	if direct != null:
+		return direct
+	return _find_balloon(tree.root)
+
+
+func _find_balloon(node: Node) -> Node:
+	for child in node.get_children():
+		if str(child.name).begins_with("VNBalloon") and "sprites" in child:
+			return child
+		if child.get_child_count() > 0:
+			var found := _find_balloon(child)
+			if found != null:
+				return found
+	return null
 
 
 # ------------------------------------------------------------- show control
@@ -157,12 +165,16 @@ func success_chance(round_no: int) -> float:
 
 # ------------------------------------------------------------------ actors
 
-## The presenter takes his mark.
+## The presenter takes the stage. Ren is a voice on the microphone and is
+## never rendered: one standing portrait (the guest) is all this stage needs,
+## so this cue only turns the light up on his mark.
 func enter_ren() -> void:
 	var gs := _gs()
 	if gs != null:
 		gs.show_ren_key = "ren"
-	_spawn_actor("ren", "ren", ShowStageScript.REN_MARK, 1.78)
+	var st := stage()
+	if st != null and st.has_method("host_entrance"):
+		st.host_entrance()
 
 
 ## The guest takes hers, wide-eyed.
@@ -233,10 +245,7 @@ func apply_mods() -> void:
 	if gs == null or st == null:
 		return
 	gs.show_outlook = outlook_for(int(gs.show_round))
-	var at: Vector3 = ShowStageScript.AURORA_MARK + Vector3(-0.85, 1.35, 0.2)
-	if is_instance_valid(st.aurora_quad):
-		at = st.aurora_quad.global_position + Vector3(-0.85, 1.35, 0.2)
-	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), at)
+	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor())
 	st.apply_aurora_fx(str(gs.show_part), str(gs.show_mod))
 	await st.get_tree().create_timer(0.9).timeout
 
@@ -302,16 +311,11 @@ func sync_from_state() -> void:
 	var st := stage()
 	if gs == null or st == null:
 		return
-	if str(gs.show_ren_key) != "":
-		_spawn_actor("ren", str(gs.show_ren_key), ShowStageScript.REN_MARK, 1.78)
 	if str(gs.show_aurora_key) != "":
 		_spawn_actor("aurora", str(gs.show_aurora_key), ShowStageScript.AURORA_MARK, ShowStageScript.AURORA_BASE_HEIGHT)
 	if str(gs.show_part) != "" and int(gs.show_part_face) >= 0:
 		st.place_gems_settled(str(gs.show_part), int(gs.show_part_face), str(gs.show_mod), int(gs.show_mod_face))
-		var at: Vector3 = ShowStageScript.AURORA_MARK + Vector3(-0.85, 1.35, 0.2)
-		if is_instance_valid(st.aurora_quad):
-			at = st.aurora_quad.global_position + Vector3(-0.85, 1.35, 0.2)
-		st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), at)
+		st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor())
 		st.apply_aurora_fx(str(gs.show_part), str(gs.show_mod))
 	else:
 		st.clear_gems()

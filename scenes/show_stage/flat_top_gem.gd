@@ -1,29 +1,53 @@
-class_name FlatTopGem extends Node3D
+class_name FlatTopGem extends RigidBody3D
 ## A Klima Gem: a diamond whose top is fully flat — an octagonal table where
 ## the octahedron's point used to be. Eight slanted pavilion faces, one word
-## per face. The gem throws, spins, and settles so the rolled face fronts the
-## camera. Pure geometry: the mesh is built here, no painted textures.
+## per face. Pure geometry: the mesh is built here, no painted textures.
+##
+## The gem is a real [RigidBody3D]. The throw is physics — an impulse, real
+## gravity, real spin, real landing on the stage — and the show only takes
+## over afterwards: the body freezes, lifts onto its mark, and turns the
+## rolled face to the camera.
+##
+## Each word is welded to the facet that carries it: the label is placed at
+## the facet's centroid, tipped to the facet's own slope, and scaled so the
+## whole word fits inside the triangle it names. Faces turned away from the
+## camera fade out, so a settled gem shows one word, not eight overlapped.
 
 const SIDES := 8
 
-@export var girdle_radius := 0.23
-@export var table_radius := 0.12
-@export var crown_height := 0.13
-@export var pavilion_height := 0.36
+## Facet triangles are narrow; the word is sized to this share of the facet's
+## base edge so it never spills onto a neighbouring face.
+const WORD_FIT := 0.66
+## How much of the facet's height a whole word may use (keeps the fit sane
+## for short words like "TINY").
+const WORD_HEIGHT_LIMIT := 0.42
+
+@export var girdle_radius := 0.5
+@export var table_radius := 0.26
+@export var crown_height := 0.17
+@export var pavilion_height := 0.44
 @export var gem_color := Color(0.55, 0.85, 1.0, 0.62)
-@export var word_color := Color(0.92, 0.99, 1.0)
+@export var word_color := Color(0.94, 0.99, 1.0)
+static var _outline_color := Color(0.02, 0.05, 0.12, 0.95)
 ## Star pips and prize chips are the same silhouette without the words.
 @export var build_words := true
+## Only the throwable gems carry colliders and gravity.
+@export var physical := false
 
 static var word_font: Font = null
 
 var words: PackedStringArray = []
 var face_labels: Array[Label3D] = []
 var body: MeshInstance3D = null
+var shape: CollisionShape3D = null
+## True once the gem has been thrown, landed and set on its mark.
+var settled := false
 var spinning := false
 var _spin_speed := 2.6
 var _wobble_time := 0.0
 var _hover_tween: Tween = null
+var _front_face := -1
+var _label_base_pixel_size: Array[float] = []
 
 
 static func _font() -> Font:
@@ -44,33 +68,96 @@ static func azimuth_of(dir: Vector3) -> float:
 
 func _init() -> void:
 	words.resize(SIDES)
+	# A gem that only ever stands still should not shove the stage around.
+	set_meta("flat_top_gem", true)
 
 
 func _ready() -> void:
 	_build_mesh()
 	_build_labels()
+	_apply_physics()
+
+
+func _apply_physics() -> void:
+	mass = 1.6
+	gravity_scale = 1.0
+	linear_damp = 0.08
+	angular_damp = 0.22
+	physics_material_override = null
+	var pm := PhysicsMaterial.new()
+	pm.bounce = 0.32
+	pm.friction = 0.75
+	physics_material_override = pm
+	continuous_cd = true
+	if physical:
+		# Gems land on the world, never on each other: two hero props shoving
+		# each other around on camera is chaos, not drama. They collide with
+		# layer 1 (the stage, the pedestal, the safety net) only.
+		collision_layer = 2
+		collision_mask = 1
+		var hull := ConvexPolygonShape3D.new()
+		hull.points = _hull_points()
+		shape = CollisionShape3D.new()
+		shape.shape = hull
+		add_child(shape)
+		freeze = true
+		freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	else:
+		# Pips, chips and stars are scenery: no body, no gravity, no cost.
+		freeze = true
+		freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		set_physics_process(false)
+		gravity_scale = 0.0
 
 
 func _process(delta: float) -> void:
 	if spinning:
 		rotation.y += _spin_speed * delta
 	_wobble_time += delta
-	if not spinning:
+	if not spinning and not _is_body_awake():
 		# A tiny breathing tilt, so a settled gem still feels alive on camera.
-		rotation.x = 0.055 * sin(_wobble_time * 1.7)
-		rotation.z = 0.045 * sin(_wobble_time * 1.13 + 1.3)
+		rotation.x = 0.05 * sin(_wobble_time * 1.7)
+		rotation.z = 0.04 * sin(_wobble_time * 1.13 + 1.3)
+	_fade_faces()
+
+
+func _is_body_awake() -> bool:
+	return physical and not freeze and not sleeping
 
 
 func word_at(face: int) -> String:
 	return words[face % SIDES]
 
 
+## Azimuth of face [param i]'s outward normal, relative to this node's yaw.
 func _face_normal(i: int) -> Vector3:
 	var a := face_azimuth(i)
 	var mid := Vector3(cos(a), 0.0, sin(a))
 	# The pavilion leans outward as it drops, so the normal tips upward a little.
 	var slope := atan2(pavilion_height, girdle_radius * cos(PI / float(SIDES)))
 	return (mid * cos(slope) + Vector3.UP * sin(slope)).normalized()
+
+
+## The facet triangle that carries word [param i], in local space: the girdle
+## edge at the top, the point at the bottom.
+func facet_corners(i: int) -> Array[Vector3]:
+	var a := TAU * float(i) / float(SIDES)
+	var b := TAU * float(i + 1) / float(SIDES)
+	return [
+		Vector3(cos(a) * girdle_radius, 0.0, sin(a) * girdle_radius),
+		Vector3(cos(b) * girdle_radius, 0.0, sin(b) * girdle_radius),
+		Vector3(0.0, -pavilion_height, 0.0),
+	]
+
+
+func _hull_points() -> PackedVector3Array:
+	var pts := PackedVector3Array()
+	for i in SIDES:
+		var a := TAU * float(i) / float(SIDES)
+		pts.append(Vector3(cos(a) * girdle_radius, 0.0, sin(a) * girdle_radius))
+		pts.append(Vector3(cos(a) * table_radius, crown_height, sin(a) * table_radius))
+	pts.append(Vector3(0.0, -pavilion_height, 0.0))
+	return pts
 
 
 func _build_mesh() -> void:
@@ -104,8 +191,8 @@ func _build_mesh() -> void:
 	body.name = "Body"
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = gem_color
-	mat.metallic = 0.55
-	mat.roughness = 0.08
+	mat.metallic = 0.85
+	mat.roughness = 0.06
 	mat.emission_enabled = true
 	mat.emission = gem_color * 0.55
 	mat.emission_energy_multiplier = 0.7
@@ -132,31 +219,108 @@ func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> v
 func _build_labels() -> void:
 	if not build_words:
 		return
-	var label_size := int(girdle_radius * 300.0)
+	var font := _font()
+	var base_size := 96
+	var facet_base := 2.0 * girdle_radius * sin(PI / float(SIDES))
+	var target_width := facet_base * WORD_FIT
+	var max_height := pavilion_height * WORD_HEIGHT_LIMIT
 	for i in SIDES:
 		var label := Label3D.new()
 		label.text = words[i]
-		label.font = _font()
-		label.font_size = maxi(label_size, 64)
-		label.outline_size = maxi(label_size / 5, 12)
+		label.font = font
+		label.font_size = base_size
+		label.outline_size = 18
 		label.modulate = word_color
-		label.outline_modulate = Color(0.03, 0.08, 0.16, 0.9)
-		label.pixel_size = 0.0032
+		label.outline_modulate = _outline_color
 		label.no_depth_test = false
 		# Opaque pre-pass: back-face words are depth-rejected by the near
 		# facets instead of ghosting through the stone.
 		label.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS
 		label.render_priority = 2
+		label.shaded = false
+		label.double_sided = false
+		# Alpha blending, not an alpha scissor: the facing fade is what keeps
+		# seven of the eight words off the screen, and a scissor would make
+		# that fade a hard pop instead.
+		label.alpha_cut = Label3D.ALPHA_CUT_DISABLED
+		# Fit the whole word inside the triangle it names.
+		var text_px := font.get_string_size(words[i], HORIZONTAL_ALIGNMENT_LEFT, -1, base_size)
+		var px := target_width / maxf(text_px.x, 1.0)
+		# ...and never let it grow taller than the facet is deep.
+		var height_units := text_px.y * px
+		if height_units > max_height:
+			px *= max_height / height_units
+		label.pixel_size = px
+		_label_base_pixel_size.append(px)
 
-		var a := face_azimuth(i)
-		var mid := Vector3(cos(a), 0.0, sin(a))
-		var pos := mid * (girdle_radius * 0.62) + Vector3.DOWN * (pavilion_height * 0.55)
-		pos += mid.normalized() * 0.012  # lift the text just off the facet
-
-		var basis := Basis.looking_at(-_face_normal(i), Vector3.UP)
+		var corners := facet_corners(i)
+		var centroid := (corners[0] + corners[1] + corners[2]) / 3.0
+		var normal := _face_normal(i)
+		# Sit the text on the facet plane, a hair proud of it.
+		var pos := centroid + normal * 0.006
+		# Label3D draws into its -Z half-space looking down +Z; aiming the -Z
+		# axis at the inverted normal turns the glyphs outward through the
+		# facet, and UP is re-resolved against the facet's own slope.
+		var basis := Basis.looking_at(-normal, Vector3.UP)
 		label.transform = Transform3D(basis, pos)
 		add_child(label)
 		face_labels.append(label)
+
+
+## Fade each word by how squarely its facet faces the camera, so a settled
+## gem reads as one named face rather than eight overlapping ones. Measured by
+## azimuth, not by the dot product: the pavilion normals lean 44 degrees up,
+## so a dot with a nearly level camera never comes close to 1 and every face
+## looked "front".
+func _fade_faces() -> void:
+	if face_labels.is_empty():
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var to_cam := cam.global_position - global_position
+	var cam_az := atan2(to_cam.z, to_cam.x)
+	_front_face = front_face_for_azimuth(cam_az)
+	for i in face_labels.size():
+		var delta := _azimuth_off(i, cam_az)
+		# 1.0 out to 20 degrees off the view axis (which is where the front
+		# face always sits on an octagon), gone by 36 degrees, so the
+		# 45-degree neighbours draw nothing at all.
+		var a := clampf((0.62 - delta) / 0.27, 0.0, 1.0)
+		var label := face_labels[i]
+		var c := word_color
+		c.a = a
+		label.modulate = c
+		# The outline does NOT follow modulate's alpha in Label3D, so a hidden
+		# word would still smear its dark border across the facet. Fade it too.
+		var o := _outline_color
+		o.a *= a
+		label.outline_modulate = o
+
+
+## How far, in radians, face [param i]'s outward normal is from a camera at
+## azimuth [param cam_az]. A yaw of +y carries face azimuth a to a - y (Godot
+## turns clockwise seen from above), which is the convention
+## [method lift_to] settles with.
+func _azimuth_off(i: int, cam_az: float) -> float:
+	return absf(wrapf(face_azimuth(i) - rotation.y - cam_az, -PI, PI))
+
+
+## The face a camera at azimuth [param cam_az] is looking at squarest.
+func front_face_for_azimuth(cam_az: float) -> int:
+	var best := 99.0
+	var best_i := 0
+	for i in face_labels.size():
+		var delta := _azimuth_off(i, cam_az)
+		if delta < best:
+			best = delta
+			best_i = i
+	return best_i
+
+
+## The face the camera is currently reading.
+func front_face() -> int:
+	return _front_face
 
 
 func set_words(new_words: PackedStringArray) -> void:
@@ -172,37 +336,73 @@ func start_spinning(speed := 2.6) -> void:
 	_kill_hover()
 
 
-## Fly an arc from [param from] to [param to] while flipping forward, then
-## leave the gem hovering where it landed. Returns when the flight ends.
-func launch(from: Vector3, to: Vector3, flips := 2.0, flight := 0.95) -> void:
+# ------------------------------------------------------------------ physics
+
+## Real throw: leave [param from] with this velocity and this spin, under
+## gravity, and let the stage decide where it lands.
+func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3) -> void:
 	_kill_hover()
 	spinning = false
-	var tw := create_tween()
-	tw.tween_method(_fly_step.bind(from, to, flips), 0.0, 1.0, flight)
-	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	await tw.finished
-	rotation.x = 0.0
+	settled = false
+	freeze = false
+	sleeping = false
+	rotation = Vector3.ZERO
+	global_position = from
+	linear_velocity = velocity
+	angular_velocity = spin
+	# A brand-new body needs the transform before the first integration step.
+	PhysicsServer3D.body_set_state(get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, global_transform)
 
 
-func _fly_step(t: float, from: Vector3, to: Vector3, flips: float) -> void:
-	position = from.lerp(to, t) + Vector3.UP * (0.85 * sin(PI * t))
-	rotation.x = -TAU * flips * t
-	rotation.z = 0.0
+## Wait until the gem has stopped moving (or [param timeout] runs out).
+## Returns true when it came to rest on its own.
+func wait_until_rest(timeout := 2.6, speed := 0.35) -> bool:
+	var waited := 0.0
+	var calm_frames := 0
+	while waited < timeout:
+		await get_tree().physics_frame
+		waited += get_physics_process_delta_time()
+		if freeze:
+			break
+		if linear_velocity.length() < speed and angular_velocity.length() < 1.1:
+			calm_frames += 1
+			if calm_frames >= 4:
+				return true
+		else:
+			calm_frames = 0
+	return false
 
 
-## Slow the spin and turn [param face] toward [param cam_azimuth] (radians,
-## azimuth of the camera seen from the gem). Extra full turns sell the decay.
-func settle_facing(face: int, cam_azimuth: float, duration := 1.25) -> void:
+## The show takes the gem back off the floor: freeze the body, lift it onto
+## its mark and turn [param face] to the camera. This is the only part of the
+## throw that is choreography rather than physics.
+func lift_to(target: Vector3, face: int, cam_azimuth: float, duration := 1.1) -> void:
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	freeze = true
+	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	spinning = false
+	var current := wrapf(rotation.y, 0.0, TAU)
 	var target_yaw := face_azimuth(face) - cam_azimuth
 	# Land approaching from one full dramatic turn away.
-	var current := wrapf(rotation.y, 0.0, TAU)
-	var wanted := wrapf(target_yaw - current, 0.0, TAU)
+	var wanted := wrapf(target_yaw - current, 0.0, TAU) + TAU
+	var from := position
 	var tw := create_tween()
-	tw.tween_property(self, "rotation:y", current + wanted + TAU, duration)
+	tw.set_parallel(true)
+	tw.tween_property(self, "position", target, duration)
+	tw.tween_property(self, "rotation:y", current + wanted, duration)
+	tw.tween_property(self, "rotation:x", 0.0, duration * 0.6)
+	tw.tween_property(self, "rotation:z", 0.0, duration * 0.6)
 	tw.set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
 	await tw.finished
-	rotation.y = wrapf(rotation.y, 0.0, TAU)
+	position = target
+	rotation = Vector3(0.0, wrapf(rotation.y, 0.0, TAU), 0.0)
+	# Push the final transform into the physics server too, so the body state
+	# and the node agree and nothing nudges the gem off its mark afterwards.
+	PhysicsServer3D.body_set_state(get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, global_transform)
+	PhysicsServer3D.body_set_state(get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
+	PhysicsServer3D.body_set_state(get_rid(), PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
+	settled = true
 	_start_hover()
 
 
@@ -211,7 +411,7 @@ func _start_hover() -> void:
 	_kill_hover()
 	var home_y := position.y
 	_hover_tween = create_tween()
-	_hover_tween.tween_property(self, "position:y", home_y + 0.045, 1.1)
+	_hover_tween.tween_property(self, "position:y", home_y + 0.05, 1.1)
 	_hover_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_hover_tween.set_loops(0)
 	_hover_tween.chain().tween_property(self, "position:y", home_y, 1.1)
@@ -223,11 +423,37 @@ func _kill_hover() -> void:
 	_hover_tween = null
 
 
+## Instant placement for restores: no physics, no tween, just the truth.
+func snap_settled(target: Vector3, face: int, cam_azimuth: float) -> void:
+	_kill_hover()
+	spinning = false
+	settled = true
+	freeze = true
+	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	position = target
+	rotation = Vector3(0.0, wrapf(face_azimuth(face) - cam_azimuth, 0.0, TAU), 0.0)
+
+
 ## A bright beat when the word is announced: the gem swells and flashes.
 func flash_reveal() -> void:
 	var tw := create_tween()
 	tw.tween_property(self, "scale", Vector3.ONE * 1.22, 0.16)
 	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "scale", Vector3.ONE, 0.4)
+	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tw.finished
+
+
+## A one-word pop on the facet that was just announced, so the eye catches
+## which face of the stone is the named one.
+func flash_face(face: int) -> void:
+	if face < 0 or face >= face_labels.size():
+		return
+	var label := face_labels[face]
+	var base: float = _label_base_pixel_size[face] if face < _label_base_pixel_size.size() else label.pixel_size
+	var tw := create_tween()
+	tw.tween_property(label, "pixel_size", base * 2.1, 0.18)
+	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(label, "pixel_size", base, 0.5)
 	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	await tw.finished
