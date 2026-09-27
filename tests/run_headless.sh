@@ -154,11 +154,11 @@ echo ""
 echo "=== Step 10: Klima Gem stage integrity tests ==="
 bash tests/stage_integrity_test.sh
 
-# Step 10b: Aurora's transformations are FULL-BODY sprites, not icon cards.
-# Verify all variants are transparent lossless WebP and that changing an
-# expression, restoring or applying a later shift keeps one Aurora on stage.
+# Step 10b: Aurora is one actor built from nine direct-drawn body layers.
+# Verify all 81 part/mod pairs are local, composable transparent WebP shifts,
+# and expression/restore paths never bring back full-body combination plates.
 echo ""
-echo "=== Step 10b: transformed Aurora sprite tests ==="
+echo "=== Step 10b: modular Aurora body tests ==="
 bash tests/aurora_mod_sprites_test.sh
 
 echo ""
