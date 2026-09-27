@@ -431,6 +431,7 @@ func swap_mod_gem() -> void:
 	if replaying():
 		gs.show_mod_face = gs.rng.randi_range(0, ShowStageScript.MODS.size() - 1)
 		gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
+		st.place_word_plaque(str(gs.show_mod), false)
 		await apply_mods()
 		return
 	var face: int = await st.rethrow_gem(1, gs.rng)
