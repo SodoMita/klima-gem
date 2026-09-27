@@ -37,6 +37,12 @@ signal state_restored
 @export var rerolls_used: int = 0
 ## Body modifications Aurora keeps across trials: part word -> mod word.
 @export var show_body_mods: Dictionary = {}
+## How many times each shift has been stamped on her tonight: mod word ->
+## count. Counts every application, including the same part twice.
+@export var show_mod_counts: Dictionary = {}
+## The pairing last stamped (part|mod|round), so a re-run of the same line
+## after a rewind does not count the same stamp twice.
+@export var show_last_stamp: String = ""
 @export var last_roll: float = 0.0
 @export var last_success: bool = false
 ## Fixed for the playthrough. A from-start replay uses this, not a fresh roll,
@@ -150,6 +156,8 @@ func snapshot() -> Dictionary:
 		"show_aurora_key": show_aurora_key,
 		"rerolls_used": rerolls_used,
 		"show_body_mods": show_body_mods.duplicate(true),
+		"show_mod_counts": show_mod_counts.duplicate(true),
+		"show_last_stamp": show_last_stamp,
 		"last_roll": last_roll,
 		"last_success": last_success,
 	}
@@ -188,6 +196,9 @@ func restore(data: Dictionary) -> void:
 	rerolls_used = int(data.get("rerolls_used", 0))
 	var kept: Variant = data.get("show_body_mods", {})
 	show_body_mods = (kept as Dictionary).duplicate(true) if kept is Dictionary else {}
+	var counts: Variant = data.get("show_mod_counts", {})
+	show_mod_counts = (counts as Dictionary).duplicate(true) if counts is Dictionary else {}
+	show_last_stamp = str(data.get("show_last_stamp", ""))
 	last_roll = float(data.get("last_roll", 0.0))
 	last_success = bool(data.get("last_success", false))
 	if data.has("story_seed"):

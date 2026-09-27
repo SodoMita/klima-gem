@@ -116,7 +116,28 @@ func _run_tests() -> void:
 	check(director.stack_word("GIANT").begins_with("x3"), "x3 stack reads mastered")
 	var parts3 := parts_only + int((director.PART_EDGE["BACK"] as Array)[0])
 	check(director.edge_for(1) == parts3 + 3, "a mastered GIANT is +1 per part even where it used to hurt")
+	# The same part twice: GIANT stamped on HANDS in round 1 and again in
+	# round 2 is a x2 even though only one part carries it. The count
+	# persists through a snapshot and does not double on a re-run.
 	gs.show_body_mods = {}
+	gs.show_mod_counts = {}
+	gs.show_last_stamp = ""
+	gs.show_part = "HANDS"
+	gs.show_mod = "GIANT"
+	gs.show_round = 1
+	await director.apply_mods()
+	gs.show_round = 2
+	await director.apply_mods()
+	check(director.mod_stacks().get("GIANT", 0) == 2, "GIANT on the same part twice is a x2 stack")
+	await director.apply_mods()
+	check(int(gs.show_mod_counts.get("GIANT", 0)) == 2, "re-running the same stamp does not count it again")
+	var snap_stack: Dictionary = gs.snapshot()
+	gs.show_mod_counts = {}
+	gs.restore(snap_stack)
+	check(int(gs.show_mod_counts.get("GIANT", 0)) == 2, "stack counts survive snapshot/restore")
+	gs.show_body_mods = {}
+	gs.show_mod_counts = {}
+	gs.show_last_stamp = ""
 	gs.show_part = "HANDS"
 	gs.show_mod = "GIANT"
 	gs.show_round = 3
