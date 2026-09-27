@@ -154,6 +154,12 @@ echo ""
 echo "=== Step 10: Klima Gem stage integrity tests ==="
 bash tests/stage_integrity_test.sh
 
+# Step 10b: all nine modification outcomes have case-specific cards, and
+# same-frame rollback never leaves a duplicate card on the stage.
+echo ""
+echo "=== Step 10b: modification CG cards and restore ==="
+bash tests/mod_card_test.sh
+
 # Step 11 (optional): the rendered framing check. Boots the real main scene
 # under sway headless + pixman + llvmpipe, walks the show, and measures the
 # projected rectangle of everything the audience has to read. Skips when no
@@ -168,7 +174,3 @@ bash "$ROOT/tests/show_async_state_test.sh"
 
 echo ""
 echo "=== All checks passed ==="
-
-# Controller continuations must not commit to a restored timeline.
-echo "=== Show async restore regression ==="
-bash "$ROOT/tests/show_async_state_test.sh"

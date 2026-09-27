@@ -118,6 +118,7 @@ var _plaque_part: Node3D = null
 var _props: Node3D = null
 var _chip: Node3D = null
 var _chip_label: Label3D = null
+var _mod_card: Node3D = null
 var _stamp: Label3D = null
 var _pips: Array[MeshInstance3D] = []
 var _stones: Array[MeshInstance3D] = []
@@ -803,10 +804,67 @@ func _glyph_part(part: String, color: Color, parent: Node3D) -> void:
 			cap.position = Vector3(0, 0.125, 0)
 
 
+## The eight case-specific CGs are packed lossless WebP. MEGA is the table
+## outcome — the strongest GIANT shift — and borrows its artwork with its
+## own caption and color. All nine modification outcomes get a visual card.
+const MOD_ART_DIR := "res://assets/mods/"
+const MOD_CARD_MARK := Vector3(-2.35, 2.90, -0.25)
+
+
+func mod_art(mod: String) -> Texture2D:
+	var key := "giant" if mod == "MEGA" else mod.to_lower()
+	var path := MOD_ART_DIR + key + ".webp"
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
+
+
+## An illuminated card at stage left: outside the glass throw case, above the
+## dialogue balloon, and apart from Aurora's lone standing portrait. The
+## art is the *modification*, not a new character in the cast.
+func show_mod_card(mod: String) -> void:
+	clear_mod_card()
+	var tex := mod_art(mod)
+	if tex == null:
+		return
+	var color: Color = MOD_COLORS.get(mod, Color(0.8, 0.9, 1.0))
+	_mod_card = Node3D.new()
+	_mod_card.name = "ModCard"
+	add_child(_mod_card)
+	var frame := BoxMesh.new()
+	frame.size = Vector3(1.15, 1.15, 0.04)
+	var backing := _mesh_instance(frame, _mat(Color(0.05, 0.07, 0.16), 0.35, 0.4, color * 0.55, 1.0), _mod_card)
+	backing.name = "Frame"
+	var art := Sprite3D.new()
+	art.name = "Art"
+	art.texture = tex
+	art.pixel_size = 1.04 / float(maxi(tex.get_width(), 1))
+	art.shaded = false
+	art.position = Vector3(0.0, 0.0, 0.033)
+	_mod_card.add_child(art)
+	var caption := _label(mod, 78, color, Color(0.02, 0.04, 0.1, 0.95), 0.0022)
+	caption.name = "Caption"
+	caption.position = Vector3(0.0, -0.72, 0.035)
+	_mod_card.add_child(caption)
+	_mod_card.position = MOD_CARD_MARK
+	_mod_card.scale = Vector3.ONE * 0.05
+	# A bound tween dies with its card. Rollback can replace the card several
+	# times in one frame; no old animation may touch a freed instance.
+	var tw := create_tween().bind_node(_mod_card)
+	tw.tween_property(_mod_card, "scale", Vector3.ONE, 0.45)
+	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func clear_mod_card() -> void:
+	_free_now(_mod_card)
+	_mod_card = null
+
+
 ## The applied modification, floating beside the guest: a bright ring, the
 ## body-part glyph, and the pairing written out underneath.
 func apply_mod_chip(part: String, mod: String, at: Vector3, kept: Dictionary = {}) -> void:
 	clear_mod_chip()
+	show_mod_card(mod)
 	var color: Color = MOD_COLORS.get(mod, Color(0.8, 0.9, 1.0))
 	_chip = Node3D.new()
 	_chip.name = "ModChip"
@@ -838,6 +896,7 @@ func apply_mod_chip(part: String, mod: String, at: Vector3, kept: Dictionary = {
 
 
 func clear_mod_chip() -> void:
+	clear_mod_card()
 	if is_instance_valid(_chip):
 		if _chip.get_parent() != null:
 			_chip.get_parent().remove_child(_chip)
