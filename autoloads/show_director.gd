@@ -129,6 +129,8 @@ func begin_show() -> void:
 		if not pin_seed and gs.has_method("fresh_seed"):
 			gs.fresh_seed()
 		gs.show_body_mods = {}
+		gs.show_mod_counts = {}
+		gs.show_last_stamp = ""
 		gs.show_round = 0
 		gs.show_ren_key = ""
 		gs.show_aurora_key = ""
@@ -200,6 +202,13 @@ func mod_stacks() -> Dictionary:
 	for part in mods:
 		var mod := str(mods[part])
 		stacks[mod] = int(stacks.get(mod, 0)) + 1
+	# Applications outrank parts: GIANT stamped on HANDS twice is a x2 even
+	# though only one part carries it now.
+	var gs := _gs()
+	if gs != null and "show_mod_counts" in gs:
+		var counts: Dictionary = gs.show_mod_counts
+		for mod in counts:
+			stacks[str(mod)] = maxi(int(stacks.get(str(mod), 0)), int(counts[mod]))
 	return stacks
 
 
@@ -395,6 +404,15 @@ func apply_mods() -> void:
 	if gs == null or st == null:
 		return
 	gs.show_body_mods = body_mods()
+	# Count the stamp once: the same line re-run by a rewind or a mercy
+	# swap to a different word must not double it, but a mercy swap IS a
+	# new stamp and a shift landing on the same part again still counts.
+	var stamp := "%s|%s|%d|%d" % [str(gs.show_part), str(gs.show_mod), int(gs.show_round), int(gs.rerolls_used)]
+	if str(gs.show_mod) != "" and str(gs.show_last_stamp) != stamp:
+		gs.show_last_stamp = stamp
+		var counts: Dictionary = (gs.show_mod_counts as Dictionary).duplicate()
+		counts[str(gs.show_mod)] = int(counts.get(str(gs.show_mod), 0)) + 1
+		gs.show_mod_counts = counts
 	gs.show_outlook = outlook_for(int(gs.show_round))
 	if replaying():
 		return
