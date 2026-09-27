@@ -86,6 +86,12 @@ func _run_tests() -> void:
 	check(director.edge_for(1) == -2, "SKIN+STICKY is a bad crossing hand")
 	check(director.outlook_for(1) == "disadvantage", "outlook reads disadvantage")
 	check(director.outlook_word(1) == "a DISADVANTAGE", "outlook word for dialogue")
+	gs.show_part = "EYES"
+	gs.show_mod = "GLOWING"
+	gs.show_round = 3
+	check(director.edge_for(3) == 2, "EYES+GLOWING edge in the choir")
+	check(director.action_edge(3) == 0, "no actions banked yet in this probe")
+	check(director.outlook_for(3) == "even", "trial 3 with total 2 is one short, not an advantage")
 	gs.show_part = "HANDS"
 	gs.show_mod = "GIANT"
 	gs.show_round = 2
@@ -213,6 +219,41 @@ func _run_tests() -> void:
 	check(combo_seen.is_empty(), "combo-specific lines stay hidden unless rolled (%s)" % [combo_seen])
 	gs_probe.show_part = ""
 	gs_probe.show_mod = ""
+	# The disadvantage branch offers the cheer spend only when a cheer
+	# exists to spend; otherwise the jar-empty line plays and the spend
+	# choice stays hidden (the director also refuses a broke swap).
+	for cheers in [0, 2]:
+		gs_probe.show_cheers = cheers
+		var spend_seen := false
+		var keep_seen := false
+		var jar_seen := false
+		var ckey := "gem_round"
+		for i in 80:
+			var cline = await dm_guard.get_next_dialogue_line(story, ckey, [])
+			if cline == null:
+				break
+			var ct := str(cline.text)
+			if ct.begins_with("I can FEEL it"):
+				gs_probe.show_outlook = "disadvantage"
+			if "jar is EMPTY" in ct:
+				jar_seen = true
+			if cline.responses.size() > 0:
+				for r in cline.responses:
+					var rt := str(r.text)
+					# Failed-condition responses ride along with
+					# is_allowed=false; the balloon hides them.
+					if "spend the cheer" in rt and r.is_allowed:
+						spend_seen = true
+					if "keep the bad hand" in rt and r.is_allowed:
+						keep_seen = true
+				break
+			if ct.begins_with("The stage is set"):
+				break
+			ckey = cline.next_id
+		check(keep_seen, "cheer choice offers the keep with %d cheers" % cheers)
+		check(spend_seen == (cheers > 0), "cheer spend offered iff affordable (%d cheers)" % cheers)
+		check(jar_seen == (cheers <= 0), "empty-jar line shows iff broke (%d cheers)" % cheers)
+	gs_probe.show_cheers = 1
 	if story != null:
 		var states: PackedStringArray = story.using_states
 		check(states.has("GameState") and states.has("ShowDirector"), "story declares both states")

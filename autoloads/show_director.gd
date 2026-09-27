@@ -184,13 +184,19 @@ func total_for(round_no: int) -> int:
 	return edge_for(round_no) + action_edge(round_no)
 
 
+## What the board tells the audience before a trial. Uses the SAME threshold
+## the trial is decided on (success = total >= trial number): on pace to
+## clear reads advantage, one short reads even, worse reads disadvantage.
+## A bare sign check would call trial 3 with total +2 an "advantage" while
+## the trial itself fails it — the board must never disagree with the judge.
 func outlook_for(round_no: int) -> String:
+	var need := clampi(round_no, 1, 3)
 	var total := total_for(round_no)
-	if total > 0:
+	if total >= need:
 		return "advantage"
-	if total < 0:
-		return "disadvantage"
-	return "even"
+	if total >= need - 1:
+		return "even"
+	return "disadvantage"
 
 
 ## One word for the dialogue: what the odds are doing to the guest.

@@ -89,7 +89,9 @@ elif show_outlook == "disadvantage":
 	Ren: Oh no. Oh no, no. Gems plus everything so far — the board calls it a disadvantage, and the board on this stage is never wrong.
 	Aurora: The gems have chosen mischief and I respect the craft.
 	Ren: There is a cheat code, though. One crowd cheer buys a re-throw of the modification gem. We are holding {{show_cheers}}.
-	- I spend the cheer. The modification gem goes back into the air.
+	if show_cheers <= 0:
+		Ren: ...which is to say, the jar is EMPTY. No cheers, no cheat code — play the hand!
+	- I spend the cheer. The modification gem goes back into the air. [if show_cheers > 0 /]
 		do swap_mod_gem()
 		Ren: The producer weeps. The audience ROARS. New words — and the new pairing is... {{show_part}} x {{show_mod}}!
 		%2 Aurora: A second chance! On live television! I will not waste it, probably!
