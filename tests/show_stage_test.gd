@@ -210,7 +210,21 @@ func _run_tests() -> void:
 		if t.begins_with("The stage is set"):
 			break
 		guard_key = probe_line.next_id
-	check(combo_seen.is_empty(), "combo-specific lines stay hidden unless rolled (%s)" % [combo_seen])
+	# A combo line must be gated on its exact roll: the walk throws for real
+	# (mutations execute), so a line is allowed on screen only when the throw
+	# produced its pairing.
+	var rolled_combo := "%s+%s" % [gs_probe.show_part, gs_probe.show_mod]
+	var combo_prefixes := {
+		"VOICE+STICKY": "When I try to speak,",
+		"EYES+GLOWING": "I can see the infras",
+		"HEART+HEAVY": "My chest has a balla",
+	}
+	for combo: String in combo_prefixes:
+		var prefix: String = combo_prefixes[combo]
+		if combo == rolled_combo:
+			check(combo_seen.has(prefix), "the rolled combo line shows (%s)" % [combo])
+		else:
+			check(not combo_seen.has(prefix), "combo line %s stays hidden when %s was rolled" % [prefix, rolled_combo])
 	gs_probe.show_part = ""
 	gs_probe.show_mod = ""
 	if story != null:
