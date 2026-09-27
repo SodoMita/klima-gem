@@ -32,6 +32,8 @@ const PART_EDGE := {
 	"BACK": [1, -1, 0],
 	"HEART": [0, 1, -1],
 	"SKIN": [-1, 1, -1],
+	# The table word, rarer than any side: a stone resting on its top.
+	"MILK": [1, -1, 1],
 }
 
 ## How each modification leans each trial. Same rule: every shapeshift is an
@@ -45,6 +47,7 @@ const MOD_EDGE := {
 	"MAGNET": [0, 1, -1],
 	"HEAVY": [-1, 1, -1],
 	"GLOWING": [1, -1, 1],
+	"MEGA": [1, 1, -1],
 }
 
 ## Visual-only randomness for the choir melody. Not saved: a restore rebuilds
@@ -54,6 +57,8 @@ var _pattern: Array = []
 # Async scene animations can finish after rollback/load has restored GameState.
 # Never let those old continuations commit into the newly restored timeline.
 var _state_epoch: int = 0
+## Tests pin the story seed; players never do.
+var pin_seed := false
 
 
 func _is_current(epoch: int, st: Node) -> bool:
@@ -120,6 +125,10 @@ func begin_show() -> void:
 	_state_epoch += 1
 	var gs := _gs()
 	if gs != null:
+		# Unless a test pinned it, every new show throws under a new seed.
+		if not pin_seed and gs.has_method("fresh_seed"):
+			gs.fresh_seed()
+		gs.show_body_mods = {}
 		gs.show_round = 0
 		gs.show_ren_key = ""
 		gs.show_aurora_key = ""
@@ -162,9 +171,25 @@ func edge_for(round_no: int) -> int:
 	if gs == null or str(gs.show_part) == "" or str(gs.show_mod) == "":
 		return 0
 	var idx := clampi(round_no, 1, 3) - 1
-	var part_edge: int = (PART_EDGE.get(str(gs.show_part), [0, 0, 0]) as Array)[idx]
-	var mod_edge: int = (MOD_EDGE.get(str(gs.show_mod), [0, 0, 0]) as Array)[idx]
-	return part_edge + mod_edge
+	# Every modification she still carries counts, not only tonight's pair:
+	# a body keeps what the gems gave it.
+	var total := 0
+	var mods := body_mods()
+	for part in mods:
+		total += int((PART_EDGE.get(str(part), [0, 0, 0]) as Array)[idx])
+		total += int((MOD_EDGE.get(str(mods[part]), [0, 0, 0]) as Array)[idx])
+	return total
+
+
+## Kept modifications plus the current pair (one mod per body part).
+func body_mods() -> Dictionary:
+	var gs := _gs()
+	if gs == null:
+		return {}
+	var mods: Dictionary = (gs.show_body_mods as Dictionary).duplicate() if "show_body_mods" in gs else {}
+	if str(gs.show_part) != "" and str(gs.show_mod) != "":
+		mods[str(gs.show_part)] = str(gs.show_mod)
+	return mods
 
 
 ## What Aurora's own actions contribute to a trial: the stats she built by
@@ -249,8 +274,8 @@ func set_aurora_expression(emotion: String, fresh := false) -> void:
 		gs.show_aurora_key = key
 	_spawn_actor("aurora", key, ShowStageScript.AURORA_MARK, ShowStageScript.AURORA_BASE_HEIGHT)
 	var st := stage()
-	if not fresh and st != null and gs != null and str(gs.show_part) != "":
-		st.apply_aurora_fx(str(gs.show_part), str(gs.show_mod))
+	if not fresh and st != null and gs != null and not body_mods().is_empty():
+		st.apply_body_mods(body_mods())
 
 
 func _spawn_actor(alias: String, tex_key: String, at: Vector3, height: float) -> void:
@@ -321,9 +346,10 @@ func apply_mods() -> void:
 	var st := stage()
 	if gs == null or st == null:
 		return
+	gs.show_body_mods = body_mods()
 	gs.show_outlook = outlook_for(int(gs.show_round))
-	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor())
-	st.apply_aurora_fx(str(gs.show_part), str(gs.show_mod))
+	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor(), gs.show_body_mods)
+	st.apply_body_mods(gs.show_body_mods)
 	await st.get_tree().create_timer(0.9).timeout
 
 
@@ -408,11 +434,13 @@ func sync_from_state() -> void:
 		st.aurora_quad = null
 	if str(gs.show_part) != "" and int(gs.show_part_face) >= 0:
 		st.place_gems_settled(str(gs.show_part), int(gs.show_part_face), str(gs.show_mod), int(gs.show_mod_face))
-		st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor())
-		st.apply_aurora_fx(str(gs.show_part), str(gs.show_mod))
+		st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor(), gs.show_body_mods)
 	else:
 		st.clear_gems()
 		st.clear_mod_chip()
+	if not body_mods().is_empty():
+		st.apply_body_mods(body_mods())
+	else:
 		st.reset_aurora_fx()
 	st.clear_props()
 	match clampi(int(gs.show_props_round), 0, 3):

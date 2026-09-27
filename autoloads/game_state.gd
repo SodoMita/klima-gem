@@ -35,6 +35,8 @@ signal state_restored
 @export var show_ren_key: String = ""
 @export var show_aurora_key: String = ""
 @export var rerolls_used: int = 0
+## Body modifications Aurora keeps across trials: part word -> mod word.
+@export var show_body_mods: Dictionary = {}
 @export var last_roll: float = 0.0
 @export var last_success: bool = false
 ## Fixed for the playthrough. A from-start replay uses this, not a fresh roll,
@@ -50,6 +52,15 @@ func _ready() -> void:
 	_reseed()
 	# Dialogue Manager is a later autoload, so the first reseed cannot see it yet.
 	call_deferred("_reseed")
+
+
+## A new show gets a new seed: throws are never the same night twice. The
+## seed is saved in every snapshot, so rewinds and loads replay exactly.
+func fresh_seed() -> void:
+	var r := RandomNumberGenerator.new()
+	r.randomize()
+	story_seed = int(r.randi() & 0x7fffffff)
+	_reseed()
 
 
 func _reseed() -> void:
@@ -129,6 +140,7 @@ func snapshot() -> Dictionary:
 		"show_ren_key": show_ren_key,
 		"show_aurora_key": show_aurora_key,
 		"rerolls_used": rerolls_used,
+		"show_body_mods": show_body_mods.duplicate(true),
 		"last_roll": last_roll,
 		"last_success": last_success,
 	}
@@ -165,6 +177,8 @@ func restore(data: Dictionary) -> void:
 	show_ren_key = str(data.get("show_ren_key", ""))
 	show_aurora_key = str(data.get("show_aurora_key", ""))
 	rerolls_used = int(data.get("rerolls_used", 0))
+	var kept: Variant = data.get("show_body_mods", {})
+	show_body_mods = (kept as Dictionary).duplicate(true) if kept is Dictionary else {}
 	last_roll = float(data.get("last_roll", 0.0))
 	last_success = bool(data.get("last_success", false))
 	if data.has("story_seed"):
