@@ -60,6 +60,12 @@ var _spin_speed := 2.6
 var _wobble_time := 0.0
 var _hover_tween: Tween = null
 var _front_face := -1
+## Damping the stone takes on once it has touched the world: free flight is
+## a clean ballistic arc under plain gravity, and only a stone that is
+## already rolling on the glass is asked to stop quickly.
+var settle_linear_damp := 0.0
+var settle_angular_damp := 0.0
+var _touched := false
 var _label_base_pixel_size: Array[float] = []
 
 
@@ -113,6 +119,8 @@ func _apply_physics() -> void:
 		shape = CollisionShape3D.new()
 		shape.shape = hull
 		add_child(shape)
+		contact_monitor = true
+		max_contacts_reported = 4
 		freeze = true
 		# STATIC, not kinematic: a settled gem must never drift. Kinematic
 		# freeze lets the server fight the node (stale velocity tracking
@@ -132,6 +140,16 @@ func _process(delta: float) -> void:
 		rotation.y += _spin_speed * delta
 	_wobble_time += delta
 	_fade_faces()
+
+
+func _physics_process(_delta: float) -> void:
+	if freeze or _touched or settle_linear_damp <= 0.0:
+		return
+	if get_contact_count() > 0:
+		# First contact: from here on the stone is landing, not flying.
+		_touched = true
+		linear_damp = settle_linear_damp
+		angular_damp = settle_angular_damp
 
 
 func _is_body_awake() -> bool:
@@ -211,7 +229,10 @@ func _build_mesh() -> void:
 	mat.emission = gem_color * 0.55
 	mat.emission_energy_multiplier = 0.7
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # two-sided: glass gem seen from inside/below
+	# A glass stone is seen through: the far facets show through the near
+	# ones, so both sides of every face are drawn (back-face culling made
+	# the gem read as a hollow, single-sided shell).
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	body.material_override = mat
 	body.mesh = mesh
 	add_child(body)
@@ -314,12 +335,14 @@ func _make_face_label(text: String, corners: Array[Vector3], is_crown: bool) -> 
 
 func _make_top_label(text: String) -> Label3D:
 	var label := _new_label(text)
-	# Fit the word's rectangle inside the table octagon's inscribed circle.
-	var r_in := table_radius * cos(PI / float(SIDES)) * 0.92
+	# Fit the word across the table: as wide as the octagon's inscribed
+	# circle, no taller than the table is deep. (The table is small so a
+	# table rest stays rare; the word uses all of it.)
+	var r_in := table_radius * cos(PI / float(SIDES)) * 0.96
 	var sz := _font().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.font_size)
 	var ink_w := sz.x + 2.0 * label.outline_size
 	var ink_h := sz.y + 2.0 * label.outline_size
-	label.pixel_size = 2.0 * r_in / sqrt(ink_w * ink_w + ink_h * ink_h)
+	label.pixel_size = minf(2.0 * r_in / maxf(ink_w, 1.0), 2.0 * r_in * 0.9 / maxf(ink_h, 1.0))
 	label.transform = Transform3D(TOP_BASIS, Vector3(0.0, crown_height + WORD_LIFT, 0.0))
 	add_child(label)
 	return label
@@ -339,7 +362,9 @@ func _fade_faces() -> void:
 	for label in labels:
 		var n := (label.global_basis.z).normalized()
 		var to_cam := (cam.global_position - label.global_position).normalized()
-		var a := clampf((n.dot(to_cam) - 0.12) / 0.3, 0.0, 1.0)
+		# Faces turned away vanish; anything the camera can see at all
+		# keeps its word, fading in as the face squares up.
+		var a := clampf((n.dot(to_cam) - 0.02) / 0.26, 0.0, 1.0)
 		var c := word_color
 		c.a = a
 		label.modulate = c
@@ -391,6 +416,18 @@ func label_for(face: int) -> Label3D:
 	return null
 
 
+## The label actually lying on the glass for result [param face]. A sector
+## carries its word twice — pavilion facet below the girdle, crown facet
+## above — and a stone may rest on either; the under-view reads whichever
+## twin points down.
+func resting_label(face: int) -> Label3D:
+	var crown := label_for(face)
+	if face == TOP_FACE or crown == null or face >= face_labels.size() or not is_inside_tree():
+		return crown
+	var pav := face_labels[face]
+	return pav if pav.global_basis.z.y < crown.global_basis.z.y else crown
+
+
 ## World basis that turns result [param face] squarely toward a viewer along
 ## [param to_viewer], text upright.
 func presentation_basis(face: int, to_viewer: Vector3) -> Basis:
@@ -401,23 +438,6 @@ func presentation_basis(face: int, to_viewer: Vector3) -> Basis:
 	var y_t := (Vector3.UP - z_t * Vector3.UP.dot(z_t)).normalized()
 	var x_t := y_t.cross(z_t)
 	return Basis(x_t, y_t, z_t) * f.inverse()
-
-
-## The twin word that faces DOWN when the stone rests on sector [param face]
-## (a sector carries its word on the pavilion facet and on the crown facet;
-## whichever lies against the glass is the one an under-view camera reads).
-func under_label(face: int) -> Label3D:
-	if face == TOP_FACE:
-		return top_label
-	if face < 0 or face >= SIDES:
-		return null
-	var a := face_labels[face]
-	var b := crown_labels[face]
-	if a == null:
-		return b
-	if b == null:
-		return a
-	return a if a.global_basis.z.y < b.global_basis.z.y else b
 
 
 ## Basis that lays the stone down with result [param face]'s facet against
@@ -478,6 +498,10 @@ func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3, orient
 	_kill_hover()
 	spinning = false
 	settled = false
+	_touched = false
+	# In the air: real gravity, next to no drag, so the arc is honest.
+	linear_damp = 0.05
+	angular_damp = 0.1
 	collision_layer = 2
 	collision_mask = 1
 	if is_instance_valid(shape):

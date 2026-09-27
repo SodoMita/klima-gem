@@ -32,12 +32,13 @@ func check_near(actual: float, expected: float, label: String, eps := 0.01) -> v
 
 
 func _ready() -> void:
-	get_tree().create_timer(180.0, true, false, true).timeout.connect(_on_watchdog)
+	get_tree().create_timer(420.0, true, false, true).timeout.connect(_on_watchdog)
 	_test_physics_is_on()
 	_test_facet_words_are_welded()
 	_test_dialogue_colons()
 	await _test_gem_throw_is_physics()
 	await _test_portrait_on_stage()
+	await _test_rewind_resets_stars()
 	if failures == 0:
 		print("STAGE INTEGRITY TESTS: PASS")
 		get_tree().quit(0)
@@ -229,9 +230,9 @@ func _test_gem_throw_is_physics() -> void:
 	# Launch it straight up and let gravity bring it back: a tween cannot do this.
 	gem.physical = true
 	gem.freeze = false
-	# Launched clear of the glass box: inside it the lid (correctly) stops the rise.
-	gem.position = Vector3(0.0, 3.0, -3.0)
-	gem.throw_with_velocity(Vector3(0.0, 3.0, -3.0), Vector3(0.0, 3.0, 0.0), Vector3(2.0, 3.0, 1.0))
+	# Outside the floating glass case (its lid is at y ~3.05 over the box).
+	gem.position = Vector3(2.4, 3.0, -1.5)
+	gem.throw_with_velocity(Vector3(2.4, 3.0, -1.5), Vector3(0.0, 3.0, 0.0), Vector3(2.0, 3.0, 1.0))
 	var peak := gem.position.y
 	var fell := gem.position.y
 	for i in 60:
@@ -387,5 +388,107 @@ func _test_portrait_on_stage() -> void:
 	check(not balloon.skip_mode and not balloon._resume_skip_after_choice,
 		"turning skip off in toolbar cannot resume after the choice")
 
+	main.queue_free()
+	await get_tree().process_frame
+
+
+# ------------------------------------------ 6 - rewinding un-wins the trial
+
+## Play the real balloon forward through the first trial (advancing like a
+## player, taking the first allowed answer at every choice), then rewind to
+## the line spoken BEFORE the trial ran and demand that the star count — in
+## GameState and on the pips — is the count from before the trial.
+func _test_rewind_resets_stars() -> void:
+	print("-- rewind un-wins --")
+	# The previous test's balloon lives at the tree root (Dialogue Manager
+	# parents balloons there), so it outlives its main scene. Clear it.
+	for child in get_tree().root.get_children():
+		if child.has_method("rollback_to"):
+			get_tree().root.remove_child(child)
+			child.free()
+	await get_tree().process_frame
+	var main: Node = load("res://main.tscn").instantiate()
+	add_child(main)
+	await get_tree().create_timer(0.5).timeout
+	# Straight to the first trial with a settled board: the intro's arrival
+	# choreography is covered elsewhere and only slows this rewind down.
+	var gs0 := get_node("/root/GameState")
+	gs0.show_round = 1
+	gs0.show_stars = 0
+	gs0.show_part = "EYES"
+	gs0.show_mod = "GLOWING"
+	gs0.show_part_face = 1
+	gs0.show_mod_face = 7
+	gs0.show_props_round = 1
+	# Enough nerve to clear the Crossing (bond + trust), so a real star is won.
+	gs0.trust = 5
+	gs0.insight = 5
+	gs0.power = 5
+	gs0.bond = {"ren": 5}
+	main._start("trial")
+	await get_tree().create_timer(0.8).timeout
+	var director := get_node_or_null("/root/ShowDirector")
+	var balloon: Node = director._balloon() if director != null else null
+	check(balloon != null, "the balloon is running for the rewind test")
+	if balloon == null:
+		main.queue_free()
+		return
+	var gs := get_node("/root/GameState")
+	var stage := get_tree().get_first_node_in_group("show_stage")
+	if stage != null:
+		stage.interactive_throws = false
+	Engine.time_scale = 4.0
+	var before_idx := -1
+	var after_seen := false
+	var stars_before := -1
+	var steps := 0
+	while steps < 1500 and not after_seen:
+		steps += 1
+		await get_tree().create_timer(0.05).timeout
+		var line = balloon.dialogue_line
+		if line == null:
+			continue
+		if balloon.dialogue_label.is_typing:
+			balloon.dialogue_label.skip_typing()
+			continue
+		var at_choice: bool = line.responses.size() > 0 and balloon.responses_menu.visible
+		if not balloon.is_waiting_for_input and not at_choice:
+			continue
+		var text := str(line.text)
+		if text.begins_with("(Actions, not luck"):
+			before_idx = int(balloon.history_cursor)
+			stars_before = int(gs.show_stars)
+		if text.begins_with("A star peels off") or text.begins_with("I was SO close"):
+			after_seen = true
+			break
+		if line.responses.size() > 0:
+			var picked = null
+			for r in line.responses:
+				if r.is_allowed:
+					picked = r
+					break
+			if picked != null:
+				balloon.next(picked.next_id)
+			continue
+		balloon.next(line.next_id)
+	Engine.time_scale = 1.0
+	var last_line = balloon.dialogue_line
+	print("    last line: ", (str(last_line.text).left(60) if last_line != null else "<none>"), " waiting=", balloon.is_waiting_for_input, " round=", gs.show_round)
+	check(after_seen, "the balloon played through trial 1 (%d steps)" % steps)
+	check(before_idx >= 0, "the pre-trial line is in the backlog")
+	if after_seen and before_idx >= 0:
+		var stars_after := int(gs.show_stars)
+		check(bool(gs.last_success) and stars_after == stars_before + 1, "the trial was cleared and won a star (%d -> %d)" % [stars_before, stars_after])
+		await balloon.rollback_to(before_idx)
+		await get_tree().create_timer(0.3).timeout
+		check(int(gs.show_stars) == stars_before, "rewinding to before the trial resets the stars (%d, want %d)" % [int(gs.show_stars), stars_before])
+		if stage != null:
+			var lit := 0
+			for pip in stage._pips:
+				var mat := pip.material_override as StandardMaterial3D
+				if mat != null and mat.emission_energy_multiplier > 1.0:
+					lit += 1
+			check(lit == stars_before, "the pips show the rewound count (%d lit, want %d)" % [lit, stars_before])
+			check(not is_instance_valid(stage._stamp) or not stage._stamp.visible, "the CLEAR/MISS stamp is gone after the rewind")
 	main.queue_free()
 	await get_tree().process_frame

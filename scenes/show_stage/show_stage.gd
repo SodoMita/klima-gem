@@ -24,6 +24,7 @@ class_name ShowStage extends Node3D
 ## under an impulse. See [method throw_gems].
 
 const FlatTopGemScript := preload("res://scenes/show_stage/flat_top_gem.gd")
+const ThrowCueScript := preload("res://scenes/show_stage/throw_cue.gd")
 
 ## Eight side words, then the word on the flat table (index 8 = TOP_FACE).
 const PARTS: PackedStringArray = ["HANDS", "EYES", "LEGS", "VOICE", "HAIR", "BACK", "HEART", "SKIN", "MILK"]
@@ -94,6 +95,13 @@ const BOX_SIZE := Vector3(3.0, 1.4, 1.8)
 const REST_TIMEOUT := 14.0
 ## Gem geometry scale on stage (a 1 m stone swallowed the frame).
 const GEM_SCALE := 0.62
+## How long the show waits for the player's hand before throwing for them.
+const THROW_CUE_TIMEOUT := 8.0
+
+## The player throws: aim with the cursor / finger / stick, hold for power.
+## Off under a headless display (tests) — then the impulse is drawn from the
+## story RNG alone. Tests may force it either way.
+var interactive_throws := true
 
 ## Below this line the dialogue balloon covers the frame, so nothing the
 ## audience has to read may be placed there.
@@ -130,6 +138,9 @@ var _chip_home := Vector3.ZERO
 var _set_root: Node3D = null
 var _camera: Camera3D = null
 var _cam_tween: Tween = null
+var _throw_cue: ThrowCue = null
+## The last cue the player gave (aim, power, manual) — for tests and HUD.
+var last_throw_cue: Dictionary = {}
 
 
 func _ready() -> void:
@@ -141,6 +152,10 @@ func _ready() -> void:
 	if _camera != null:
 		_camera.make_current()
 	_key_light = get_node_or_null("KeyLight") as OmniLight3D
+	interactive_throws = DisplayServer.get_name() != "headless"
+	_throw_cue = ThrowCueScript.new()
+	_throw_cue.name = "ThrowCue"
+	add_child(_throw_cue)
 	_set_root = get_node_or_null("Set") as Node3D
 	_props = get_node_or_null("Props") as Node3D
 	if _props == null:
@@ -211,6 +226,18 @@ func aurora_hand() -> Vector3:
 
 
 # ---------------------------------------------------------------- stage build
+
+## Free a node NOW as far as the scene tree is concerned. queue_free() alone
+## leaves it parented until the end of the frame, so a rebuild in the same
+## frame (rollback, save-load, a jump from the story map) adds a second node
+## with the same name and the stage wears two of everything. Detach, then free.
+func _free_now(node: Node) -> void:
+	if not is_instance_valid(node):
+		return
+	if node.get_parent() != null:
+		node.get_parent().remove_child(node)
+	node.queue_free()
+
 
 func _mesh_instance(mesh: Mesh, mat: StandardMaterial3D, parent: Node = self) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
@@ -316,18 +343,18 @@ func throw_gems(rng: RandomNumberGenerator) -> Array:
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
 	var epoch := _gem_epoch
 
-	# The body part goes first, thrown long across the stage; it gets its own
-	# landing, its own reveal, and its own word before the second stone flies.
+	# The shapeshift (modification) goes first; it gets its own landing, its
+	# own reveal, and its own word before the body-part stone flies.
 	# Every await is epoch-guarded: a rewind clears the gems mid-flight, and
 	# this choreography must stop when its stones are gone.
-	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng, epoch)
-	if epoch != _gem_epoch or part_face < 0:
+	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng, epoch)
+	if epoch != _gem_epoch or mod_face < 0:
 		return []
 	await get_tree().create_timer(0.25).timeout
 	if epoch != _gem_epoch:
 		return []
-	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng, epoch)
-	if epoch != _gem_epoch or mod_face < 0:
+	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng, epoch)
+	if epoch != _gem_epoch or part_face < 0:
 		return []
 	await get_tree().create_timer(0.3).timeout
 	if epoch != _gem_epoch:
@@ -343,13 +370,13 @@ func throw_gems_fixed(part_face: int, mod_face: int) -> void:
 	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
 	var epoch := _gem_epoch
-	await _throw_one(gem_part, LAND_PART, part_face, true, epoch)
+	await _throw_one(gem_mod, LAND_MOD, mod_face, false, epoch)
 	if epoch != _gem_epoch:
 		return
 	await get_tree().create_timer(0.25).timeout
 	if epoch != _gem_epoch:
 		return
-	await _throw_one(gem_mod, LAND_MOD, mod_face, false, epoch)
+	await _throw_one(gem_part, LAND_PART, part_face, true, epoch)
 	if epoch != _gem_epoch:
 		return
 	await get_tree().create_timer(0.3).timeout
@@ -365,28 +392,14 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 	# Released inside the closed box, up under the lid on Aurora's side, with
 	# a random orientation, a random shove and a random spin. Nothing about
 	# the result is chosen: the stone decides by the face it comes to rest on.
-	var half := BOX_SIZE * 0.5
-	# DaVinci: no predefined outcome. The saved story seed is mixed with the
-	# wall clock and the cursor at the moment of the throw, so a rewind or a
-	# load can never replay a known result.
-	var mouse := get_viewport().get_mouse_position()
-	var live := RandomNumberGenerator.new()
-	live.seed = hash([rng.randi(), Time.get_ticks_usec(), mouse.x, mouse.y, randi()])
-	rng = live
-	var from := BOX_CENTER + Vector3(
-		rng.randf_range(0.35, 0.8) * half.x, BOX_SIZE.y - 0.3, rng.randf_range(-0.5, 0.5) * half.z)
-	var target := Vector3(
-		rng.randf_range(-0.8, 0.3) * half.x, BOX_CENTER.y, BOX_CENTER.z + rng.randf_range(-0.6, 0.6) * half.z)
-	var aim = _cursor_target(mouse, half)
-	if aim != null:
-		target = aim
-	var flight := rng.randf_range(0.28, 0.45)
-	var spin := Vector3(rng.randf_range(-24.0, 24.0), rng.randf_range(-24.0, 24.0), rng.randf_range(-24.0, 24.0))
-	_fast_settle(gem)
-	var q := Quaternion(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1))
-	if q.length() < 0.01:
-		q = Quaternion.IDENTITY
-	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin, Basis(q.normalized()))
+	# The player's hand: where the cursor points is where the stone is
+	# aimed, and how long the button is held is how hard it flies. The
+	# release instant and the cursor position are mixed into the impulse
+	# generator, so no seed can pre-decide a throw the player makes.
+	var cue := await _await_throw_cue(is_part, epoch)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return -1
+	launch_gem(gem, rng, cue)
 	# Wait on the STAGE rather than on the body: on rewind the body is
 	# freed, and a suspended method on it would resume into a dead instance.
 	await _wait_throw_rest(gem, epoch)
@@ -439,32 +452,59 @@ func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch:
 	await present_word(gem, face, is_part)
 
 
+## The launch itself: draw the impulse from [param rng] XOR the cue's
+## entropy, aim at the cue's point (or a random one), and let go. Shared by
+## the show and the fairness probe so both throw the very same way.
+func launch_gem(gem: FlatTopGem, rng: RandomNumberGenerator, cue: Dictionary = {}) -> void:
+	var half := BOX_SIZE * 0.5
+	var r := RandomNumberGenerator.new()
+	r.seed = int(rng.randi()) ^ int(cue.get("entropy", 0))
+	var power: float = float(cue.get("power", 1.0))
+	var from := BOX_CENTER + Vector3(
+		r.randf_range(0.35, 0.8) * half.x, BOX_SIZE.y - 0.3, r.randf_range(-0.5, 0.5) * half.z)
+	var target: Vector3
+	if cue.has("aim"):
+		var aim: Vector3 = cue["aim"]
+		target = Vector3(
+			clampf(aim.x, BOX_CENTER.x - half.x + 0.25, BOX_CENTER.x + half.x - 0.25),
+			BOX_CENTER.y,
+			clampf(aim.z, BOX_CENTER.z - half.z + 0.2, BOX_CENTER.z + half.z - 0.2))
+	else:
+		target = Vector3(
+			r.randf_range(-0.8, 0.3) * half.x, BOX_CENTER.y, BOX_CENTER.z + r.randf_range(-0.6, 0.6) * half.z)
+	# Harder throw: shorter flight (a flatter, faster arc) and more spin.
+	var flight := maxf(r.randf_range(0.34, 0.48) / power, 0.24)
+	var spin_max := 18.0 * power
+	var spin := Vector3(r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max), r.randf_range(-spin_max, spin_max))
+	var q := Quaternion(r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1), r.randf_range(-1, 1))
+	_fast_settle(gem)
+	if q.length() < 0.01:
+		q = Quaternion.IDENTITY
+	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin, Basis(q.normalized()))
+
+
+## Open the player's throw cue over the case (or skip it when throws are
+## not interactive). Returns the cue dictionary, {} when nothing was asked.
+func _await_throw_cue(is_part: bool, epoch: int) -> Dictionary:
+	if not interactive_throws or _throw_cue == null or not is_inside_tree():
+		return {}
+	_throw_cue.camera = _camera
+	_throw_cue.floor_center = BOX_CENTER
+	_throw_cue.half_extent = Vector2(BOX_SIZE.x * 0.5 - 0.25, BOX_SIZE.z * 0.5 - 0.2)
+	var text := "AIM + HOLD TO THROW THE %s GEM" % ("BODY" if is_part else "SHIFT")
+	var cue: Dictionary = await _throw_cue.wait(text, THROW_CUE_TIMEOUT)
+	if epoch != _gem_epoch:
+		return {}
+	last_throw_cue = cue
+	return cue
+
+
 ## Fly fast, stop fast: heavy damping and a dull bounce so a stone that has
 ## spent its energy quits rolling instead of creeping for seconds.
-## Where the cursor points on the box floor plane (clamped inside the box),
-## or null without a camera. The throw aims there; spin and toss stay random.
-func _cursor_target(mouse: Vector2, half: Vector3) -> Variant:
-	if _camera == null or not is_instance_valid(_camera):
-		return null
-	var o := _camera.project_ray_origin(mouse)
-	var d := _camera.project_ray_normal(mouse)
-	if absf(d.y) < 0.0001:
-		return null
-	var t := (BOX_CENTER.y - o.y) / d.y
-	if t <= 0.0:
-		return null
-	var p := o + d * t
-	p.x = clampf(p.x, BOX_CENTER.x - half.x * 0.8, BOX_CENTER.x + half.x * 0.8)
-	p.z = clampf(p.z, BOX_CENTER.z - half.z * 0.8, BOX_CENTER.z + half.z * 0.8)
-	p.y = BOX_CENTER.y
-	return p
-
-
 func _fast_settle(gem: FlatTopGem) -> void:
-	# Natural fall: real gravity, almost no air drag (heavy damp looked floaty).
-	gem.gravity_scale = 1.0
-	gem.linear_damp = 0.05
-	gem.angular_damp = 0.6
+	# Applied by the gem itself at first contact; the flight stays ballistic.
+	gem.settle_linear_damp = 1.2
+	gem.settle_angular_damp = 2.8
 	var pm := PhysicsMaterial.new()
 	pm.bounce = 0.15
 	pm.friction = 0.95
@@ -475,8 +515,7 @@ func _fast_settle(gem: FlatTopGem) -> void:
 ## head-on, at the face the stone rests on — upright, never mirrored — then
 ## returns to the house shot.
 func _underview(gem: FlatTopGem, face: int, epoch: int) -> void:
-	# Read the twin word that lies against the glass, not the one facing up.
-	var label := gem.under_label(face)
+	var label := gem.resting_label(face)
 	if _camera == null or label == null:
 		return
 	var lb := label.global_basis.orthonormalized()
@@ -538,7 +577,7 @@ func place_gems_settled(part_word: String, part_face: int, mod_word: String, mod
 func present_word(gem: FlatTopGem, face: int, is_part: bool) -> void:
 	var plaque := _make_word_plaque(gem.word_at(face), is_part)
 	add_child(plaque)
-	var src := gem.label_for(face)
+	var src := gem.resting_label(face)
 	var from: Vector3 = src.global_position if src != null else gem.global_position
 	var to := PRESENT_POS_PART if is_part else PRESENT_POS_MOD
 	plaque.global_position = from
@@ -591,7 +630,7 @@ func _clear_plaque(is_part: bool) -> void:
 ## A word plaque: the glowing copy of the rolled word plus its additive halo.
 func _make_word_plaque(word: String, is_part: bool) -> Node3D:
 	var root := Node3D.new()
-	root.name = "WordPlaque"
+	root.name = "WordPlaquePart" if is_part else "WordPlaqueMod"
 	var label := Label3D.new()
 	label.text = word
 	label.font = FlatTopGemScript._font()
@@ -1217,8 +1256,7 @@ func _spawn_note(at: Vector3) -> void:
 # ------------------------------------------------------------------ results
 
 func _show_result(success: bool) -> void:
-	if is_instance_valid(_stamp):
-		_stamp.queue_free()
+	_free_now(_stamp)
 	_stamp = _label("CLEAR!" if success else "MISS...", 150, Color(1.0, 0.85, 0.3) if success else Color(0.65, 0.75, 0.95), Color(0.03, 0.05, 0.12, 0.95), 0.008)
 	_stamp.name = "ResultStamp"
 	_stamp.position = Vector3(0, 2.75, 1.4)
@@ -1229,7 +1267,7 @@ func _show_result(success: bool) -> void:
 	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(0.7)
 	tw.tween_property(_stamp, "modulate:a", 0.0, 0.5)
-	tw.finished.connect(_stamp.queue_free)
+	tw.finished.connect(_free_now.bind(_stamp))
 	_pulse_lights(2.6 if success else 1.2)
 
 
@@ -1264,8 +1302,7 @@ func fly_star(earned: bool, star_index: int) -> void:
 
 ## Golden rain for a perfect show.
 func confetti_burst() -> void:
-	if is_instance_valid(_confetti):
-		_confetti.queue_free()
+	_free_now(_confetti)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	var piece := BoxMesh.new()
@@ -1324,12 +1361,18 @@ func _pulse_lights(peak: float) -> void:
 
 # ---------------------------------------------------------------- full reset
 
+## Drop the CLEAR!/MISS... stamp — a restore must not keep a verdict from a
+## future the player just rewound out of.
+func clear_result_stamp() -> void:
+	_free_now(_stamp)
+	_stamp = null
+
+
 func reset_show() -> void:
 	clear_gems()
 	clear_props()
 	clear_mod_chip()
 	set_stars(0)
 	reset_aurora_fx()
-	if is_instance_valid(_stamp):
-		_stamp.queue_free()
-		_stamp = null
+	_free_now(_stamp)
+	_stamp = null

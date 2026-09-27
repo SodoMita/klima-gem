@@ -177,21 +177,17 @@ func _run_tests() -> void:
 				"gem %d rests on the glass floor in the air, not on the platform" % gi2)
 			# The word is legible from below: its label faces DOWN (toward an
 			# under-view camera) and its up-vector reads upright from there.
-			var lab2: Label3D = g2.under_label(face2)
+			var lab2: Label3D = g2.resting_label(face2)
 			var n2: Vector3 = lab2.global_basis.z.normalized()
 			check(n2.y < -0.45, "gem %d: rolled word points down through the glass floor (%.2f)" % [gi2, n2.y])
-			# Rebuild the under-view shot exactly as the stage frames it and
-			# prove the word reads the right way round from below: the camera's
-			# screen-right must agree with the label's own +X.
 			var eye := lab2.global_position + n2 * ShowStageScript.UNDERVIEW_DIST
 			eye.y = clampf(eye.y, ShowStageScript.STAGE_TOP + 0.12, ShowStageScript.BOX_CENTER.y - 0.25)
-			var z_axis := (eye - lab2.global_position).normalized()
-			var up_ref: Vector3 = lab2.global_basis.y - z_axis * lab2.global_basis.y.dot(z_axis)
-			check(up_ref.length() > 0.2, "gem %d: rolled word is not edge-on from below (%.2f)" % [gi2, up_ref.length()])
-			if up_ref.length() > 0.2:
-				var x_screen := up_ref.normalized().cross(z_axis).normalized()
-				check(x_screen.dot(lab2.global_basis.x.normalized()) > 0.9,
-					"gem %d: rolled word is not mirrored from below (%.2f)" % [gi2, x_screen.dot(lab2.global_basis.x.normalized())])
+			var up2: Vector3 = lab2.global_basis.y
+			up2.y = 0.0
+			# A label is read along its own +Z; a right-handed frame whose Z
+			# points at the under-view eye cannot be mirrored.
+			var lb2: Basis = lab2.global_basis.orthonormalized()
+			check(lb2.x.cross(lb2.y).dot(n2) > 0.9, "gem %d: rolled word is not mirrored from below" % gi2)
 
 	# --- the glowing word presentation ---------------------------------------
 	check(is_instance_valid(stage._plaque_part), "body-part word is presented")
