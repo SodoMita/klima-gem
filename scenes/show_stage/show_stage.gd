@@ -542,11 +542,12 @@ func _wait_throw_rest(gem: FlatTopGem, epoch: int) -> void:
 ## Instant version for rollback / saves: gems appear already settled.
 func place_gems_settled(part_word: String, part_face: int, mod_word: String, mod_face: int) -> void:
 	clear_gems()
-	var az := _viewer_pos()
+	# Restored stones lie on the glass floor with their rolled face down, in
+	# the same pose a live throw leaves them — nothing floats outside the box.
 	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
-	gem_part.snap_settled(GEM_SLOT_PART, part_face, az)
-	gem_mod.snap_settled(GEM_SLOT_MOD, mod_face, az)
+	gem_part.snap_rest(LAND_PART + Vector3.UP * BOX_LIFT, part_face)
+	gem_mod.snap_rest(LAND_MOD + Vector3.UP * BOX_LIFT, mod_face)
 	place_word_plaque(PARTS[part_face], true)
 	place_word_plaque(MODS[mod_face], false)
 

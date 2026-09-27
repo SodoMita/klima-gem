@@ -255,14 +255,15 @@ func _test_gem_throw_is_physics() -> void:
 	check(stage._gems.size() == 2, "two gems come back")
 	for i in stage._gems.size():
 		var g: FlatTopGem = stage._gems[i]
-		var slot: Vector3 = ShowStageScript.GEM_SLOT_PART if i == 0 else ShowStageScript.GEM_SLOT_MOD
 		check(g.settled, "gem %d reports itself settled" % i)
-		check(g.global_position.distance_to(slot) < 0.12,
-			"gem %d stands on its mark within a hand's width (%.2f)" % [i, g.global_position.distance_to(slot)])
+		var rel := g.global_position - ShowStageScript.BOX_CENTER
+		var half := ShowStageScript.BOX_SIZE * 0.5
+		check(absf(rel.x) <= half.x + 0.01 and absf(rel.y) <= half.y + 0.01 and absf(rel.z) <= half.z + 0.01,
+			"gem %d rests where it landed, inside the closed glass box (%s)" % [i, g.global_position])
 	if stage._gems.size() == 2 and faces.size() == 2:
 		var lab0: Label3D = stage._gems[0].label_for(int(faces[0]))
-		check(lab0 != null and lab0.global_basis.z.dot((stage.camera().global_position - lab0.global_position).normalized()) > 0.95,
-			"the part gem shows the face it landed on to the camera")
+		check(lab0 != null and lab0.global_basis.z.normalized().y < -0.45,
+			"the part gem rests on the face it landed on, readable through the glass floor")
 	# The deterministic staging helper still exists for framing shots.
 	stage.clear_gems()
 	await stage.throw_gems_fixed(1, 7)
