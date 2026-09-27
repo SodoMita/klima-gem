@@ -9,7 +9,7 @@ Ren: (As a foreign exchange student, I've spent weeks in Tokyo trying to blend i
 Ren: (But today, the silence in the old school building feels heavy. The air is vibrating...)
 Ren: (Wait. The desks... they're flickering? The chalkboard is folding in on itself!) [#sfx=open]
 Ren: (The school is gone. I am floating in a magnificent, terrifying fracture of reality—crystals floating in starlight...) [#bg=nexus, #music=tense]
-Aurora: U-Um… system integrity at 84%… The rift waves are making everything feel all tingly and unstable… [#sprite=aurora_serious:right, #focus=right]
+Aurora: U-Um… system integrity at 84%… The rift waves are making everything feel all tingly and unstable… [#sprite=aurora_serious:right, #focus=right, #tween=right:position=0 -16:1.0:sine:in_out?relative&yoyo&loops=0]
 Aurora: W-Wait! A localized foreign signature... Your physical structure is... entirely made of shifting shadows? [#sprite=aurora_surprised:right]
 Aurora: S-Stranger…? You just appeared in my classroom dimension. I’m Aurora… the subsystem construct of the Chrono Nexus. But your presence is… making my holographic layers glitch… [#sprite=aurora_blush:right]
 Aurora: Your bio-signature is actively resonating with my core! The interference is fading… but why is my outfit phase-stabilizer suddenly flickering so much?! [#sprite=aurora_surprised:right]
@@ -33,7 +33,7 @@ Kira: Whoa—! The floor just tilted!
 	Kira: H-Hey! Those glowing eyes are way too intense from this close! My tail’s puffing up! [#sprite=kira_blush:left, #focus=left]
 	Kira: Eek—! My skirt just flipped from the rift wind! Don’t look, don't look!
 	Aurora: Traveler… please don’t ignore my calibration… It feels lonely when you’re far… [#sprite=aurora_sad:right]
-Aurora: L-Look out! The rift is pulling us again! [#bg=rift, #sprite=none:left, #sprite=none:right, #music=tense, #sfx=open]
+Aurora: L-Look out! The rift is pulling us again! [#bg=rift, #sprite=none:left, #sprite=none:right, #music=tense, #sfx=open, #shake=bg:6:0.9, #shake=stage:4:0.9]
 => sanctum
 
 ~ beginning

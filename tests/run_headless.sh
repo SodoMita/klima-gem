@@ -127,5 +127,11 @@ else
 	echo "WARN: pre-commit hook is missing or not executable."
 fi
 
+# Step 8: StageDirector motion system (tweens, NLA tracks, frame ranges,
+# shake, rollback replay) has its own headless suite.
+echo ""
+echo "=== Step 8: StageDirector motion tests ==="
+bash tests/motion_director_test.sh
+
 echo ""
 echo "=== All checks passed ==="

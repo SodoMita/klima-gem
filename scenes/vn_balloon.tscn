@@ -7,6 +7,7 @@
 [ext_resource type="FontFile" uid="uid://ex3s7gibjgfb" path="res://assets/fonts/DejaVuSerif-Bold.ttf" id="5_serifbold"]
 [ext_resource type="Script" uid="uid://dvxki2gr62k4a" path="res://scenes/hold_indicator.gd" id="11_hold"]
 [ext_resource type="PackedScene" uid="uid://ba4pj5dj4gjtc" path="res://scenes/route_graph/route_graph_panel.tscn" id="12_route"]
+[ext_resource type="Script" path="res://scenes/motion/stage_director.gd" id="13_motion"]
 [ext_resource type="Texture2D" uid="uid://c88ys72uu5he1" path="res://bgs/cyberpunk_alley.jpg" id="bg_alley"]
 [ext_resource type="Texture2D" uid="uid://d0f8gteurtol" path="res://bgs/japanese_school_class.jpg" id="bg_classroom"]
 [ext_resource type="Texture2D" uid="uid://dxxs1bydii1v7" path="res://bgs/core.jpg" id="bg_core"]
@@ -2017,6 +2018,10 @@ one_shot = true
 
 [node name="VoicePlayer" type="AudioStreamPlayer" parent="." unique_id=1970659894]
 unique_name_in_owner = true
+
+[node name="MotionDirector" type="Node" parent="." unique_id=987654321]
+unique_name_in_owner = true
+script = ExtResource("13_motion")
 
 [connection signal="gui_input" from="Balloon" to="." method="_on_balloon_gui_input"]
 [connection signal="pressed" from="Balloon/UIRoot/BottomUI/SystemRow/QSButton" to="." method="_on_quick_save_pressed"]

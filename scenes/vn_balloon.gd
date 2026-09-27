@@ -28,6 +28,29 @@ const DisplayScale = preload("res://scenes/display_scale.gd")
 ##                         a speaker's expression change (#sprite=maya_smile:left with no
 ##                         #focus=) still brings that portrait in front of the other
 ##   #box=hide / #box=show hide or show the dialogue box (pure stage directions)
+##
+## Motion tags (StageDirector, scenes/motion/stage_director.gd) move ANY 2D
+## or 3D object on the stage and run NLA-style animation clips. They are
+## snapshotted into the backlog like the other tags, so rollback and saves
+## re-dress tweened objects too. Full reference: docs/motion_director.md.
+##   #target=alias:NodePath            register a scene object as "alias"
+##   #tween=alias:prop=value:dur:trans:ease?relative&delay=...
+##                                     tween position/rotation/scale/modulate
+##   #set=alias:prop=value             set a property instantly
+##   #shake=alias:strength:duration?rot decaying shake, lands back home
+##   #tween_stop=alias                 kill the alias's running tweens
+##   #nla_track=alias:NodePath         register an AnimationPlayer/Tree track
+##   #nla=track:clip:FROM-TO?loop&blend=0.4&speed=1.2&fps=60
+##                                     play a clip with crossfade, loop and
+##                                     frame range (hold = pause at end)
+##   #nla_stop=track                   stop a track
+##   #sprite3d=key:alias?path=World3D&height=1.8
+##                                     stand a portrait in a 3D scene as a
+##                                     quad that faces the camera by rotating
+##                                     only around the vertical axis
+##   #place3d=alias:x y z / alias:copy=NodePath
+##                                     place that quad by transform, or by
+##                                     copying an existing 3D object
 
 
 ## The dialogue resource (only needed when dropping the balloon into a scene manually).
@@ -204,6 +227,9 @@ var _panic_place: Dictionary = {}
 @onready var skip_timer: Timer = %SkipTimer
 @onready var voice_player: AudioStreamPlayer = %VoicePlayer
 
+## Stage motion: tweens, NLA tracks and shakes for any 2D/3D scene object.
+@onready var motion: StageDirector = %MotionDirector
+
 ## Timer used to briefly hide the box while a mutation runs (authored in the scene).
 @onready var mutation_cooldown: Timer = %MutationCooldown
 
@@ -239,6 +265,9 @@ var _current_bg: String = ""
 var _current_left: String = ""
 var _current_right: String = ""
 var _current_focus: String = ""
+## Motion tags (#tween=, #nla=, ...) applied by the current line, snapshotted
+## into its history entry so rollback can replay them in order.
+var _line_motion_tags: Array[String] = []
 
 ## Modes
 var auto_mode: bool = false
@@ -413,6 +442,16 @@ func _ready() -> void:
 	if audio != null:
 		_connect_ui_sfx()
 	_bind_story_stats()
+	if motion != null:
+		motion.attach(self, {
+			"bg": background,
+			"left": sprite_left,
+			"right": sprite_right,
+			"box": dialogue_box,
+			"stage": balloon.get_node_or_null("Stage"),
+		})
+		# #sprite3d= keys resolve against the same portraits as #sprite=.
+		motion.texture_resolver = _resolve_motion_texture
 	_refresh_stats()
 	_setup_key_bindings()
 	_prepare_sliders()
@@ -558,6 +597,7 @@ func apply_dialogue_line() -> void:
 
 	# Stage direction tags first, so the scene is dressed before the text types out.
 	voice_player.stop()
+	_line_motion_tags.clear()
 	_apply_stage_tags(dialogue_line)
 	_apply_voice_pacing()
 
@@ -575,6 +615,7 @@ func apply_dialogue_line() -> void:
 			"left": _current_left,
 			"right": _current_right,
 			"focus": _current_focus,
+			"motion": _line_motion_tags.duplicate(),
 			"choices": dialogue_line.responses.size() > 0,
 		}
 		var game_state: Node = get_tree().root.get_node_or_null("GameState")
@@ -758,6 +799,11 @@ func _apply_stage_tags(line: DialogueLine) -> void:
 			audio.request_music(tag.substr(6))
 		elif tag.begins_with("sfx=") and audio != null:
 			audio.play_sfx(tag.substr(4))
+		elif motion != null and motion.is_motion_tag(tag):
+			# Rollback re-applies motion through replay_tags() instead: doing
+			# both would double relative tweens and restart clips twice.
+			if not _restoring and motion.apply_tag(tag):
+				_line_motion_tags.append(tag)
 	if not had_focus and speaker_slot != "":
 		_set_focus(speaker_slot)
 
@@ -776,6 +822,11 @@ func _speaker_slot_for_sprite(spec: String, speaker: String) -> String:
 	if parts.size() == 1 or parts[1] == "left":
 		return "left"
 	return "right"
+
+
+## Portrait lookup for the StageDirector's `#sprite3d=` tags.
+func _resolve_motion_texture(key: String) -> Texture2D:
+	return sprites.get(key)
 
 
 ## Play the voiced clip for a line on the Voice bus; lines without a clip
@@ -951,6 +1002,31 @@ func _restore_stage(entry: Dictionary) -> void:
 	var focus_key: String = str(entry.get("focus", ""))
 	if focus_key != "":
 		_set_focus(focus_key)
+	_restore_motion(entry)
+
+
+## Re-dress the motion layer: reset every tweened/shaken object to its rest
+## state, then replay each recorded motion tag instantly, in story order, up
+## to the backlog cursor. Every caller of _restore_stage has positioned
+## history_cursor first (rollback, save-load, panic resume, travel restore),
+## so the replayed motion always matches the line being re-shown.
+func _restore_motion(entry: Dictionary) -> void:
+	if motion == null:
+		return
+	motion.reset_all()
+	var replayed: Array = []
+	if history_cursor >= 0 and history_cursor < history.size():
+		for i: int in range(0, history_cursor + 1):
+			var tags: Variant = history[i].get("motion", [])
+			if tags is Array:
+				replayed.append_array(tags)
+	else:
+		# No backlog context (e.g. a synthesized entry before any line):
+		# replay just this entry's own tags, if it carries any.
+		var own: Variant = entry.get("motion", [])
+		if own is Array:
+			replayed = own
+	motion.replay_tags(replayed)
 
 
 #endregion
