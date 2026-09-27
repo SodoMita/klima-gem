@@ -101,11 +101,15 @@ func _apply_physics() -> void:
 		shape.shape = hull
 		add_child(shape)
 		freeze = true
-		freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		# STATIC, not kinematic: a settled gem must never drift. Kinematic
+		# freeze lets the server fight the node (stale velocity tracking
+		# nudges the body off its mark in a flicker); static makes the node
+		# authoritative and the mark exact.
+		freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	else:
 		# Pips, chips and stars are scenery: no body, no gravity, no cost.
 		freeze = true
-		freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		set_physics_process(false)
 		gravity_scale = 0.0
 
@@ -375,7 +379,7 @@ func lift_to(target: Vector3, face: int, cam_azimuth: float, duration := 1.1) ->
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
 	freeze = true
-	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	spinning = false
 	var current := wrapf(rotation.y, 0.0, TAU)
 	var target_yaw := face_azimuth(face) - cam_azimuth
@@ -424,7 +428,7 @@ func snap_settled(target: Vector3, face: int, cam_azimuth: float) -> void:
 	spinning = false
 	settled = true
 	freeze = true
-	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	position = target
 	rotation = Vector3(0.0, wrapf(face_azimuth(face) - cam_azimuth, 0.0, TAU), 0.0)
 
