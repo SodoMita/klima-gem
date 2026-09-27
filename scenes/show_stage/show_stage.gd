@@ -151,6 +151,7 @@ func _ready() -> void:
 	# The set itself is authored in show_stage.tscn; the script only finds
 	# the pieces it animates.
 	add_to_group("show_stage")
+	_dress_audience_and_stars()
 	_cosmetic.seed = 20260927
 	_camera = get_node_or_null("Camera3D") as Camera3D
 	if _camera != null:
@@ -171,6 +172,86 @@ func _ready() -> void:
 		for pip in pips.get_children():
 			if pip is FlatTopGem and is_instance_valid((pip as FlatTopGem).body):
 				_pips.append((pip as FlatTopGem).body)
+	## The audience (capsule silhouettes), their glowsticks and the star cloth
+	## are serialized as MultiMeshes in show_stage.tscn. A past editor save
+	## persisted their transform buffers from uninitialized memory — denormals
+	## and wild values (1e-41 bases, origins at 3304/8e+26) that smeared
+	## polygons across the view or blanked the whole frame on several GPUs.
+	## The buffers are no longer serialized; the script dresses all three from
+	## a dedicated fixed seed every boot, so the set reads identically on every
+	## platform and can never carry stale memory into VRAM again.
+
+## Rebuilds the three decorative MultiMeshes (star cloth, audience, glow
+## sticks) with deterministic seeded placements. Separated from _cosmetic so
+## the show's streams keep their historical order. See the note in _ready().
+func _dress_audience_and_stars() -> void:
+	# The MultiMesh resources serialized in the .tscn are not touched: a
+	# buffer-less load leaves their internal rendering buffer unallocated, so
+	# writing transforms into them silently goes nowhere. Fresh resources are
+	# built here instead (the same pattern confetti_burst() relies on), filled
+	# from a dedicated fixed seed, and swapped onto the nodes — identical on
+	# every platform, and immune to anything a future editor save persists.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 0x2EED5EA7
+	# A cloth of slow stars: tiny spheres sprinkled over the backdrop panel.
+	var stars := get_node_or_null("StarCloth/Stars") as MultiMeshInstance3D
+	if stars != null:
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = stars.multimesh.mesh if stars.multimesh != null else null
+		mm.instance_count = 64
+		for i in mm.instance_count:
+			var pos := Vector3(
+				rng.randf_range(-8.3, 8.3),
+				rng.randf_range(1.0, 6.1),
+				-3.78 + rng.randf_range(-0.02, 0.0))
+			var s := rng.randf_range(0.55, 1.5)
+			mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * s), pos))
+		stars.multimesh = mm
+	# The house: three riser rows of dark capsule silhouettes behind the
+	# camera, all facing the stage. Seats are shared with the glowsticks.
+	var row_z: Array[float] = [11.3, 12.5, 13.7]
+	var riser_y: Array[float] = [0.0, 0.28, 0.56]
+	var seats: Array[Transform3D] = []
+	for row in 3:
+		for seat in 9:
+			var pos := Vector3(
+				-4.4 + float(seat) * 1.1 + rng.randf_range(-0.18, 0.18),
+				0.46 + riser_y[row],
+				row_z[row] + rng.randf_range(-0.12, 0.12))
+			seats.append(Transform3D(Basis.IDENTITY, pos))
+	var crowd := get_node_or_null("Audience/Crowd") as MultiMeshInstance3D
+	if crowd != null:
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = crowd.multimesh.mesh if crowd.multimesh != null else null
+		mm.instance_count = mini(27, seats.size())
+		for i in mm.instance_count:
+			mm.set_instance_transform(i, seats[i])
+		crowd.multimesh = mm
+	var glow := get_node_or_null("Audience/Glowsticks") as MultiMeshInstance3D
+	if glow != null:
+		var palette := [
+			Color(0.35, 1.0, 0.6), Color(1.0, 0.35, 0.8), Color(0.4, 0.8, 1.0),
+			Color(1.0, 0.65, 0.3), Color(0.85, 1.0, 0.35)]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.mesh = glow.multimesh.mesh if glow.multimesh != null else null
+		mm.instance_count = 26
+		for i in mm.instance_count:
+			var seat: Transform3D = seats[i % seats.size()]
+			var side := 1.0 if i % 2 == 0 else -1.0
+			var pos := seat.origin + Vector3(
+				rng.randf_range(0.28, 0.45) * side,
+				rng.randf_range(0.25, 0.6),
+				rng.randf_range(-0.1, 0.1))
+			var tilt := Basis.from_euler(Vector3(
+				rng.randf_range(-0.25, 0.25), 0.0, rng.randf_range(-0.5, 0.5)))
+			mm.set_instance_transform(i, Transform3D(tilt, pos))
+			mm.set_instance_color(i, palette[rng.randi_range(0, palette.size() - 1)])
+		glow.multimesh = mm
+
 
 func camera() -> Camera3D:
 	return _camera
