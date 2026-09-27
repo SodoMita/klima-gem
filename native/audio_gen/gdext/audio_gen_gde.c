@@ -78,6 +78,21 @@ static NameBuf sn_amb_set_weather;
 static NameBuf sn_amb_set_listener;
 static NameBuf sn_amb_set_gain;
 static NameBuf sn_amb_add_source;
+static NameBuf sn_dub_start;
+static NameBuf sn_dub_intensity;
+static NameBuf sn_dub_event;
+static NameBuf sn_dub_trigger;
+static NameBuf sn_dub_render;
+static NameBuf sn_dub_release;
+static NameBuf sn_dub_active;
+static NameBuf sn_dub_sfx;
+static NameBuf sn_dub_sfx_len;
+static NameBuf sn_variant;
+static NameBuf sn_kind;
+static NameBuf sn_energy;
+static NameBuf sn_pan;
+static NameBuf sn_fade;
+static NameBuf sn_sr;
 static NameBuf sn_min_dist;
 static NameBuf sn_max_dist;
 static NameBuf empty_string;
@@ -113,6 +128,8 @@ typedef struct AgGDE {
     AgProcMixer mixer;
     AgRng rng;
     int sr;
+    AgDubstep dub;      /* live dubstep score (stage music) */
+    int dub_started;
 } AgGDE;
 
 typedef struct AgAmbienceGDE {
@@ -415,6 +432,133 @@ static void m_amb_set_gain(void *userdata, GDExtensionClassInstancePtr inst, con
     return_nil(ret,err);
 }
 
+/* ------------------------------------------------------------ dubstep ---- */
+
+static void dub_ensure(AgGDE *g) {
+    if (!g->dub_started) {
+        ag_dubstep_init(&g->dub, g->sr > 0 ? g->sr : 44100, AG_DUB_VARIANT_STAGE, 140.0, 20260927);
+        g->dub_started = 1;
+    }
+}
+
+/* dub_start(variant:int, bpm:float, seed:float, sample_rate:float) */
+static void m_dub_start(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata;
+    if(!inst){ return_nil(ret,err); return; }
+    AgGDE *g=(AgGDE*)inst;
+    int variant = argc>=1 ? (int)read_int_arg(args[0]) : 0;
+    double bpm = argc>=2 ? read_float_arg(args[1]) : 140.0;
+    uint64_t seed = argc>=3 ? (uint64_t)read_int_arg(args[2]) : 20260927u;
+    int sr = argc>=4 ? (int)read_int_arg(args[3]) : g->sr;
+    if(sr<8000||sr>192000) sr = g->sr>0?g->sr:44100;
+    g->sr = sr;
+    ag_dubstep_init(&g->dub, sr, variant, bpm, seed);
+    ag_dubstep_set_gain(&g->dub, 1.0f, 0.35f);
+    g->dub_started = 1;
+    return_nil(ret,err);
+}
+
+/* dub_set_variant is folded into dub_start; intensity(level, fade) */
+static void m_dub_intensity(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata;
+    if(!inst || argc<1){ return_nil(ret,err); return; }
+    AgGDE *g=(AgGDE*)inst; dub_ensure(g);
+    ag_dubstep_set_intensity(&g->dub, (float)read_float_arg(args[0]),
+                             argc>=2?(float)read_float_arg(args[1]):0.6f);
+    return_nil(ret,err);
+}
+
+static void m_dub_event(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata;
+    if(!inst || argc<1){ return_nil(ret,err); return; }
+    AgGDE *g=(AgGDE*)inst; dub_ensure(g);
+    ag_dubstep_event(&g->dub, (int)read_int_arg(args[0]));
+    return_nil(ret,err);
+}
+
+/* dub_trigger(kind:int, energy:float, pan:float, gain:float) */
+static void m_dub_trigger(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata;
+    if(!inst || argc<1){ return_nil(ret,err); return; }
+    AgGDE *g=(AgGDE*)inst; dub_ensure(g);
+    ag_dubstep_trigger_sfx(&g->dub, (int)read_int_arg(args[0]),
+                           argc>=2?(float)read_float_arg(args[1]):0.8f,
+                           argc>=3?(float)read_float_arg(args[2]):0.0f,
+                           argc>=4?(float)read_float_arg(args[3]):0.8f);
+    return_nil(ret,err);
+}
+
+static int dub_render_cb(AgGDE *g, float *buf, int frames) {
+    dub_ensure(g);
+    ag_dubstep_render(&g->dub, buf, frames);
+    return frames;
+}
+
+static void m_dub_render(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata;
+    if(!inst || argc<1){ return_nil(ret,err); return; }
+    render_into_packed_v2((AgGDE*)inst, args[0], dub_render_cb);
+    return_nil(ret,err);
+}
+
+static void m_dub_release(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata;
+    if(!inst){ return_nil(ret,err); return; }
+    AgGDE *g=(AgGDE*)inst; dub_ensure(g);
+    ag_dubstep_release(&g->dub, argc>=1?(float)read_float_arg(args[0]):0.8f);
+    return_nil(ret,err);
+}
+
+static void m_dub_active(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata; (void)args; (void)argc;
+    GDExtensionBool v = 0;
+    if(inst){ AgGDE *g=(AgGDE*)inst; v = g->dub_started && ag_dubstep_active(&g->dub) ? 1 : 0; }
+    api.from_bool(ret,&v);
+    set_ok(err);
+}
+
+/* render_dub_sfx(kind:int, frames:PackedVector2Array, energy:float) -> int */
+static void m_dub_sfx(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata; (void)inst;
+    int64_t written = 0;
+    if(argc>=2){
+        int kind = (int)read_int_arg(args[0]);
+        float energy = argc>=3 ? (float)read_float_arg(args[2]) : 0.8f;
+        int64_t n = call_size(args[1]);
+        if(n>0 && api.variant_get_type(args[1])==GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR2_ARRAY){
+            void *arr = api.packed_v2_ptr((GDExtensionVariantPtr)args[1]);
+            float *tmp = (float*)api.mem_alloc(sizeof(float)*(size_t)n);
+            if(tmp){
+                AgGDE *g = (AgGDE*)inst;
+                int sr = (g && g->sr>0) ? g->sr : 44100;
+                uint64_t seed = 0;
+                if(g){ seed = ag_rng_next_u64(&g->rng); }
+                written = ag_dub_sfx_render(kind, energy, seed, tmp, (int)n, sr);
+                for(int64_t i=0;i<n;i++){
+                    float *slot=(float*)api.packed_v2_op(arr,i);
+                    float s = i<written ? tmp[i] : 0.0f;
+                    if(slot){ slot[0]=s; slot[1]=s; }
+                }
+                api.mem_free(tmp);
+            }
+        }
+    }
+    api.from_int(ret,&written);
+    set_ok(err);
+}
+
+/* dub_sfx_frames(kind:int) -> int (at the instance sample rate) */
+static void m_dub_sfx_len(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata;
+    int64_t n = 0;
+    if(argc>=1){
+        AgGDE *g=(AgGDE*)inst;
+        n = ag_dub_sfx_frames((int)read_int_arg(args[0]), (g&&g->sr>0)?g->sr:44100);
+    }
+    api.from_int(ret,&n);
+    set_ok(err);
+}
+
 static void bind_method(const NameBuf *name, GDExtensionClassMethodCall call, GDExtensionVariantType ret_type, int has_ret, const GDExtensionVariantType *arg_types, const NameBuf *const *arg_names, uint32_t argc) {
     GDExtensionPropertyInfo args[4]; GDExtensionClassMethodArgumentMetadata meta[4];
     GDExtensionPropertyInfo ret_info; GDExtensionClassMethodInfo info;
@@ -526,6 +670,21 @@ static void register_class(void) {
     make_name(&sn_amb_set_listener,"set_listener");
     make_name(&sn_amb_set_gain,"set_gain");
     make_name(&sn_amb_add_source,"add_point_source");
+    make_name(&sn_dub_start,"dub_start");
+    make_name(&sn_dub_intensity,"dub_set_intensity");
+    make_name(&sn_dub_event,"dub_event");
+    make_name(&sn_dub_trigger,"dub_trigger");
+    make_name(&sn_dub_render,"dub_render");
+    make_name(&sn_dub_release,"dub_release");
+    make_name(&sn_dub_active,"dub_active");
+    make_name(&sn_dub_sfx,"render_dub_sfx");
+    make_name(&sn_dub_sfx_len,"dub_sfx_frames");
+    make_name(&sn_variant,"variant");
+    make_name(&sn_kind,"kind");
+    make_name(&sn_energy,"energy");
+    make_name(&sn_pan,"pan");
+    make_name(&sn_fade,"fade");
+    make_name(&sn_sr,"sample_rate");
     make_name(&sn_min_dist,"min_dist");
     make_name(&sn_max_dist,"max_dist");
     make_string(&empty_string,"");
@@ -551,6 +710,30 @@ static void register_class(void) {
         bind_method(&sn_render_proc, m_render_proc, GDEXTENSION_VARIANT_TYPE_NIL,0, t_v2, n_frames,1);
         NameBuf sn_trans; make_name(&sn_trans,"transition");
         bind_method(&sn_trans, m_transition, GDEXTENSION_VARIANT_TYPE_NIL,0, t_mood_root_bpm_fade, n_mood_root_bpm_fade,4);
+
+        /* dubstep score + event one-shots */
+        GDExtensionVariantType t_dub_start[4]={GDEXTENSION_VARIANT_TYPE_INT,GDEXTENSION_VARIANT_TYPE_FLOAT,GDEXTENSION_VARIANT_TYPE_FLOAT,GDEXTENSION_VARIANT_TYPE_FLOAT};
+        const NameBuf *n_dub_start[4]={&sn_variant,&sn_bpm,&sn_seed,&sn_sr};
+        GDExtensionVariantType t_f_f[2]={GDEXTENSION_VARIANT_TYPE_FLOAT,GDEXTENSION_VARIANT_TYPE_FLOAT};
+        const NameBuf *n_int_fade[2]={&sn_intensity,&sn_fade};
+        GDExtensionVariantType t_i[1]={GDEXTENSION_VARIANT_TYPE_INT};
+        const NameBuf *n_kind[1]={&sn_kind};
+        GDExtensionVariantType t_trigger[4]={GDEXTENSION_VARIANT_TYPE_INT,GDEXTENSION_VARIANT_TYPE_FLOAT,GDEXTENSION_VARIANT_TYPE_FLOAT,GDEXTENSION_VARIANT_TYPE_FLOAT};
+        const NameBuf *n_trigger[4]={&sn_kind,&sn_energy,&sn_pan,&sn_gain};
+        GDExtensionVariantType t_f[1]={GDEXTENSION_VARIANT_TYPE_FLOAT};
+        const NameBuf *n_fade[1]={&sn_fade};
+        GDExtensionVariantType t_dub_sfx[3]={GDEXTENSION_VARIANT_TYPE_INT,GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR2_ARRAY,GDEXTENSION_VARIANT_TYPE_FLOAT};
+        const NameBuf *n_dub_sfx[3]={&sn_kind,&sn_frames,&sn_energy};
+
+        bind_method(&sn_dub_start, m_dub_start, GDEXTENSION_VARIANT_TYPE_NIL,0, t_dub_start, n_dub_start,4);
+        bind_method(&sn_dub_intensity, m_dub_intensity, GDEXTENSION_VARIANT_TYPE_NIL,0, t_f_f, n_int_fade,2);
+        bind_method(&sn_dub_event, m_dub_event, GDEXTENSION_VARIANT_TYPE_NIL,0, t_i, n_kind,1);
+        bind_method(&sn_dub_trigger, m_dub_trigger, GDEXTENSION_VARIANT_TYPE_NIL,0, t_trigger, n_trigger,4);
+        bind_method(&sn_dub_render, m_dub_render, GDEXTENSION_VARIANT_TYPE_NIL,0, t_v2, n_frames,1);
+        bind_method(&sn_dub_release, m_dub_release, GDEXTENSION_VARIANT_TYPE_NIL,0, t_f, n_fade,1);
+        bind_method(&sn_dub_active, m_dub_active, GDEXTENSION_VARIANT_TYPE_BOOL,1, t_f, n_fade,0);
+        bind_method(&sn_dub_sfx, m_dub_sfx, GDEXTENSION_VARIANT_TYPE_INT,1, t_dub_sfx, n_dub_sfx,3);
+        bind_method(&sn_dub_sfx_len, m_dub_sfx_len, GDEXTENSION_VARIANT_TYPE_INT,1, t_i, n_kind,1);
         registered=1;
     }
 
