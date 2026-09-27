@@ -69,13 +69,23 @@ const PRESENT_POS_PART := Vector3(2.2, 1.95, 4.2)
 
 ## The star board is three prize gems standing on the altar, so the reward
 ## for a cleared trial lands somewhere the audience is already looking.
-const PIP_BASE := Vector3(-0.42, 1.63, 3.45)
+const PIP_BASE := Vector3(-0.42, 2.88, -3.62)
 const PIP_STEP := Vector3(0.42, 0.0, 0.0)
 
 ## Where each thrown gem is aimed on the stage floor. Different landing spots
 ## keep the two bodies from shoving each other around.
-const LAND_PART := Vector3(1.25, STAGE_TOP, 2.35)
-const LAND_MOD := Vector3(-1.45, STAGE_TOP, 2.05)
+const LAND_PART := Vector3(0.45, STAGE_TOP, 0.9)
+const LAND_MOD := Vector3(-0.85, STAGE_TOP, 0.7)
+const TOP_WORD_PART := "MILK"
+const TOP_WORD_MOD := "MEGA"
+## The closed throw box: invisible glass walls and a lid over the platform,
+## so every throw ends ON the stage and settles by itself.
+const BOX_HALF := Vector3(2.35, 1.6, 2.0)
+const BOX_CENTER := Vector3(0.0, STAGE_TOP + 1.6, 0.3)
+## Long enough for a real stone to stop on its own.
+const SETTLE_TIMEOUT := 14.0
+const SETTLE_CALM_TIME := 0.6
+const MAX_COCKED_RETHROWS := 4
 
 ## Below this line the dialogue balloon covers the frame, so nothing the
 ## audience has to read may be placed there.
@@ -111,39 +121,34 @@ var _fx_orbs: Array[Node3D] = []
 var _chip_home := Vector3.ZERO
 var _set_root: Node3D = null
 var _camera: Camera3D = null
+var _cam_home := Transform3D.IDENTITY
+var _cam_tween: Tween = null
+## Throw impulses come from real entropy: the story seed is fixed per
+## playthrough, and a throw drawn from it would be a scripted outcome.
+var _throw_rng := RandomNumberGenerator.new()
+const CLOSEUP_HOLD := 1.3
 
 
 func _ready() -> void:
 	add_to_group("show_stage")
 	_cosmetic.seed = 20260927
-	_apply_camera()
-	_build_environment()
-	_build_world_containers()
-	_build_hall()
-	_build_set()
-	_build_star_cloth()
-	_build_beams()
-	_build_audience()
-	_build_pedestal()
-	_build_colliders()
-	_build_marks()
-	_build_pips()
-	_props = Node3D.new()
-	_props.name = "Props"
-	add_child(_props)
+	_throw_rng.randomize()
+	_bind_scene()
 
 
-func _apply_camera() -> void:
-	_camera = get_node_or_null("Camera3D") as Camera3D
-	if _camera == null:
-		_camera = Camera3D.new()
-		_camera.name = "Camera3D"
-		add_child(_camera)
-	_camera.position = CAM_POS
-	_camera.rotation_degrees = Vector3(CAM_PITCH_DEG, 0.0, 0.0)
-	_camera.fov = CAM_FOV
+## The set is authored in show_stage.tscn; this only picks up the handles the
+## show animates.
+func _bind_scene() -> void:
+	_camera = get_node("Camera3D") as Camera3D
 	_camera.current = true
-	_camera.far = 60.0
+	_cam_home = _camera.transform
+	_set_root = get_node("Set") as Node3D
+	_key_light = get_node("KeyLight") as OmniLight3D
+	_props = get_node("Props") as Node3D
+	_pips.clear()
+	for pip in get_node("StarPips").get_children():
+		if pip is FlatTopGem and (pip as FlatTopGem).body != null:
+			_pips.append((pip as FlatTopGem).body)
 
 
 func camera() -> Camera3D:
@@ -238,406 +243,6 @@ func _label(text: String, size: int, color: Color, outline: Color, px := 0.008) 
 	return l
 
 
-func _build_environment() -> void:
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.012, 0.016, 0.045)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.22, 0.29, 0.52)
-	env.ambient_light_energy = 0.55
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.45
-	env.glow_bloom = 0.05
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-
-
-## Stands the moving parts under stable names: the stage manager's own
-## containers, so portraits and props never land under the show furniture.
-func _build_world_containers() -> void:
-	var world := Node3D.new()
-	world.name = "World3D"
-	add_child(world)
-	var chars := Node3D.new()
-	chars.name = "Characters"
-	world.add_child(chars)
-
-
-func _build_hall() -> void:
-	# The house floor the audience sits on.
-	var floor_mesh := BoxMesh.new()
-	floor_mesh.size = Vector3(40.0, 0.1, 20.0)
-	var floor_mi := _mesh_instance(floor_mesh, _mat(Color(0.015, 0.02, 0.05), 0.95), self)
-	floor_mi.position = Vector3(0, -0.05, 5.0)
-
-
-## The set proper: the round platform and its glowing rim, and the dark wings
-## that keep the eye on the stage. Nothing is placed where it would crop
-## against the camera frame — the arena is the whole picture.
-func _build_set() -> void:
-	_set_root = Node3D.new()
-	_set_root.name = "Set"
-	add_child(_set_root)
-
-	var platform := CylinderMesh.new()
-	platform.top_radius = STAGE_RADIUS
-	platform.bottom_radius = STAGE_RADIUS + 0.18
-	platform.height = STAGE_TOP
-	platform.radial_segments = 64
-	var plat_mi := _mesh_instance(platform, _mat(Color(0.07, 0.08, 0.17), 0.55, 0.25), _set_root)
-	plat_mi.name = "Platform"
-	plat_mi.position = Vector3(0, STAGE_TOP * 0.5, 0)
-
-	var rim := TorusMesh.new()
-	rim.inner_radius = STAGE_RADIUS - 0.05
-	rim.outer_radius = STAGE_RADIUS + 0.07
-	rim.rings = 64
-	var rim_mi := _mesh_instance(rim, _mat(Color(0.2, 0.5, 0.8), 0.3, 0.6, Color(0.3, 0.75, 1.0), 1.7), _set_root)
-	rim_mi.name = "Rim"
-	rim_mi.position = Vector3(0, STAGE_TOP, 0)
-
-	# A soft inlay disc so the floor is not one flat colour: the show's floor
-	# plan, drawn as a ring of faint wedges.
-	var inlay := CylinderMesh.new()
-	inlay.top_radius = STAGE_RADIUS * 0.62
-	inlay.bottom_radius = STAGE_RADIUS * 0.62
-	inlay.height = 0.02
-	inlay.radial_segments = 48
-	var inlay_mi := _mesh_instance(inlay, _mat(Color(0.09, 0.11, 0.22), 0.7), _set_root)
-	inlay_mi.position = Vector3(0, STAGE_TOP + 0.005, 0.35)
-	var inlay_rim := TorusMesh.new()
-	inlay_rim.inner_radius = STAGE_RADIUS * 0.62 - 0.02
-	inlay_rim.outer_radius = STAGE_RADIUS * 0.62 + 0.02
-	inlay_rim.rings = 48
-	var ir_mi := _mesh_instance(inlay_rim, _mat(Color(0.3, 0.6, 0.9), 0.4, 0.5, Color(0.25, 0.6, 0.95), 0.9), _set_root)
-	ir_mi.position = Vector3(0, STAGE_TOP + 0.01, 0.35)
-
-	# Wings: dark masses at the far left and right, well outside the frame's
-	# readable area, so the studio has depth without crowding the shot.
-	var wing_mat := _mat(Color(0.03, 0.035, 0.085), 0.9, 0.1, Color(0.06, 0.12, 0.28), 0.18)
-	for sx in [-1.0, 1.0]:
-		var wing := BoxMesh.new()
-		wing.size = Vector3(1.2, 4.2, 3.4)
-		var wm := _mesh_instance(wing, wing_mat, _set_root)
-		wm.position = Vector3(4.6 * sx, 2.1, 1.6)
-		var drape := BoxMesh.new()
-		drape.size = Vector3(0.16, 3.6, 1.9)
-		var dm := _mesh_instance(drape, _mat(Color(0.13, 0.06, 0.24), 0.75, 0.2), _set_root)
-		dm.position = Vector3(4.02 * sx, 1.8, 2.6)
-
-
-## The back wall: a star cloth and the show sign, with the prize board below.
-func _build_star_cloth() -> void:
-	var cloth := Node3D.new()
-	cloth.name = "StarCloth"
-	add_child(cloth)
-
-	var backdrop := BoxMesh.new()
-	backdrop.size = Vector3(18.0, 7.4, 0.2)
-	var bm := _mesh_instance(backdrop, _mat(Color(0.035, 0.045, 0.115), 0.9), cloth)
-	bm.name = "Backdrop"
-	bm.position = Vector3(0, 3.2, -3.9)
-
-	var star_mm := MultiMesh.new()
-	star_mm.transform_format = MultiMesh.TRANSFORM_3D
-	star_mm.mesh = SphereMesh.new()
-	(star_mm.mesh as SphereMesh).radius = 0.032
-	(star_mm.mesh as SphereMesh).height = 0.064
-	star_mm.instance_count = 64
-	for i in 64:
-		var pos := Vector3(_cosmetic.randf_range(-8.6, 8.6), _cosmetic.randf_range(0.8, 6.8), -3.78)
-		star_mm.set_instance_transform(i, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * _cosmetic.randf_range(0.6, 1.5)), pos))
-	var star_mi := MultiMeshInstance3D.new()
-	star_mi.name = "Stars"
-	star_mi.multimesh = star_mm
-	var star_mat := _mat(Color(0.8, 0.92, 1.0), 1.0, 0.0, Color(0.75, 0.9, 1.0), 1.7)
-	star_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	star_mi.material_override = star_mat
-	cloth.add_child(star_mi)
-
-	# The sign. The only thing on the back wall: the tagline lives on the
-	# title card, and a second line of type up here only collided with the
-	# word plaques.
-	var sign := _label("KLIMA GEM", 160, Color(0.6, 0.92, 1.0), Color(0.02, 0.07, 0.18, 0.95), 0.0072)
-	sign.name = "Sign"
-	sign.position = Vector3(0, 3.62, -3.8)
-	cloth.add_child(sign)
-
-
-## Lighting beams: additive cones that fade as they fall, so the stage is lit
-## by something the audience can see.
-func _build_beams() -> void:
-	var beams := Node3D.new()
-	beams.name = "Beams"
-	add_child(beams)
-
-	var beam_shader := Shader.new()
-	beam_shader.code = """
-shader_type spatial;
-render_mode blend_add, unshaded, cull_disabled, depth_draw_never, shadows_disabled;
-uniform vec4 beam_color : source_color = vec4(0.55, 0.80, 1.0, 1.0);
-uniform float strength : hint_range(0.0, 1.0) = 0.22;
-void fragment() {
-	// Densest where the cone is deepest (top), and softest at the silhouette
-	// so the beam has no hard tube edge.
-	float depth = clamp(1.0 - UV.y, 0.0, 1.0);
-	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
-	ALBEDO = beam_color.rgb;
-	ALPHA = strength * mix(0.35, 1.0, depth) * mix(0.30, 1.0, facing);
-}
-"""
-	for sx in [-1.0, 0.0, 1.0]:
-		var rig := Node3D.new()
-		beams.add_child(rig)
-		rig.position = Vector3(1.72 * sx, 0.0, 1.15)
-		var cone := CylinderMesh.new()
-		cone.top_radius = 0.05
-		cone.bottom_radius = 0.92
-		cone.height = 3.9
-		cone.radial_segments = 28
-		cone.cap_top = false
-		cone.cap_bottom = false
-		var cmi := _mesh_instance(cone, _mat(Color(1, 1, 1), 1.0), rig)
-		cmi.name = "Beam"
-		var bm := ShaderMaterial.new()
-		bm.shader = beam_shader
-		bm.set_shader_parameter("beam_color", Color(0.58, 0.82, 1.0) if sx != 0.0 else Color(0.86, 0.92, 1.0))
-		bm.set_shader_parameter("strength", 0.075 if sx != 0.0 else 0.10)
-		cmi.material_override = bm
-		cmi.position = Vector3(0, 3.1, 0)
-		rig.rotation_degrees = Vector3(-6.0, 0, 4.0 * sx)
-		cmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var lamp := CylinderMesh.new()
-		lamp.top_radius = 0.11
-		lamp.bottom_radius = 0.15
-		lamp.height = 0.34
-		var lmi := _mesh_instance(lamp, _mat(Color(0.15, 0.16, 0.24), 0.4, 0.8, Color(0.6, 0.85, 1.0), 1.2), rig)
-		lmi.position = Vector3(0, 5.1, 0)
-
-	# Truss across the top, out of frame but lighting the beams.
-	var truss_mat := _mat(Color(0.1, 0.11, 0.2), 0.4, 0.7)
-	for z in [-0.4, 2.4]:
-		var beam := BoxMesh.new()
-		beam.size = Vector3(8.4, 0.12, 0.12)
-		var bmi := _mesh_instance(beam, truss_mat, beams)
-		bmi.position = Vector3(0, 5.3, z)
-
-	_key_light = OmniLight3D.new()
-	_key_light.position = Vector3(0, 4.4, 3.4)
-	_key_light.light_color = Color(1.0, 0.96, 0.88)
-	_key_light.light_energy = 1.35
-	_key_light.omni_range = 12.0
-	add_child(_key_light)
-	var rim := OmniLight3D.new()
-	rim.position = Vector3(0, 3.4, -3.2)
-	rim.light_color = Color(0.5, 0.75, 1.0)
-	rim.light_energy = 1.0
-	rim.omni_range = 11.0
-	add_child(rim)
-	var fill := OmniLight3D.new()
-	fill.position = Vector3(3.2, 1.8, 4.4)
-	fill.light_color = Color(0.72, 0.62, 1.0)
-	fill.light_energy = 0.7
-	fill.omni_range = 9.0
-	add_child(fill)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-52, 24, 0)
-	sun.light_color = Color(0.75, 0.82, 1.0)
-	sun.light_energy = 0.18
-	add_child(sun)
-
-
-func _build_audience() -> void:
-	var crowd := Node3D.new()
-	crowd.name = "Audience"
-	add_child(crowd)
-	var cap := CapsuleMesh.new()
-	cap.radius = 0.19
-	cap.height = 0.92
-	var body_mm := MultiMesh.new()
-	body_mm.transform_format = MultiMesh.TRANSFORM_3D
-	body_mm.mesh = cap
-	var spots: Array[Vector3] = []
-	var count := 0
-	for row in 3:
-		var z := 5.5 + 0.8 * row
-		var y := 0.26 + 0.26 * row
-		var n := 10 - row
-		for i in n:
-			var x := -4.8 + 9.6 * float(i) / float(n - 1) + _cosmetic.randf_range(-0.25, 0.25)
-			spots.append(Vector3(x, y, z + _cosmetic.randf_range(-0.2, 0.2)))
-			count += 1
-	body_mm.instance_count = count
-	for i in count:
-		body_mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, spots[i]))
-	var body_mi := MultiMeshInstance3D.new()
-	body_mi.multimesh = body_mm
-	# Silhouettes: darker than the hall, so the stage stays the brightest thing.
-	body_mi.material_override = _mat(Color(0.02, 0.025, 0.065), 0.95)
-	crowd.add_child(body_mi)
-
-	# Glowsticks: little unshaded colour bars held up in the dark.
-	var stick := BoxMesh.new()
-	stick.size = Vector3(0.032, 0.22, 0.032)
-	var stick_mm := MultiMesh.new()
-	stick_mm.transform_format = MultiMesh.TRANSFORM_3D
-	stick_mm.mesh = stick
-	stick_mm.use_colors = true
-	var stick_colors := [Color(0.4, 0.9, 1.0), Color(1.0, 0.5, 0.85), Color(1.0, 0.85, 0.4), Color(0.6, 1.0, 0.6)]
-	stick_mm.instance_count = 26
-	for i in 26:
-		var base := spots[_cosmetic.randi_range(0, spots.size() - 1)]
-		var t := Transform3D(Basis.IDENTITY.rotated(Vector3.UP, _cosmetic.randf_range(-0.5, 0.5)), base + Vector3(_cosmetic.randf_range(-0.26, 0.26), 0.36, 0.1))
-		stick_mm.set_instance_transform(i, t)
-		stick_mm.set_instance_color(i, stick_colors[_cosmetic.randi_range(0, stick_colors.size() - 1)])
-	var stick_mi := MultiMeshInstance3D.new()
-	stick_mi.multimesh = stick_mm
-	var stick_mat := StandardMaterial3D.new()
-	stick_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	stick_mat.vertex_color_use_as_albedo = true
-	stick_mi.material_override = stick_mat
-	crowd.add_child(stick_mi)
-
-
-## A slim column the gems are thrown toward and then lifted above: the show's
-## only piece of furniture, centred so the two word slots hang either side.
-func _build_pedestal() -> void:
-	var ped := Node3D.new()
-	ped.name = "Pedestal"
-	add_child(ped)
-	var column := CylinderMesh.new()
-	column.top_radius = 0.24
-	column.bottom_radius = 0.34
-	column.height = 1.05
-	column.radial_segments = 10
-	var col_mi := _mesh_instance(column, _mat(Color(0.045, 0.05, 0.12), 0.22, 0.85, Color(0.1, 0.22, 0.45), 0.3), ped)
-	col_mi.name = "Column"
-	col_mi.position = Vector3(0, STAGE_TOP + 0.525, PEDESTAL_Z)
-	# A lit band around the neck, so the altar reads as built rather than as
-	# one extruded shape.
-	var band := CylinderMesh.new()
-	band.top_radius = 0.275
-	band.bottom_radius = 0.275
-	band.height = 0.05
-	band.radial_segments = 10
-	var band_mi := _mesh_instance(band, _mat(Color(0.5, 0.85, 1.0), 0.15, 0.4, Color(0.45, 0.8, 1.0), 1.1), ped)
-	band_mi.name = "NeckBand"
-	band_mi.position = Vector3(0, STAGE_TOP + 0.9, PEDESTAL_Z)
-	var base := CylinderMesh.new()
-	base.top_radius = 0.5
-	base.bottom_radius = 0.58
-	base.height = 0.12
-	base.radial_segments = 24
-	var base_mi := _mesh_instance(base, _mat(Color(0.06, 0.07, 0.16), 0.35, 0.8), ped)
-	base_mi.name = "Base"
-	base_mi.position = Vector3(0, STAGE_TOP + 0.06, PEDESTAL_Z)
-	var plate := CylinderMesh.new()
-	plate.top_radius = 0.46
-	plate.bottom_radius = 0.40
-	plate.height = 0.09
-	plate.radial_segments = 24
-	var plate_mi := _mesh_instance(plate, _mat(Color(0.06, 0.07, 0.16), 0.2, 0.85, Color(0.2, 0.42, 0.8), 0.4), ped)
-	plate_mi.name = "Plate"
-	plate_mi.position = Vector3(0, PEDESTAL_HEAD - 0.045, PEDESTAL_Z)
-	var ring := CylinderMesh.new()
-	ring.top_radius = 0.24
-	ring.bottom_radius = 0.24
-	ring.height = 0.025
-	ring.radial_segments = 24
-	var ring_mi := _mesh_instance(ring, _mat(Color(0.4, 0.8, 1.0), 0.2, 0.5, Color(0.45, 0.85, 1.0), 0.9), ped)
-	ring_mi.name = "HeadGlow"
-	ring_mi.position = Vector3(0, PEDESTAL_HEAD + 0.015, PEDESTAL_Z)
-
-
-## Static bodies for everything a thrown gem can land on, plus a net far
-## below the house floor so a wild throw can never fall out of the world.
-func _build_colliders() -> void:
-	var physics := Node3D.new()
-	physics.name = "Physics"
-	add_child(physics)
-
-	var platform_body := StaticBody3D.new()
-	platform_body.name = "PlatformBody"
-	physics.add_child(platform_body)
-	var platform_shape := CollisionShape3D.new()
-	var cyl := CylinderShape3D.new()
-	cyl.radius = STAGE_RADIUS
-	cyl.height = STAGE_TOP
-	platform_shape.shape = cyl
-	platform_body.add_child(platform_shape)
-	platform_body.position = Vector3(0, STAGE_TOP * 0.5, 0)
-	platform_body.physics_material_override = _gem_physics_material(0.5)
-	platform_body.collision_layer = 1
-	platform_body.collision_mask = 0
-
-	var pedestal_body := StaticBody3D.new()
-	pedestal_body.name = "PedestalBody"
-	physics.add_child(pedestal_body)
-	var pedestal_shape := CollisionShape3D.new()
-	var plate_shape := CylinderShape3D.new()
-	plate_shape.radius = 0.5
-	plate_shape.height = 0.12
-	pedestal_shape.shape = plate_shape
-	pedestal_body.add_child(pedestal_shape)
-	pedestal_body.position = Vector3(0, PEDESTAL_HEAD - 0.06, PEDESTAL_Z)
-	pedestal_body.physics_material_override = _gem_physics_material(0.45)
-	pedestal_body.collision_layer = 1
-	pedestal_body.collision_mask = 0
-
-	var net := StaticBody3D.new()
-	net.name = "SafetyNet"
-	physics.add_child(net)
-	var net_shape := CollisionShape3D.new()
-	var net_box := BoxShape3D.new()
-	net_box.size = Vector3(60.0, 0.5, 40.0)
-	net_shape.shape = net_box
-	net.add_child(net_shape)
-	net.position = Vector3(0, -6.0, 4.0)
-	net.collision_layer = 1
-	net.collision_mask = 0
-
-
-func _gem_physics_material(bounce: float) -> PhysicsMaterial:
-	var pm := PhysicsMaterial.new()
-	pm.bounce = bounce
-	pm.friction = 0.8
-	return pm
-
-
-func _build_marks() -> void:
-	var marks := Node3D.new()
-	marks.name = "Marks"
-	add_child(marks)
-	var disc := CylinderMesh.new()
-	disc.top_radius = 0.42
-	disc.bottom_radius = 0.42
-	disc.height = 0.015
-	var mi := _mesh_instance(disc, _mat(Color(1.0, 0.55, 0.85), 0.3, 0.4, Color(1.0, 0.55, 0.85), 0.9), marks)
-	mi.name = "AuroraMark"
-	mi.position = AURORA_MARK + Vector3(0, 0.012, 0)
-
-
-func _build_pips() -> void:
-	var pips := Node3D.new()
-	pips.name = "StarPips"
-	add_child(pips)
-	for i in 3:
-		var pip := FlatTopGemScript.new()
-		pip.name = "Pip%d" % i
-		pip.build_words = false
-		pip.gem_color = Color(0.16, 0.18, 0.26, 0.8)
-		pip.girdle_radius = 0.17
-		pip.table_radius = 0.085
-		pip.crown_height = 0.07
-		pip.pavilion_height = 0.19
-		pip.position = PIP_BASE + PIP_STEP * float(i)
-		pip.rotation_degrees = Vector3(0, -18, 0)
-		pips.add_child(pip)
-		_pips.append(pip.body)
-
-
 func set_stars(stars: int) -> void:
 	for i in _pips.size():
 		var pip := _pips[i]
@@ -658,6 +263,9 @@ func set_stars(stars: int) -> void:
 
 func _make_gem(slot: Vector3, color: Color, word_list: PackedStringArray, physical := true) -> FlatTopGem:
 	var gem: FlatTopGem = FlatTopGemScript.new()
+	# The tables read as one brand across the pair: MEGA on the shapeshift
+	# gem, MILK on the body-part gem.
+	gem.top_word = TOP_WORD_PART if word_list == PARTS else TOP_WORD_MOD
 	gem.gem_color = color
 	gem.physical = physical
 	gem.set_words(word_list)
@@ -669,6 +277,7 @@ func _make_gem(slot: Vector3, color: Color, word_list: PackedStringArray, physic
 
 func clear_gems() -> void:
 	_gem_epoch += 1
+	reset_camera()
 	for gem in _gems:
 		if is_instance_valid(gem):
 			gem.hide()
@@ -744,89 +353,119 @@ func throw_gems_fixed(part_face: int, mod_face: int) -> void:
 	await get_tree().create_timer(0.3).timeout
 
 
-## One full physics-random throw: leave the hand under a seeded impulse,
-## land, rest, READ the face that landed front-most, lift onto the mark
-## keeping it, flash it, present the word, and fly it to its slot.
-## Returns the face index the stones chose, or -1 when a rewind cancelled
-## the flight (the gems were cleared under it — see _gem_epoch).
-func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: RandomNumberGenerator, epoch: int) -> int:
-	var from := aurora_hand() + (Vector3(0.16, 0.04, -0.06) if is_part else Vector3(-0.14, 0.08, -0.02))
-	_pulse_lights(2.2)
-	# Every throw is its own throw: the landing spot, the flight time and the
-	# spin come from the story RNG, so the same seed replays the same night
-	# while no two stones in one night fly alike.
-	var flight := clampf((1.0 if is_part else 0.78) + rng.randf_range(-0.12, 0.12), 0.55, 1.25)
-	var target := land + Vector3(rng.randf_range(-0.55, 0.55), 0.0, rng.randf_range(-0.35, 0.35))
-	var spin := Vector3(rng.randf_range(5.0, 9.0), rng.randf_range(7.0, 12.0), rng.randf_range(3.0, 6.0))
-	if not is_part:
-		spin = spin * -0.8
-	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin)
-	# Wait on the STAGE rather than on the body: on rewind the body is
-	# freed, and a suspended method on it would resume into a dead instance.
-	await _wait_throw_rest(gem, epoch)
-	if epoch != _gem_epoch or not is_instance_valid(gem):
-		return -1
+## One fair throw: the stone leaves the guest's hand under an impulse drawn
+## from true entropy (not the fixed story seed, so no night is scripted),
+## tumbles in the closed box, and settles ON ITS OWN. The word is the crown
+## face that ends up facing the sky; the stone is never lifted or turned.
+## A cocked landing (on its table, or leaning) is thrown again.
+## Returns the face, or -1 when a rewind cancelled the flight.
+func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, _rng: RandomNumberGenerator, epoch: int) -> int:
+	var face := -1
+	for attempt in MAX_COCKED_RETHROWS + 1:
+		_launch(gem, land, is_part)
+		await _wait_throw_rest(gem, epoch)
+		if epoch != _gem_epoch or not is_instance_valid(gem):
+			return -1
+		if not gem.is_cocked() or attempt == MAX_COCKED_RETHROWS:
+			face = gem.up_face()
+			break
+	gem.freeze_in_place()
 	_pulse_lights(1.9)
-	var cam_az := _camera_azimuth()
-	var face := gem.front_face_for_azimuth(cam_az)
-	await gem.lift_to(GEM_SLOT_PART if is_part else GEM_SLOT_MOD, face, cam_az, 1.05)
+	await _reveal(gem, face, is_part, epoch)
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return -1
-	await gem.flash_face(face)
-	if epoch != _gem_epoch or not is_instance_valid(gem):
-		return -1
-	await gem.flash_reveal()
-	if epoch != _gem_epoch or not is_instance_valid(gem):
-		return -1
-	await present_word(gem, face, is_part)
 	return face
 
 
-## One full throw: leave the hand, land, rest, lift onto the mark, flash the
-## named face, present the word, and fly it to its presentation slot.
-func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch: int) -> void:
+func _launch(gem: FlatTopGem, land: Vector3, is_part: bool) -> void:
 	var from := aurora_hand() + (Vector3(0.16, 0.04, -0.06) if is_part else Vector3(-0.14, 0.08, -0.02))
 	_pulse_lights(2.2)
-	# Gravity does the rest: this is a real impulse, not a tween.
-	gem.throw_with_velocity(
-		from,
-		_arc_velocity(from, land, 1.0 if is_part else 0.78),
-		Vector3(7.0, 9.5, 4.5) * (1.0 if is_part else -0.8)
-	)
-	# Wait on the STAGE rather than on the body: on rewind the body is
-	# freed, and a suspended method on it would resume into a dead instance.
-	await _wait_throw_rest(gem, epoch)
-	if epoch != _gem_epoch or not is_instance_valid(gem):
-		return
-	_pulse_lights(1.9)
-	await gem.lift_to(GEM_SLOT_PART if is_part else GEM_SLOT_MOD, face, _camera_azimuth(), 1.05)
+	var r := _throw_rng
+	var flight := r.randf_range(0.6, 1.0)
+	var target := land + Vector3(r.randf_range(-0.6, 0.6), 0.0, r.randf_range(-0.45, 0.45))
+	var spin := Vector3(r.randf_range(-11.0, 11.0), r.randf_range(-12.0, 12.0), r.randf_range(-11.0, 11.0))
+	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin)
+
+
+## Show the landed word: the camera leans over the stone to read its sky
+## face, the facet flashes, and the glowing plaque flies up.
+func _reveal(gem: FlatTopGem, face: int, is_part: bool, epoch: int) -> void:
+	await _closeup(gem, face, epoch)
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return
 	await gem.flash_face(face)
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return
-	await gem.flash_reveal()
-	if epoch != _gem_epoch or not is_instance_valid(gem):
-		return
 	await present_word(gem, face, is_part)
 
 
+## Brief camera lean over a resting gem, framed so its up word reads upright.
+func _closeup(gem: FlatTopGem, face: int, epoch: int) -> void:
+	if _camera == null or face < 0 or face >= gem.face_labels.size():
+		return
+	var label := gem.face_labels[face]
+	var lb := label.global_transform.basis.orthonormalized()
+	var top := lb.y
+	top.y = 0.0
+	top = top.normalized() if top.length() > 0.01 else Vector3.FORWARD
+	var look_at_pt := label.global_position
+	var eye := look_at_pt - top * 0.55 + Vector3.UP * 1.25
+	var shot := Transform3D(Basis.looking_at(look_at_pt - eye, top), eye)
+	_cam_tween_kill()
+	_cam_tween = create_tween()
+	_cam_tween.tween_property(_camera, "global_transform", shot, 0.55).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_cam_tween.tween_interval(CLOSEUP_HOLD)
+	_cam_tween.tween_property(_camera, "global_transform", _cam_home, 0.55).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await _cam_tween.finished
+	if epoch != _gem_epoch:
+		return
+
+
+func _cam_tween_kill() -> void:
+	if _cam_tween != null and _cam_tween.is_valid():
+		_cam_tween.kill()
+	_cam_tween = null
+
+
+func reset_camera() -> void:
+	_cam_tween_kill()
+	if _camera != null:
+		_camera.global_transform = _cam_home
+
+
+## Deterministic staging for TESTS ONLY: a real throw, then the stone is set
+## down resting with the requested face up where it landed. Gameplay never
+## calls this.
+func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch: int) -> void:
+	_launch(gem, land, is_part)
+	await _wait_throw_rest(gem, epoch)
+	if epoch != _gem_epoch or not is_instance_valid(gem):
+		return
+	var spot := gem.global_position
+	spot.y = STAGE_TOP
+	gem.snap_settled(spot, face, _camera_azimuth())
+	await _reveal(gem, face, is_part, epoch)
+
+
+## Wait until the stone stops by itself: calm (or asleep) for a sustained
+## moment, with a generous ceiling so nothing is cut short.
 func _wait_throw_rest(gem: FlatTopGem, epoch: int) -> void:
 	var elapsed := 0.0
-	var calm_frames := 0
-	while elapsed < 3.2 and epoch == _gem_epoch and is_instance_valid(gem):
+	var calm := 0.0
+	while elapsed < SETTLE_TIMEOUT and epoch == _gem_epoch and is_instance_valid(gem):
 		await get_tree().physics_frame
 		if epoch != _gem_epoch or not is_instance_valid(gem):
 			return
-		elapsed += get_physics_process_delta_time()
+		var dt := get_physics_process_delta_time()
+		elapsed += dt
 		if gem.freeze:
 			return
-		if gem.linear_velocity.length() < 0.35 and gem.angular_velocity.length() < 1.1:
-			calm_frames += 1
-			if calm_frames >= 4:
+		if gem.sleeping or (gem.linear_velocity.length() < 0.06 and gem.angular_velocity.length() < 0.2):
+			calm += dt
+			if calm >= SETTLE_CALM_TIME:
 				return
 		else:
-			calm_frames = 0
+			calm = 0.0
 
 
 ## Instant version for rollback / saves: gems appear already settled.
@@ -835,8 +474,8 @@ func place_gems_settled(part_word: String, part_face: int, mod_word: String, mod
 	var az := _camera_azimuth()
 	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
-	gem_part.snap_settled(GEM_SLOT_PART, part_face, az)
-	gem_mod.snap_settled(GEM_SLOT_MOD, mod_face, az)
+	gem_part.snap_settled(LAND_PART, part_face, az)
+	gem_mod.snap_settled(LAND_MOD, mod_face, az)
 	place_word_plaque(PARTS[part_face], true)
 	place_word_plaque(MODS[mod_face], false)
 
@@ -958,7 +597,13 @@ func _camera_azimuth() -> float:
 
 
 func gem_center() -> Vector3:
-	return (GEM_SLOT_PART + GEM_SLOT_MOD) * 0.5
+	var sum := Vector3.ZERO
+	var n := 0
+	for gem in _gems:
+		if is_instance_valid(gem):
+			sum += gem.global_position
+			n += 1
+	return sum / float(n) if n > 0 else (LAND_PART + LAND_MOD) * 0.5
 
 
 ## Quick physics-random re-throw of one gem (the producer's mercy): it goes
@@ -1068,6 +713,8 @@ func apply_mod_chip(part: String, mod: String, at: Vector3) -> void:
 	_glyph_part(part, color, _chip)
 	_chip_label = _label("%s  x  %s" % [part, mod], 92, Color(0.95, 0.98, 1.0), Color(0.03, 0.05, 0.12, 0.95), 0.0015)
 	_chip_label.position = Vector3(0, -0.3, 0)
+	# The chip spins; its caption must not (it read mirrored half the turn).
+	_chip_label.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	_chip.add_child(_chip_label)
 	_chip_home = at
 	_chip.position = at

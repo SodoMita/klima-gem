@@ -14,17 +14,23 @@ class_name FlatTopGem extends RigidBody3D
 ## camera fade out, so a settled gem shows one word, not eight overlapped.
 
 const SIDES := 8
+## Best crown-face dot with UP below this = cocked landing, re-throw.
+const COCKED_DOT := 0.55
 
 ## Facet triangles are narrow; the word is sized to this share of the facet's
 ## base edge so it never spills onto a neighbouring face.
-const WORD_FIT := 0.60
+const WORD_FIT := 0.82
+## Word box centre, as a fraction of the crown facet's height.
+const WORD_CENTRE := 0.42
 ## How much of the facet's height a whole word may use (keeps the fit sane
 ## for short words like "TINY").
-const WORD_HEIGHT_LIMIT := 0.28
+const WORD_HEIGHT := 0.42
+## Words float this far off their facet (coplanar quads z-fight).
+const LABEL_LIFT := 0.006
 
 @export var girdle_radius := 0.5
-@export var table_radius := 0.26
-@export var crown_height := 0.17
+@export var table_radius := 0.27
+@export var crown_height := 0.2
 @export var pavilion_height := 0.44
 @export var gem_color := Color(0.55, 0.85, 1.0, 0.62)
 @export var word_color := Color(0.94, 0.99, 1.0)
@@ -39,6 +45,12 @@ static var word_font: Font = null
 var words: PackedStringArray = []
 var face_labels: Array[Label3D] = []
 var body: MeshInstance3D = null
+## Mesh + words; scaled for flashes so the rigid body itself never scales.
+var dress: Node3D = null
+## Brand word on the flat table: "MEGA" on one gem, "MILK" on the other.
+@export var top_word := ""
+@export var top_color := Color(1.0, 0.93, 0.55)
+var top_label: Label3D = null
 var shape: CollisionShape3D = null
 ## True once the gem has been thrown, landed and set on its mark.
 var settled := false
@@ -118,10 +130,6 @@ func _process(delta: float) -> void:
 	if spinning:
 		rotation.y += _spin_speed * delta
 	_wobble_time += delta
-	if not spinning and not _is_body_awake():
-		# A tiny breathing tilt, so a settled gem still feels alive on camera.
-		rotation.x = 0.05 * sin(_wobble_time * 1.7)
-		rotation.z = 0.04 * sin(_wobble_time * 1.13 + 1.3)
 	_fade_faces()
 
 
@@ -133,26 +141,91 @@ func word_at(face: int) -> String:
 	return words[face % SIDES]
 
 
-## Azimuth of face [param i]'s outward normal, relative to this node's yaw.
+## Outward normal of crown facet [param i] (the upper trapezoid between
+## girdle edge i..i+1 and the table), in the gem's local frame.
 func _face_normal(i: int) -> Vector3:
-	var a := face_azimuth(i)
-	var mid := Vector3(cos(a), 0.0, sin(a))
-	# The outward normal of (girdle[i], girdle[i+1], apex). The apex is
-	# BELOW the rim, so this plane's outward normal slopes DOWN, not up.
-	var apothem := girdle_radius * cos(PI / float(SIDES))
-	return (mid * pavilion_height - Vector3.UP * apothem).normalized()
+	var c := facet_corners(i)
+	var n := (c[3] - c[0]).cross(c[1] - c[0]).normalized()
+	if n.dot((c[0] + c[1] + c[2] + c[3]) * 0.25) < 0.0:
+		n = -n
+	return n
 
 
-## The facet triangle that carries word [param i], in local space: the girdle
-## edge at the top, the point at the bottom.
+## Crown facet [param i] in local space: girdle i, girdle i+1, table i+1,
+## table i. Words live here, on the UPPER side faces.
 func facet_corners(i: int) -> Array[Vector3]:
 	var a := TAU * float(i) / float(SIDES)
 	var b := TAU * float(i + 1) / float(SIDES)
 	return [
 		Vector3(cos(a) * girdle_radius, 0.0, sin(a) * girdle_radius),
 		Vector3(cos(b) * girdle_radius, 0.0, sin(b) * girdle_radius),
-		Vector3(0.0, -pavilion_height, 0.0),
+		Vector3(cos(b) * table_radius, crown_height, sin(b) * table_radius),
+		Vector3(cos(a) * table_radius, crown_height, sin(a) * table_radius),
 	]
+
+
+## Outward normal of pavilion facet [param i] (lower triangle to the point).
+func pavilion_normal(i: int) -> Vector3:
+	var a := face_azimuth(i)
+	var mid := Vector3(cos(a), 0.0, sin(a))
+	var apothem := girdle_radius * cos(PI / float(SIDES))
+	return (mid * pavilion_height - Vector3.UP * apothem).normalized()
+
+
+## Local frame of the word on crown facet [param i]: +Z out of the facet,
+## +Y up the facet toward the table, +X along the girdle edge.
+func facet_label_basis(i: int) -> Basis:
+	var c := facet_corners(i)
+	var z := _face_normal(i)
+	var up := ((c[2] + c[3]) * 0.5 - (c[0] + c[1]) * 0.5)
+	var y := (up - z * up.dot(z)).normalized()
+	var x := y.cross(z).normalized()
+	return Basis(x, y, z)
+
+
+## The crown face whose outward normal points most toward the sky, and how
+## squarely (dot with UP). This is the throw's result: the physics decides
+## how the stone lies, and the word facing up is read. Nothing else.
+func up_face_and_score() -> Array:
+	var best := -2.0
+	var best_i := 0
+	var b := global_transform.basis.orthonormalized()
+	for i in SIDES:
+		var d := (b * _face_normal(i)).dot(Vector3.UP)
+		if d > best:
+			best = d
+			best_i = i
+	return [best_i, best]
+
+
+func up_face() -> int:
+	return int(up_face_and_score()[0])
+
+
+## A cocked stone (resting on its table, or leaning on a wall) shows no
+## clean upper face; the show re-throws it instead of guessing.
+func is_cocked() -> bool:
+	return float(up_face_and_score()[1]) < COCKED_DOT
+
+
+## World transform of this gem resting on the floor point [param floor_point]
+## with crown face [param face] up: it lies on the opposite pavilion facet,
+## exactly as a thrown stone comes to rest. [param away] is the horizontal
+## direction the word's top should point (away from the viewer).
+func rest_transform(face: int, floor_point: Vector3, away: Vector3) -> Transform3D:
+	var n := pavilion_normal((face + SIDES / 2) % SIDES)
+	var axis := n.cross(Vector3.DOWN)
+	var b := Basis.IDENTITY
+	if axis.length() > 0.0001:
+		b = Basis(axis.normalized(), n.angle_to(Vector3.DOWN))
+	var ydir := b * facet_label_basis(face).y
+	var flat := Vector2(ydir.x, ydir.z)
+	var want := Vector2(away.x, away.z)
+	if flat.length() > 0.001 and want.length() > 0.001:
+		b = Basis(Vector3.UP, flat.angle() - want.angle()) * b
+	var corner := facet_corners(0)[0]
+	var lift := corner.dot(n)
+	return Transform3D(b, floor_point + Vector3.UP * lift)
 
 
 func _hull_points() -> PackedVector3Array:
@@ -178,10 +251,10 @@ func _build_mesh() -> void:
 		table.append(Vector3(cos(a) * table_radius, crown_height, sin(a) * table_radius))
 	var apex := Vector3(0.0, -pavilion_height, 0.0)
 
-	# Pavilion: eight word-bearing triangles, girdle edge down to the point.
+	# Pavilion: eight plain triangles, girdle edge down to the point.
 	for i in SIDES:
 		_tri(st, girdle[i], girdle[(i + 1) % SIDES], apex)
-	# Crown: eight quiet trapezoids from girdle up to the table edge.
+	# Crown: eight word-bearing trapezoids from girdle up to the table edge.
 	for i in SIDES:
 		_quad(st, girdle[i], girdle[(i + 1) % SIDES], table[(i + 1) % SIDES], table[i])
 	# The table: the fully flat top, one octagon.
@@ -205,7 +278,10 @@ func _build_mesh() -> void:
 	mat.cull_mode = BaseMaterial3D.CULL_BACK
 	body.material_override = mat
 	body.mesh = mesh
-	add_child(body)
+	dress = Node3D.new()
+	dress.name = "Dress"
+	add_child(dress)
+	dress.add_child(body)
 
 
 func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
@@ -224,102 +300,96 @@ func _build_labels() -> void:
 		return
 	var font := _font()
 	var base_size := 96
-	var facet_base := 2.0 * girdle_radius * sin(PI / float(SIDES))
-	var target_width := facet_base * WORD_FIT
-	var facet_height := sqrt(pavilion_height * pavilion_height + pow(girdle_radius * cos(PI / float(SIDES)), 2))
-	var max_height := facet_height * WORD_HEIGHT_LIMIT
 	for i in SIDES:
-		var label := Label3D.new()
-		label.text = words[i]
-		label.font = font
-		label.font_size = base_size
-		label.outline_size = 18
-		label.modulate = word_color
-		label.outline_modulate = _outline_color
-		# Only the front-facing facet's word is rendered; putting it in front
-		# of its own translucent depth pre-pass prevents punched-out glyphs.
-		label.no_depth_test = true
-		# Opaque pre-pass: back-face words are depth-rejected by the near
-		# facets instead of ghosting through the stone. The facing fade
-		# (modulate alpha) is what keeps seven of the eight words off the
-		# screen, so the settled gem reads as one named face.
-		label.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS
-		label.render_priority = 2
-		label.shaded = false
-		label.double_sided = false
-		# Fit the whole word inside the triangle it names.
-		var text_px := font.get_string_size(words[i], HORIZONTAL_ALIGNMENT_LEFT, -1, base_size)
-		# The glyph's OUTLINE also takes space; budget its full bounding box.
-		var ink_width := text_px.x + 2.0 * label.outline_size
-		var ink_height := text_px.y + 2.0 * label.outline_size
-		var px := target_width / maxf(ink_width, 1.0)
-		# ...and never let it grow taller than the facet is deep.
-		var height_units := ink_height * px
-		if height_units > max_height:
-			px *= max_height / height_units
+		var label := _make_word_label(words[i], font, base_size)
+		var c := facet_corners(i)
+		var bottom_w := c[0].distance_to(c[1])
+		var top_w := c[3].distance_to(c[2])
+		var height := ((c[2] + c[3]) * 0.5).distance_to((c[0] + c[1]) * 0.5)
+		# Word box centred 42% up the trapezoid, 40% of its height tall; its
+		# top edge (the narrow side) bounds the width.
+		var box_top := WORD_CENTRE + WORD_HEIGHT * 0.5
+		var avail_w := (bottom_w + (top_w - bottom_w) * box_top) * WORD_FIT
+		var px := _fit_px(label, font, base_size, avail_w, height * WORD_HEIGHT)
 		label.pixel_size = px
 		_label_base_pixel_size.append(px)
-
-		var corners := facet_corners(i)
-		# At the centroid a horizontal word can only occupy 2/3 of the
-		# base if it has zero height. Move its centre up the facet so its
-		# entire rectangular ink+outline box fits BETWEEN the sloping sides.
-		var centre := ((corners[0] + corners[1]) * 0.5).lerp(corners[2], 0.19)
-		var normal := _face_normal(i)
-		var pos := centre + normal * 0.003  # depth bias only; same plane
-		# Label3D draws into its -Z half-space looking down +Z; aiming the -Z
-		# axis at the inverted normal turns the glyphs outward through the
-		# facet, and UP is re-resolved against the facet's own slope.
-		var basis := Basis.looking_at(-normal, Vector3.UP)
-		label.transform = Transform3D(basis, pos)
-		add_child(label)
+		var lb := facet_label_basis(i)
+		var centre := ((c[0] + c[1]) * 0.5).lerp((c[2] + c[3]) * 0.5, WORD_CENTRE)
+		label.transform = Transform3D(lb, centre + lb.z * LABEL_LIFT)
+		dress.add_child(label)
 		face_labels.append(label)
+	# The table: one flat octagon, one brand word across it.
+	if top_word != "":
+		top_label = _make_word_label(top_word, font, base_size)
+		top_label.modulate = top_color
+		var inradius := table_radius * cos(PI / float(SIDES))
+		top_label.pixel_size = _fit_px(top_label, font, base_size, inradius * 2.0 * 0.78, inradius * 0.7)
+		var tb := Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP)
+		top_label.transform = Transform3D(tb, Vector3(0.0, crown_height + LABEL_LIFT, 0.0))
+		dress.add_child(top_label)
 
 
-## Fade each word by how squarely its facet faces the camera, so a settled
-## gem reads as one named face rather than eight overlapping ones. Measured by
-## azimuth, not by the dot product: the pavilion normals lean 44 degrees up,
-## so a dot with a nearly level camera never comes close to 1 and every face
-## looked "front".
+func _make_word_label(text: String, font: Font, size: int) -> Label3D:
+	var label := Label3D.new()
+	label.text = text
+	label.font = font
+	label.font_size = size
+	label.outline_size = 18
+	label.modulate = word_color
+	label.outline_modulate = _outline_color
+	label.shaded = false
+	# One-sided: a word whose facet faces away is simply not drawn, so the
+	# translucent stone never shows mirrored text from its far side.
+	label.double_sided = false
+	label.render_priority = 2
+	label.outline_render_priority = 1
+	return label
+
+
+func _fit_px(label: Label3D, font: Font, size: int, max_w: float, max_h: float) -> float:
+	var text_px := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size)
+	var ink_w := text_px.x + 2.0 * label.outline_size
+	var ink_h := text_px.y + 2.0 * label.outline_size
+	return minf(max_w / maxf(ink_w, 1.0), max_h / maxf(ink_h, 1.0))
+
+
+## Words fade as their facet turns edge-on to the camera, so grazing faces do
+## not smear; the face turned to the lens (or to the sky, for the close-up)
+## reads clean.
 func _fade_faces() -> void:
 	if face_labels.is_empty():
 		return
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return
-	var to_cam := cam.global_position - global_position
-	var cam_az := atan2(to_cam.z, to_cam.x)
-	_front_face = front_face_for_azimuth(cam_az)
+	var b := global_transform.basis.orthonormalized()
+	var best := -2.0
 	for i in face_labels.size():
-		var delta := _azimuth_off(i, cam_az)
-		# 1.0 out to 20 degrees off the view axis (which is where the front
-		# face always sits on an octagon), gone by 36 degrees, so the
-		# 45-degree neighbours draw nothing at all.
-		var a := clampf((0.62 - delta) / 0.27, 0.0, 1.0)
-		var label := face_labels[i]
+		var n := b * _face_normal(i)
+		var to_cam := (cam.global_position - face_labels[i].global_position).normalized()
+		var d := n.dot(to_cam)
+		if d > best:
+			best = d
+			_front_face = i
+		var a := clampf((d - 0.08) / 0.3, 0.0, 1.0)
 		var c := word_color
 		c.a = a
-		label.modulate = c
-		# The outline does NOT follow modulate's alpha in Label3D, so a hidden
-		# word would still smear its dark border across the facet. Fade it too.
+		face_labels[i].modulate = c
 		var o := _outline_color
 		o.a *= a
-		label.outline_modulate = o
+		face_labels[i].outline_modulate = o
 
 
-## How far, in radians, face [param i]'s outward normal is from a camera at
-## azimuth [param cam_az]. A yaw of +y carries face azimuth a to a - y (Godot
-## turns clockwise seen from above), which is the convention
-## [method lift_to] settles with.
+## Azimuth distance of face [param i] from [param cam_az] (upright gem).
 func _azimuth_off(i: int, cam_az: float) -> float:
 	return absf(wrapf(face_azimuth(i) - rotation.y - cam_az, -PI, PI))
 
 
-## The face a camera at azimuth [param cam_az] is looking at squarest.
+## The face an upright gem shows a camera at azimuth [param cam_az].
 func front_face_for_azimuth(cam_az: float) -> int:
 	var best := 99.0
 	var best_i := 0
-	for i in face_labels.size():
+	for i in SIDES:
 		var delta := _azimuth_off(i, cam_az)
 		if delta < best:
 			best = delta
@@ -442,27 +512,36 @@ func _kill_hover() -> void:
 	_hover_tween = null
 
 
-## Instant placement for restores: no physics, no tween, just the truth.
+## Instant placement for restores and tests: the stone lies on the floor
+## point [param target] exactly as a throw that rolled [param face] leaves
+## it — resting on the opposite pavilion facet, word to the sky, its top
+## pointing away from a camera at azimuth [param cam_azimuth].
 func snap_settled(target: Vector3, face: int, cam_azimuth: float) -> void:
 	_kill_hover()
 	spinning = false
-	settled = true
-	freeze = true
-	collision_layer = 0
-	collision_mask = 0
-	if is_instance_valid(shape):
-		shape.set_deferred("disabled", true)
+	var away := -Vector3(cos(cam_azimuth), 0.0, sin(cam_azimuth))
+	global_transform = rest_transform(face, target, away)
+	freeze_in_place()
+
+
+## Where the stone came to rest it stays: frozen STATIC on the spot the
+## physics chose, never lifted, never turned.
+func freeze_in_place() -> void:
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
 	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
-	position = target
-	rotation = Vector3(0.0, wrapf(face_azimuth(face) - cam_azimuth, 0.0, TAU), 0.0)
+	freeze = true
+	settled = true
+	if physical:
+		PhysicsServer3D.body_set_state(get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, global_transform)
 
 
 ## A bright beat when the word is announced: the gem swells and flashes.
 func flash_reveal() -> void:
 	var tw := create_tween()
-	tw.tween_property(self, "scale", Vector3.ONE * 1.22, 0.16)
+	tw.tween_property(dress, "scale", Vector3.ONE * 1.22, 0.16)
 	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "scale", Vector3.ONE, 0.4)
+	tw.tween_property(dress, "scale", Vector3.ONE, 0.4)
 	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	await tw.finished
 
