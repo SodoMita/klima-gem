@@ -82,7 +82,13 @@ const LAND_MOD := Vector3(-0.55, STAGE_TOP, 1.2)
 
 ## The closed throw box: a glass case on the stage floor. Walls and lid are
 ## colliders, so no throw can ever leave the world. Inner size, floor centre.
-const BOX_CENTER := Vector3(0.0, STAGE_TOP, 1.2)
+## The glass box hangs in the air: its glass floor is BOX_LIFT above the
+## platform, so the camera can slide underneath and read the face a stone
+## rests on straight through the glass.
+const BOX_LIFT := 1.1
+const BOX_CENTER := Vector3(0.0, STAGE_TOP + BOX_LIFT, 1.2)
+const UNDERVIEW_DIST := 0.85
+const UNDERVIEW_HOLD := 1.4
 const BOX_SIZE := Vector3(3.0, 1.4, 1.8)
 ## Longest the show waits for a stone to stop on its own.
 const REST_TIMEOUT := 14.0
@@ -123,6 +129,7 @@ var _fx_orbs: Array[Node3D] = []
 var _chip_home := Vector3.ZERO
 var _set_root: Node3D = null
 var _camera: Camera3D = null
+var _cam_tween: Tween = null
 
 
 func _ready() -> void:
@@ -363,8 +370,9 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 		rng.randf_range(0.35, 0.8) * half.x, BOX_SIZE.y - 0.3, rng.randf_range(-0.5, 0.5) * half.z)
 	var target := Vector3(
 		rng.randf_range(-0.8, 0.3) * half.x, BOX_CENTER.y, BOX_CENTER.z + rng.randf_range(-0.6, 0.6) * half.z)
-	var flight := rng.randf_range(0.45, 0.75)
-	var spin := Vector3(rng.randf_range(-14.0, 14.0), rng.randf_range(-14.0, 14.0), rng.randf_range(-14.0, 14.0))
+	var flight := rng.randf_range(0.28, 0.45)
+	var spin := Vector3(rng.randf_range(-24.0, 24.0), rng.randf_range(-24.0, 24.0), rng.randf_range(-24.0, 24.0))
+	_fast_settle(gem)
 	var q := Quaternion(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1))
 	if q.length() < 0.01:
 		q = Quaternion.IDENTITY
@@ -375,8 +383,14 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return -1
 	var face := gem.resting_face()
+	# The stone stays exactly where it stopped; the camera goes to it.
+	gem.linear_velocity = Vector3.ZERO
+	gem.angular_velocity = Vector3.ZERO
+	gem.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	gem.freeze = true
+	gem.settled = true
 	_pulse_lights(1.9)
-	await gem.lift_to(GEM_SLOT_PART if is_part else GEM_SLOT_MOD, face, _viewer_pos(), 1.05)
+	await _underview(gem, face, epoch)
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return -1
 	await gem.flash_face(face)
@@ -415,6 +429,42 @@ func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch:
 	await present_word(gem, face, is_part)
 
 
+## Fly fast, stop fast: heavy damping and a dull bounce so a stone that has
+## spent its energy quits rolling instead of creeping for seconds.
+func _fast_settle(gem: FlatTopGem) -> void:
+	gem.linear_damp = 0.9
+	gem.angular_damp = 2.4
+	var pm := PhysicsMaterial.new()
+	pm.bounce = 0.15
+	pm.friction = 0.95
+	gem.physics_material_override = pm
+
+
+## The reveal: the camera slides under the floating glass floor and looks up,
+## head-on, at the face the stone rests on — upright, never mirrored — then
+## returns to the house shot.
+func _underview(gem: FlatTopGem, face: int, epoch: int) -> void:
+	var label := gem.label_for(face)
+	if _camera == null or label == null:
+		return
+	var lb := label.global_basis.orthonormalized()
+	var target := label.global_position
+	var eye := target + lb.z * UNDERVIEW_DIST
+	eye.y = minf(eye.y, BOX_CENTER.y - 0.25)
+	eye.y = maxf(eye.y, STAGE_TOP + 0.12)
+	var shot := Transform3D(Basis.looking_at(target - eye, lb.y), eye)
+	var home := _camera.global_transform
+	if _cam_tween != null and _cam_tween.is_valid():
+		_cam_tween.kill()
+	_cam_tween = create_tween()
+	_cam_tween.tween_property(_camera, "global_transform", shot, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_cam_tween.tween_interval(UNDERVIEW_HOLD)
+	_cam_tween.tween_property(_camera, "global_transform", home, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await _cam_tween.finished
+	if epoch != _gem_epoch and _camera != null:
+		_camera.global_transform = home
+
+
 func _wait_throw_rest(gem: FlatTopGem, epoch: int) -> void:
 	# Patient: the stone stops on its own. Calm means slow AND staying slow
 	# for half a second (a gem balanced on an edge is slow for an instant).
@@ -432,7 +482,7 @@ func _wait_throw_rest(gem: FlatTopGem, epoch: int) -> void:
 			return
 		if elapsed > 0.3 and gem.linear_velocity.length() < 0.05 and gem.angular_velocity.length() < 0.15:
 			calm += dt
-			if calm >= 0.5:
+			if calm >= 0.3:
 				return
 		else:
 			calm = 0.0
