@@ -229,5 +229,14 @@ from what actually ran.
 `bash tests/motion_director_test.sh` (or `tests/run_headless.sh`, step 8)
 runs the headless suite: tweens on 2D/3D/Control nodes, relative deltas,
 instant sets, tween stop, NLA play/crossfade/stop, frame-range hold and
-loop, state-machine travel, shake landing, delay/yoyo/loops, and rollback
-replay.
+loop, state-machine travel, shake landing, delay/yoyo/loops, rollback
+replay and live balloon integration.
+
+`bash tests/render_billboard_test.sh` renders the billboard for real under
+sway headless + pixman + Mesa llvmpipe (skips when sway is absent): a
+`Sprite3DQuad` next to an identical plain quad, shot from the side and from
+above. Pass criteria: the billboard silhouette stays wide (≥60 px from the
+side, ≥50 px elevated — the plain quad goes edge-on) and its top edge stays
+horizontal (spread ≤ 8 px), proving the aim is Y-locked. Sample frames:
+`tests/render_samples/billboard_side.png` and
+`tests/render_samples/billboard_elevated.png`.
