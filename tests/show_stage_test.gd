@@ -114,6 +114,43 @@ func _run_tests() -> void:
 		check(live_gems[1].word_at(int(gs.show_mod_face)) == str(gs.show_mod), "gem B carries the rolled mod on the rolled face")
 		check(live_gems[0].face_labels.size() == 8, "gem A wears eight word labels")
 		check(live_gems[1].face_labels[0].text != "", "gem B labels carry text")
+		# The human rule: every word on its own facet, in the facet's plane,
+		# inside the facet's triangle. Corners of each label rectangle are
+		# tested against the facet plane and barycentrically against it.
+		for gi in 2:
+			var gem_n: Node = live_gems[gi]
+			var dgt: Transform3D = gem_n.dress.global_transform
+			var all_in := true
+			var max_off := 0.0
+			for i in 8:
+				var lab: Label3D = gem_n.face_labels[i]
+				var a0 := i * TAU / 8.0
+				var a1 := (i + 1) * TAU / 8.0
+				var g0: Vector3 = dgt * (Vector3(cos(a0), 0, sin(a0)) * gem_n.girdle_radius)
+				var g1: Vector3 = dgt * (Vector3(cos(a1), 0, sin(a1)) * gem_n.girdle_radius)
+				var ap: Vector3 = dgt * Vector3(0, -gem_n.pavilion_height, 0)
+				var nrm: Vector3 = (g1 - g0).cross(ap - g0).normalized()
+				var lb := lab.global_transform.basis
+				var lc := lab.global_transform.origin
+				var lsz: Vector3 = lab.get_aabb().size
+				for sx in [-1, 1]:
+					for sy in [-1, 1]:
+						var p: Vector3 = lc + lb.x * (sx * lsz.x * 0.5) + lb.y * (sy * lsz.y * 0.5)
+						max_off = max(max_off, abs((p - ap).dot(nrm)))
+						var v0: Vector3 = g1 - g0
+						var v1: Vector3 = ap - g0
+						var v2: Vector3 = p - g0
+						var d00 := v0.dot(v0)
+						var d01 := v0.dot(v1)
+						var d02 := v0.dot(v2)
+						var d11 := v1.dot(v1)
+						var d12 := v1.dot(v2)
+						var den := d00 * d11 - d01 * d01
+						var u := (d11 * d02 - d01 * d12) / den
+						var vv := (d00 * d12 - d01 * d02) / den
+						if u < -0.02 or vv < -0.02 or u + vv > 1.02:
+							all_in = false
+			check(all_in and max_off < 0.02, "gem %d: every word in its facet plane (%.3f off) and inside the facet bounds" % [gi, max_off])
 		check(live_gems[0].words[0] == "HANDS" and live_gems[0].words[7] == "SKIN", "gem A word order is stable")
 		# A finished round leaves each gem dollied forward at its reveal mark,
 		# tipped toward the house camera; the slot is only the throw's landing.

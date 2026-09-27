@@ -76,9 +76,13 @@ func _ready() -> void:
 	_build_body()
 	# Idle gems are dressed by hand (tweens, hover, settle); only the throw
 	# hands the gem to the physics server.
-	# Yaw first, then the reveal tip about the world X axis: with the default
-	# XYZ order the tip is applied before the yaw and the faced facet misses
-	# the lens by the yaw angle.
+	# Yaw first, then the reveal tip about the world X axis: under Godot's
+	# default YXZ order the tip lands before the yaw and the faced facet
+	# misses the lens, so the Dress node asks for XYZ explicitly.
+	# Static freeze, not kinematic: a kinematic-frozen body keeps integrating
+	# against the server and settled gems drift off their marks (Aurora
+	# measured ~0.16; the snap-catch here hides it, static freeze buries it).
+	freeze_mode = FREEZE_MODE_STATIC
 	freeze = true
 	mass = 1.4
 	continuous_cd = true
@@ -217,7 +221,10 @@ func _build_labels() -> void:
 		var girdle_mid := (_girdle_corner(i) + _girdle_corner((i + 1) % SIDES)) * 0.5
 		var band := apex + (girdle_mid - apex) * 0.62
 		var normal := _face_normal(i)
-		var pos := band + normal * 0.014
+		# 8 mm of float: coplanar quads z-fight under the compatibility
+		# renderer, and eight millimetres on a stage-distance prop is far
+		# below a pixel, so the word reads as painted on the facet plane.
+		var pos := band + normal * 0.008
 
 		# Basis in the facet plane, built from the triangle's own girdle edge:
 		# +X along the facet's width, +Y up-slope, +Z out along the normal.
