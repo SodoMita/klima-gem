@@ -129,6 +129,7 @@ func begin_show() -> void:
 		gs.show_mod = ""
 		gs.show_part_face = -1
 		gs.show_mod_face = -1
+		gs.show_applied_mods = []
 		gs.show_outlook = ""
 		gs.show_props_round = 0
 		gs.rerolls_used = 0
@@ -291,6 +292,19 @@ func throw_gem_round() -> void:
 	gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
 
 
+## Body modifications are kept: every pairing the guest is given stays on
+## her for the rest of the show. A re-thrown modification replaces only the
+## entry from the round it belongs to, never the earlier rounds' marks.
+func _remember_mod(gs) -> void:
+	var entry := "%s:%s" % [str(gs.show_part), str(gs.show_mod)]
+	var mods: Array = (gs.show_applied_mods as Array).duplicate()
+	var round_index: int = maxi(int(gs.show_round) - 1, 0)
+	while mods.size() <= round_index:
+		mods.append("")
+	mods[round_index] = entry
+	gs.show_applied_mods = mods
+
+
 ## Spend a crowd cheer: the modification gem goes back in the air, and the
 ## new word is whatever face lands front-most this time.
 func swap_mod_gem() -> void:
@@ -322,7 +336,9 @@ func apply_mods() -> void:
 	if gs == null or st == null:
 		return
 	gs.show_outlook = outlook_for(int(gs.show_round))
+	_remember_mod(gs)
 	st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor())
+	st.apply_mod_rail(gs.show_applied_mods)
 	st.apply_aurora_fx(str(gs.show_part), str(gs.show_mod))
 	await st.get_tree().create_timer(0.9).timeout
 
@@ -409,10 +425,12 @@ func sync_from_state() -> void:
 	if str(gs.show_part) != "" and int(gs.show_part_face) >= 0:
 		st.place_gems_settled(str(gs.show_part), int(gs.show_part_face), str(gs.show_mod), int(gs.show_mod_face))
 		st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor())
+		st.apply_mod_rail(gs.show_applied_mods)
 		st.apply_aurora_fx(str(gs.show_part), str(gs.show_mod))
 	else:
 		st.clear_gems()
 		st.clear_mod_chip()
+		st.apply_mod_rail([])
 		st.reset_aurora_fx()
 	st.clear_props()
 	match clampi(int(gs.show_props_round), 0, 3):

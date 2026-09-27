@@ -48,6 +48,12 @@ var face_labels: Array[Label3D] = []
 var crown_labels: Array[Label3D] = []
 ## The word stamped flat on the table.
 var top_label: Label3D = null
+## The Dress: mesh + words live under this child, and ALL presentation
+## rotation (spin, wobble, the settle turn) is applied to it. The physics
+## server owns the body's own transform and drops euler order on a frozen
+## body, which tipped the stone before it yawed and turned the faced facet
+## into a sliver. (Rosa's fix, ported.)
+var dress: Node3D = null
 var body: MeshInstance3D = null
 var shape: CollisionShape3D = null
 ## True once the gem has been thrown, landed and set on its mark.
@@ -83,6 +89,10 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	dress = Node3D.new()
+	dress.name = "Dress"
+	dress.rotation_order = EULER_ORDER_XYZ
+	add_child(dress)
 	_build_mesh()
 	_build_labels()
 	_apply_physics()
@@ -125,13 +135,15 @@ func _apply_physics() -> void:
 
 
 func _process(delta: float) -> void:
+	if dress == null:
+		return
 	if spinning:
-		rotation.y += _spin_speed * delta
+		dress.rotation.y += _spin_speed * delta
 	_wobble_time += delta
 	if not spinning and not _is_body_awake():
 		# A tiny breathing tilt, so a settled gem still feels alive on camera.
-		rotation.x = 0.05 * sin(_wobble_time * 1.7)
-		rotation.z = 0.04 * sin(_wobble_time * 1.13 + 1.3)
+		dress.rotation.x = 0.05 * sin(_wobble_time * 1.7)
+		dress.rotation.z = 0.04 * sin(_wobble_time * 1.13 + 1.3)
 	_fade_faces()
 
 
@@ -215,7 +227,7 @@ func _build_mesh() -> void:
 	mat.cull_mode = BaseMaterial3D.CULL_BACK
 	body.material_override = mat
 	body.mesh = mesh
-	add_child(body)
+	dress.add_child(body)
 
 
 func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
@@ -282,7 +294,7 @@ func _build_labels() -> void:
 		# facet, and UP is re-resolved against the facet's own slope.
 		var basis := Basis.looking_at(-normal, Vector3.UP)
 		label.transform = Transform3D(basis, pos)
-		add_child(label)
+		dress.add_child(label)
 		face_labels.append(label)
 
 		_build_crown_label(i, font, base_size)
@@ -343,7 +355,7 @@ func _build_crown_label(i: int, font: Font, base_size: int) -> void:
 		px *= max_height / height_units
 	label.pixel_size = px
 	label.transform = Transform3D(Basis.looking_at(-normal, Vector3.UP), centroid + normal * 0.006)
-	add_child(label)
+	dress.add_child(label)
 	crown_labels.append(label)
 
 
@@ -383,7 +395,7 @@ func _build_top_label(font: Font, base_size: int) -> void:
 		Basis.looking_at(Vector3.DOWN, Vector3.BACK),
 		Vector3(0.0, crown_height + 0.005, 0.0)
 	)
-	add_child(label)
+	dress.add_child(label)
 	top_label = label
 
 
@@ -429,7 +441,8 @@ func _fade_faces() -> void:
 ## turns clockwise seen from above), which is the convention
 ## [method lift_to] settles with.
 func _azimuth_off(i: int, cam_az: float) -> float:
-	return absf(wrapf(face_azimuth(i) - rotation.y - cam_az, -PI, PI))
+	var yaw := rotation.y + (dress.rotation.y if dress != null else 0.0)
+	return absf(wrapf(face_azimuth(i) - yaw - cam_az, -PI, PI))
 
 
 ## The face a camera at azimuth [param cam_az] is looking at squarest.
@@ -482,6 +495,8 @@ func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3, start_
 	# up in. Always starting level (rotation zero) biases which facets meet
 	# the floor first, and a biased tumble is a rigged show.
 	rotation = start_rotation
+	if dress != null:
+		dress.rotation = Vector3.ZERO
 	global_position = from
 	linear_velocity = velocity
 	angular_velocity = spin
@@ -526,21 +541,24 @@ func lift_to(target: Vector3, face: int, cam_azimuth: float, duration := 1.1) ->
 		shape.set_deferred("disabled", true)
 	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	spinning = false
-	var current := wrapf(rotation.y, 0.0, TAU)
-	var target_yaw := face_azimuth(face) - cam_azimuth
+	var current := wrapf(dress.rotation.y, 0.0, TAU)
+	# The body keeps whatever attitude physics left it in on its own axes;
+	# the show turns the DRESS, in a clean XYZ euler frame.
+	var target_yaw := face_azimuth(face) - cam_azimuth - rotation.y
 	# Land approaching from one full dramatic turn away.
 	var wanted := wrapf(target_yaw - current, 0.0, TAU) + TAU
 	var from := position
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(self, "position", target, duration)
-	tw.tween_property(self, "rotation:y", current + wanted, duration)
-	tw.tween_property(self, "rotation:x", 0.0, duration * 0.6)
-	tw.tween_property(self, "rotation:z", 0.0, duration * 0.6)
+	tw.tween_property(dress, "rotation:y", current + wanted, duration)
+	tw.tween_property(dress, "rotation:x", 0.0, duration * 0.6)
+	tw.tween_property(dress, "rotation:z", 0.0, duration * 0.6)
 	tw.set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
 	await tw.finished
 	position = target
-	rotation = Vector3(0.0, wrapf(rotation.y, 0.0, TAU), 0.0)
+	dress.rotation = Vector3(0.0, wrapf(dress.rotation.y, 0.0, TAU), 0.0)
+	rotation = Vector3.ZERO
 	# Push the final transform into the physics server too, so the body state
 	# and the node agree and nothing nudges the gem off its mark afterwards.
 	PhysicsServer3D.body_set_state(get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, global_transform)
@@ -579,7 +597,9 @@ func snap_settled(target: Vector3, face: int, cam_azimuth: float) -> void:
 		shape.set_deferred("disabled", true)
 	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	position = target
-	rotation = Vector3(0.0, wrapf(face_azimuth(face) - cam_azimuth, 0.0, TAU), 0.0)
+	rotation = Vector3.ZERO
+	if dress != null:
+		dress.rotation = Vector3(0.0, wrapf(face_azimuth(face) - cam_azimuth, 0.0, TAU), 0.0)
 
 
 ## A bright beat when the word is announced: the gem swells and flashes.

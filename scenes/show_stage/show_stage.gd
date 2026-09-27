@@ -70,6 +70,11 @@ const GEM_SLOT_PART := Vector3(0.62, 2.16, PEDESTAL_Z)
 const PRESENT_POS_MOD := Vector3(-2.15, 2.25, 0.2)
 const PRESENT_POS_PART := Vector3(2.15, 2.25, 0.2)
 
+## After a stone has been read it dollies forward to its reveal mark, out in
+## front of the set where the house camera can fill the frame with it.
+const GEM_REVEAL_MOD := Vector3(-1.35, 2.05, 4.3)
+const GEM_REVEAL_PART := Vector3(1.35, 2.05, 4.3)
+
 ## The star board is three prize gems standing on the altar, so the reward
 ## for a cleared trial lands somewhere the audience is already looking.
 const PIP_BASE := Vector3(-0.42, 1.63, PEDESTAL_Z + 0.15)
@@ -904,7 +909,7 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 	_pulse_lights(1.9)
 	var cam_az := _camera_azimuth()
 	var face := gem.front_face_for_azimuth(cam_az)
-	await gem.lift_to(GEM_SLOT_PART if is_part else GEM_SLOT_MOD, face, cam_az, 1.05)
+	await gem.lift_to(GEM_REVEAL_PART if is_part else GEM_REVEAL_MOD, face, cam_az, 1.05)
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return -1
 	await gem.flash_face(face)
@@ -934,7 +939,7 @@ func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch:
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return
 	_pulse_lights(1.9)
-	await gem.lift_to(GEM_SLOT_PART if is_part else GEM_SLOT_MOD, face, _camera_azimuth(), 1.05)
+	await gem.lift_to(GEM_REVEAL_PART if is_part else GEM_REVEAL_MOD, face, _camera_azimuth(), 1.05)
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return
 	await gem.flash_face(face)
@@ -973,8 +978,8 @@ func place_gems_settled(part_word: String, part_face: int, mod_word: String, mod
 	var az := _camera_azimuth()
 	var gem_part := _make_gem(GEM_SLOT_PART, Color(0.5, 0.85, 1.0, 0.62), PARTS)
 	var gem_mod := _make_gem(GEM_SLOT_MOD, Color(1.0, 0.55, 0.85, 0.62), MODS)
-	gem_part.snap_settled(GEM_SLOT_PART, part_face, az)
-	gem_mod.snap_settled(GEM_SLOT_MOD, mod_face, az)
+	gem_part.snap_settled(GEM_REVEAL_PART, part_face, az)
+	gem_mod.snap_settled(GEM_REVEAL_MOD, mod_face, az)
 	place_word_plaque(PARTS[part_face], true)
 	place_word_plaque(MODS[mod_face], false)
 
@@ -1214,6 +1219,45 @@ func apply_mod_chip(part: String, mod: String, at: Vector3) -> void:
 	tw.tween_property(_chip, "scale", Vector3.ONE, 0.5)
 	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_pulse_lights(2.0)
+
+
+## The kept-modifications rail: one small plaque per modification the guest
+## has been given, stacked beside her mark. Body modifications are permanent
+## in this show, so the audience must be able to count them.
+func apply_mod_rail(mods: Array) -> void:
+	if is_instance_valid(_mod_rail):
+		_mod_rail.queue_free()
+	_mod_rail = null
+	var live: Array = []
+	for m in mods:
+		if str(m) != "":
+			live.append(str(m))
+	if live.is_empty():
+		return
+	_mod_rail = Node3D.new()
+	_mod_rail.name = "ModRail"
+	add_child(_mod_rail)
+	var base := AURORA_MARK + Vector3(0.95, 0.95, -0.15)
+	for i in live.size():
+		var parts := str(live[i]).split(":")
+		var part := parts[0]
+		var mod := parts[1] if parts.size() > 1 else ""
+		var color: Color = MOD_COLORS.get(mod, Color(0.8, 0.9, 1.0))
+		var row := Node3D.new()
+		row.name = "Kept%d" % i
+		row.position = base + Vector3(0.0, 0.34 * float(i), 0.0)
+		_mod_rail.add_child(row)
+		var tab := BoxMesh.new()
+		tab.size = Vector3(0.9, 0.24, 0.04)
+		var tab_mi := _mesh_instance(tab, _mat(Color(0.05, 0.07, 0.16), 0.4, 0.3, color * 0.5, 0.7), row)
+		tab_mi.name = "Tab"
+		var text := _label("%s %s" % [part, mod], 80, color, Color(0.02, 0.04, 0.1, 0.95), 0.0016)
+		text.name = "Text"
+		text.position = Vector3(0, 0, 0.035)
+		row.add_child(text)
+
+
+var _mod_rail: Node3D = null
 
 
 func clear_mod_chip() -> void:
@@ -1734,6 +1778,7 @@ func _pulse_lights(peak: float) -> void:
 # ---------------------------------------------------------------- full reset
 
 func reset_show() -> void:
+	apply_mod_rail([])
 	clear_gems()
 	clear_props()
 	clear_mod_chip()

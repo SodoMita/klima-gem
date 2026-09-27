@@ -30,6 +30,10 @@ signal state_restored
 @export var show_mod: String = ""
 @export var show_part_face: int = -1
 @export var show_mod_face: int = -1
+## Every modification the guest has been given, in the order she got them:
+## "PART:MOD" entries. Body modifications are permanent - a later round
+## stacks on top of the earlier ones instead of replacing them.
+@export var show_applied_mods: Array = []
 @export var show_outlook: String = ""
 @export var show_props_round: int = 0
 @export var show_ren_key: String = ""
@@ -124,6 +128,7 @@ func snapshot() -> Dictionary:
 		"show_mod": show_mod,
 		"show_part_face": show_part_face,
 		"show_mod_face": show_mod_face,
+		"show_applied_mods": show_applied_mods.duplicate(true),
 		"show_outlook": show_outlook,
 		"show_props_round": show_props_round,
 		"show_ren_key": show_ren_key,
@@ -160,6 +165,7 @@ func restore(data: Dictionary) -> void:
 	show_mod = str(data.get("show_mod", ""))
 	show_part_face = int(data.get("show_part_face", -1))
 	show_mod_face = int(data.get("show_mod_face", -1))
+	show_applied_mods = (data.get("show_applied_mods", []) as Array).duplicate(true)
 	show_outlook = str(data.get("show_outlook", ""))
 	show_props_round = int(data.get("show_props_round", 0))
 	show_ren_key = str(data.get("show_ren_key", ""))

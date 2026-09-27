@@ -113,3 +113,22 @@ stage was rebuilt around.
 ## Palette
 
 The glass look lives on the balloon and the title card: navy panels around `Color(0.035, 0.045, 0.11, 0.8)`, cyan borders, and a soft blue shadow. Speaker names tint the name plate (Ren cyan, Aurora blue-white). The word plaques follow their gems: pink for the shapeshift, ice-blue for the body part.
+
+### Joker's stage pass (feat/joker-stage-box)
+
+- `scenes/show_stage/show_stage.tscn` is now an **authored** scene: camera,
+  environment, house floor, platform/rim/inlay/wings, back wall, altar,
+  marks, physics bodies and the closed throw box are real nodes with real
+  transforms. `show_stage.gd` only adds the moving parts and skips anything
+  it finds already authored.
+- **Closed throw box**: a sealed glass case (four walls + lid + stage floor).
+  Gems are released inside it and can never leave the stage or the world.
+  `throw_box_contains()` proves it; `tests/joker_stage_test.tscn` checks it.
+- **Fair throws**: random release attitude and random spin sign on every
+  axis, and a 7 s settle window so the stones stop on their own.
+- **Labels**: every word now rides its pavilion facet *and* the upper (crown)
+  face above it; the flat top carries the stone's name — `GEM MEGA` on the
+  shapeshift gem, `GEM MILK` on the body-part gem.
+- **Body modifications are kept**: `GameState.show_applied_mods` records one
+  entry per round and the stage shows a rail of every modification the guest
+  is carrying.
