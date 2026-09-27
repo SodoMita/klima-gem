@@ -121,6 +121,51 @@ func _find_balloon(node: Node) -> Node:
 # ------------------------------------------------------------- show control
 
 ## Wipe the show state and the stage furniture. Call once, on the cold open.
+
+# ------------------------------------------------------------------- audio
+## Every beat of the show gets a sound out of the C dubstep generator, and the
+## floor music follows the tension. Silent while the balloon replays history.
+
+func _audio() -> Node:
+	return get_node_or_null("/root/AudioDirector")
+
+
+## One event sound. energy 0..1 (how hard the moment lands).
+func snd(key: String, energy: float = 0.8) -> void:
+	if replaying():
+		return
+	var a := _audio()
+	if a != null and a.has_method("play_event"):
+		a.play_event(key, energy)
+
+
+## A cue for the live score: riser | drop | impact | fill | stab | break.
+func music_cue(name: String) -> void:
+	if replaying():
+		return
+	var a := _audio()
+	if a != null and a.has_method("music_event"):
+		a.music_event(name)
+
+
+## How hard the floor should push right now.
+func music_heat(level: float, fade: float = 0.6) -> void:
+	if replaying():
+		return
+	var a := _audio()
+	if a != null and a.has_method("set_music_intensity"):
+		a.set_music_intensity(level, fade)
+
+
+## Stage music: active dubstep, not the calm festival score.
+func start_stage_music(key: String = "stage") -> void:
+	if replaying():
+		return
+	var a := _audio()
+	if a != null and a.has_method("play_dubstep"):
+		a.play_dubstep(key)
+
+
 func begin_show() -> void:
 	_state_epoch += 1
 	var gs := _gs()
@@ -294,6 +339,10 @@ func success_chance(round_no: int) -> float:
 ## never rendered: one standing portrait (the guest) is all this stage needs,
 ## so this cue only turns the light up on his mark.
 func enter_ren() -> void:
+	start_stage_music("stage")
+	music_heat(0.55, 0.8)
+	snd("airhorn", 0.7)
+	music_cue("fill")
 	var gs := _gs()
 	if gs != null:
 		gs.show_ren_key = "ren"
@@ -304,6 +353,7 @@ func enter_ren() -> void:
 
 ## The guest takes hers, wide-eyed.
 func aurora_enters() -> void:
+	snd("gem_spawn", 0.7)
 	set_aurora_expression("serious", true)
 
 
@@ -402,6 +452,8 @@ func throw_gem_round() -> void:
 		gs.show_part = ShowStageScript.PARTS[gs.show_part_face]
 		gs.show_mod = ShowStageScript.MODS[gs.show_mod_face]
 		return
+	music_heat(0.7, 0.5)
+	snd("throw", 0.8)
 	var faces: Array = await st.throw_gems(gs.rng)
 	if not _is_current(epoch, st) or faces.size() != 2:
 		return
@@ -416,6 +468,7 @@ func throw_gem_round() -> void:
 ## Spend a crowd cheer: the modification gem goes back in the air, and the
 ## new word is whatever face lands front-most this time.
 func swap_mod_gem() -> void:
+	snd("scratch", 0.8)
 	var gs := _gs()
 	var st := stage()
 	if gs == null or st == null:
@@ -469,6 +522,8 @@ func _unstamp_current(gs: Node) -> void:
 ## Stamp the pairing onto the guest: the floating chip, the portrait effects,
 ## and the freshly computed outlook for the trial about to run.
 func apply_mods() -> void:
+	snd("wobble_blip", 0.85)
+	music_cue("stab")
 	var gs := _gs()
 	var st := stage()
 	if gs == null or st == null:
@@ -496,6 +551,7 @@ func apply_mods() -> void:
 
 ## Dress the stage for trial [param round_no] and remember it for restores.
 func build_challenge(round_no: int) -> void:
+	snd("reveal", 0.7)
 	var gs := _gs()
 	var st := stage()
 	if gs == null or st == null:
@@ -543,9 +599,18 @@ func run_challenge() -> void:
 			gs.show_stars = int(gs.show_stars) + 1
 		gs.show_props_round = 0
 		return
+	music_heat(0.95, 0.4)
+	music_cue("riser")
 	await st.play_challenge(int(gs.show_round), bool(gs.last_success), _pattern)
 	if not _is_current(epoch, st):
 		return
+	if gs.last_success:
+		snd("correct", 1.0)
+		music_cue("drop")
+	else:
+		snd("wrong", 0.9)
+		music_cue("impact")
+	music_heat(0.6, 1.2)
 	gs.show_scored_round = need
 	if gs.last_success and not already_scored:
 		gs.show_stars = int(gs.show_stars) + 1
@@ -562,6 +627,9 @@ func run_challenge() -> void:
 func finale_confetti() -> void:
 	var st := stage()
 	if st != null and not replaying():
+		snd("win", 1.0)
+		music_cue("drop")
+		music_heat(1.0, 0.3)
 		st.confetti_burst()
 
 

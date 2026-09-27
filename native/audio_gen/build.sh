@@ -10,7 +10,7 @@ CC="${CC:-cc}"
 
 mkdir -p "$OUT"
 
-SRCS="$SRC/src/ag_common.c $SRC/src/ag_osc.c $SRC/src/ag_envelope.c $SRC/src/ag_filter.c $SRC/src/ag_noise.c $SRC/src/ag_sfx.c $SRC/src/ag_drums.c $SRC/src/ag_fm.c $SRC/src/ag_chiptune.c $SRC/src/ag_ambient.c $SRC/src/ag_music_box.c $SRC/src/ag_sequencer.c $SRC/src/ag_reverb.c $SRC/src/ag_delay.c $SRC/src/ag_wav.c $SRC/src/ag_proc_music.c $SRC/src/ag_distortion.c $SRC/src/ag_sampler.c $SRC/src/ag_formant.c $SRC/src/ag_presets.c $SRC/src/ag_3d.c $SRC/src/ag_water.c $SRC/src/ag_fire.c $SRC/src/ag_nature.c $SRC/src/ag_weather.c $SRC/src/ag_biome.c $SRC/src/ag_ambience_3d.c $SRC/src/ag_soundscape.c $SRC/src/audio_gen.c"
+SRCS="$SRC/src/ag_common.c $SRC/src/ag_osc.c $SRC/src/ag_envelope.c $SRC/src/ag_filter.c $SRC/src/ag_noise.c $SRC/src/ag_sfx.c $SRC/src/ag_drums.c $SRC/src/ag_fm.c $SRC/src/ag_chiptune.c $SRC/src/ag_ambient.c $SRC/src/ag_music_box.c $SRC/src/ag_sequencer.c $SRC/src/ag_reverb.c $SRC/src/ag_delay.c $SRC/src/ag_wav.c $SRC/src/ag_proc_music.c $SRC/src/ag_dubstep.c $SRC/src/ag_distortion.c $SRC/src/ag_sampler.c $SRC/src/ag_formant.c $SRC/src/ag_presets.c $SRC/src/ag_3d.c $SRC/src/ag_water.c $SRC/src/ag_fire.c $SRC/src/ag_nature.c $SRC/src/ag_weather.c $SRC/src/ag_biome.c $SRC/src/ag_ambience_3d.c $SRC/src/ag_soundscape.c $SRC/src/audio_gen.c"
 
 echo "=== Building tests with host cc ==="
 $CC -std=c11 -O2 -I "$INCLUDE" -I "$SRC/../scene_score" $SRCS "$SRC/tests/test_all.c" -o "$OUT/test_all" -lm
@@ -19,6 +19,10 @@ echo "Running test_all..."
 
 $CC -std=c11 -O2 -I "$INCLUDE" $SRCS "$SRC/tests/gen_samples.c" -o "$OUT/gen_samples" -lm
 echo "gen_samples built: $OUT/gen_samples (run to generate /tmp/*.wav)"
+
+$CC -std=c11 -O2 -I "$INCLUDE" $SRCS "$SRC/tests/gen_dubstep.c" -o "$OUT/gen_dubstep" -lm
+echo "Running gen_dubstep (dubstep engine + event one-shots)..."
+"$OUT/gen_dubstep"
 
 # Build GDExtension libraries using zig if available
 if command -v "$ZIG" >/dev/null 2>&1; then

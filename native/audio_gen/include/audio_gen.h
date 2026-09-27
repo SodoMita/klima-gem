@@ -44,6 +44,7 @@
 #include "ag_delay.h"
 #include "ag_wav.h"
 #include "ag_proc_music.h"
+#include "ag_dubstep.h"
 #include "ag_distortion.h"
 #include "ag_sampler.h"
 #include "ag_formant.h"
