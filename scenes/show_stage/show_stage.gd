@@ -53,29 +53,41 @@ const CAM_FOV := 45.0
 ## Where the guest stands: stage right, forward of the pedestal so she reads
 ## over it rather than behind it. Ren is a voice on the microphone and never
 ## takes a visible mark, so there is no second portrait on this stage.
-const AURORA_MARK := Vector3(1.8, STAGE_TOP, 1.9)
+const AURORA_MARK := Vector3(2.05, STAGE_TOP, 2.0)
 const AURORA_BASE_HEIGHT := 1.68
-const REN_MARK := Vector3(-1.8, STAGE_TOP, 1.9)
+const REN_MARK := Vector3(-2.05, STAGE_TOP, 2.0)
 
-const PEDESTAL_Z := 3.3
+## The altar stands upstage, fully ON the platform (it used to hang off the
+## downstage edge at z = 3.3, half of it in mid-air).
+const PEDESTAL_Z := -2.35
 const PEDESTAL_HEAD := 1.55
 ## Gem stations: the shapeshift (modification) gem hangs on the LEFT, the
 ## body-part gem on the RIGHT. Their settled words fly onward to the
 ## presentation slots, same sides, higher up.
-const GEM_SLOT_MOD := Vector3(-0.62, 2.16, 3.3)
-const GEM_SLOT_PART := Vector3(0.62, 2.16, 3.3)
-const PRESENT_POS_MOD := Vector3(-2.2, 1.95, 4.2)
-const PRESENT_POS_PART := Vector3(2.2, 1.95, 4.2)
+const GEM_SLOT_MOD := Vector3(-0.62, 2.16, PEDESTAL_Z)
+const GEM_SLOT_PART := Vector3(0.62, 2.16, PEDESTAL_Z)
+## The presented words hang over the platform, not out above the audience.
+const PRESENT_POS_MOD := Vector3(-2.15, 2.25, 0.2)
+const PRESENT_POS_PART := Vector3(2.15, 2.25, 0.2)
 
 ## The star board is three prize gems standing on the altar, so the reward
 ## for a cleared trial lands somewhere the audience is already looking.
-const PIP_BASE := Vector3(-0.42, 1.63, 3.45)
+const PIP_BASE := Vector3(-0.42, 1.63, PEDESTAL_Z + 0.15)
 const PIP_STEP := Vector3(0.42, 0.0, 0.0)
 
 ## Where each thrown gem is aimed on the stage floor. Different landing spots
 ## keep the two bodies from shoving each other around.
-const LAND_PART := Vector3(1.25, STAGE_TOP, 2.35)
-const LAND_MOD := Vector3(-1.45, STAGE_TOP, 2.05)
+## Both landing marks sit inside the throw box (see THROW_BOX_*), so a gem
+## can never be thrown off the stage or out of the world.
+const LAND_PART := Vector3(0.35, STAGE_TOP, 1.45)
+const LAND_MOD := Vector3(-1.25, STAGE_TOP, 1.05)
+
+## The closed throw box: a glass case downstage-left with four walls, a lid
+## and the stage floor for a bottom. Everything thrown stays inside it.
+const THROW_BOX_CENTER := Vector3(-0.5, STAGE_TOP, 1.3)
+const THROW_BOX_HALF := Vector3(1.35, 0.0, 0.95)
+const THROW_BOX_HEIGHT := 1.85
+const THROW_BOX_WALL := 0.06
 
 ## Below this line the dialogue balloon covers the frame, so nothing the
 ## audience has to read may be placed there.
@@ -126,11 +138,14 @@ func _ready() -> void:
 	_build_audience()
 	_build_pedestal()
 	_build_colliders()
+	_build_throw_box()
 	_build_marks()
 	_build_pips()
-	_props = Node3D.new()
-	_props.name = "Props"
-	add_child(_props)
+	_props = get_node_or_null("Props") as Node3D
+	if _props == null:
+		_props = Node3D.new()
+		_props.name = "Props"
+		add_child(_props)
 
 
 func _apply_camera() -> void:
@@ -239,6 +254,8 @@ func _label(text: String, size: int, color: Color, outline: Color, px := 0.008) 
 
 
 func _build_environment() -> void:
+	if get_node_or_null("WorldEnvironment") != null:
+		return
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.012, 0.016, 0.045)
@@ -250,6 +267,7 @@ func _build_environment() -> void:
 	env.glow_intensity = 0.45
 	env.glow_bloom = 0.05
 	var we := WorldEnvironment.new()
+	we.name = "WorldEnvironment"
 	we.environment = env
 	add_child(we)
 
@@ -257,6 +275,8 @@ func _build_environment() -> void:
 ## Stands the moving parts under stable names: the stage manager's own
 ## containers, so portraits and props never land under the show furniture.
 func _build_world_containers() -> void:
+	if get_node_or_null("World3D") != null:
+		return
 	var world := Node3D.new()
 	world.name = "World3D"
 	add_child(world)
@@ -266,6 +286,8 @@ func _build_world_containers() -> void:
 
 
 func _build_hall() -> void:
+	if get_node_or_null("HouseFloor") != null:
+		return
 	# The house floor the audience sits on.
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(40.0, 0.1, 20.0)
@@ -277,6 +299,10 @@ func _build_hall() -> void:
 ## that keep the eye on the stage. Nothing is placed where it would crop
 ## against the camera frame — the arena is the whole picture.
 func _build_set() -> void:
+	var authored := get_node_or_null("Set") as Node3D
+	if authored != null:
+		_set_root = authored
+		return
 	_set_root = Node3D.new()
 	_set_root.name = "Set"
 	add_child(_set_root)
@@ -330,15 +356,21 @@ func _build_set() -> void:
 
 ## The back wall: a star cloth and the show sign, with the prize board below.
 func _build_star_cloth() -> void:
-	var cloth := Node3D.new()
-	cloth.name = "StarCloth"
-	add_child(cloth)
+	var cloth := get_node_or_null("StarCloth") as Node3D
+	if cloth != null:
+		if cloth.get_node_or_null("Stars") != null:
+			return
+	else:
+		cloth = Node3D.new()
+		cloth.name = "StarCloth"
+		add_child(cloth)
 
-	var backdrop := BoxMesh.new()
-	backdrop.size = Vector3(18.0, 7.4, 0.2)
-	var bm := _mesh_instance(backdrop, _mat(Color(0.035, 0.045, 0.115), 0.9), cloth)
-	bm.name = "Backdrop"
-	bm.position = Vector3(0, 3.2, -3.9)
+	if cloth.get_node_or_null("Backdrop") == null:
+		var backdrop := BoxMesh.new()
+		backdrop.size = Vector3(18.0, 7.4, 0.2)
+		var bm := _mesh_instance(backdrop, _mat(Color(0.035, 0.045, 0.115), 0.9), cloth)
+		bm.name = "Backdrop"
+		bm.position = Vector3(0, 3.2, -3.9)
 
 	var star_mm := MultiMesh.new()
 	star_mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -360,6 +392,8 @@ func _build_star_cloth() -> void:
 	# The sign. The only thing on the back wall: the tagline lives on the
 	# title card, and a second line of type up here only collided with the
 	# word plaques.
+	if cloth.get_node_or_null("Sign") != null:
+		return
 	var sign := _label("KLIMA GEM", 160, Color(0.6, 0.92, 1.0), Color(0.02, 0.07, 0.18, 0.95), 0.0072)
 	sign.name = "Sign"
 	sign.position = Vector3(0, 3.62, -3.8)
@@ -369,6 +403,9 @@ func _build_star_cloth() -> void:
 ## Lighting beams: additive cones that fade as they fall, so the stage is lit
 ## by something the audience can see.
 func _build_beams() -> void:
+	if get_node_or_null("Beams") != null:
+		_key_light = get_node_or_null("KeyLight") as OmniLight3D
+		return
 	var beams := Node3D.new()
 	beams.name = "Beams"
 	add_child(beams)
@@ -425,6 +462,7 @@ void fragment() {
 		bmi.position = Vector3(0, 5.3, z)
 
 	_key_light = OmniLight3D.new()
+	_key_light.name = "KeyLight"
 	_key_light.position = Vector3(0, 4.4, 3.4)
 	_key_light.light_color = Color(1.0, 0.96, 0.88)
 	_key_light.light_energy = 1.35
@@ -450,6 +488,8 @@ void fragment() {
 
 
 func _build_audience() -> void:
+	if get_node_or_null("Audience") != null:
+		return
 	var crowd := Node3D.new()
 	crowd.name = "Audience"
 	add_child(crowd)
@@ -504,6 +544,8 @@ func _build_audience() -> void:
 ## A slim column the gems are thrown toward and then lifted above: the show's
 ## only piece of furniture, centred so the two word slots hang either side.
 func _build_pedestal() -> void:
+	if get_node_or_null("Pedestal") != null:
+		return
 	var ped := Node3D.new()
 	ped.name = "Pedestal"
 	add_child(ped)
@@ -554,6 +596,8 @@ func _build_pedestal() -> void:
 ## Static bodies for everything a thrown gem can land on, plus a net far
 ## below the house floor so a wild throw can never fall out of the world.
 func _build_colliders() -> void:
+	if get_node_or_null("Physics") != null:
+		return
 	var physics := Node3D.new()
 	physics.name = "Physics"
 	add_child(physics)
@@ -599,6 +643,80 @@ func _build_colliders() -> void:
 	net.collision_mask = 0
 
 
+## The closed throw box. Four glass walls, a glass lid and the stage floor:
+## a sealed case the gems are thrown inside, so no stone can ever skid off
+## the platform, roll into the audience or fall out of the world. The panes
+## are see-through — the throw is the act, and the house must watch it.
+func _build_throw_box() -> void:
+	if get_node_or_null("ThrowBox") != null:
+		return
+	var box := Node3D.new()
+	box.name = "ThrowBox"
+	add_child(box)
+
+	var glass := _mat(Color(0.55, 0.82, 1.0, 0.13), 0.08, 0.2, Color(0.25, 0.55, 0.9), 0.35)
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glass.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var frame_mat := _mat(Color(0.1, 0.14, 0.28), 0.25, 0.85, Color(0.3, 0.7, 1.0), 0.8)
+
+	var hx := THROW_BOX_HALF.x
+	var hz := THROW_BOX_HALF.z
+	var h := THROW_BOX_HEIGHT
+	var c := THROW_BOX_CENTER
+	var walls := [
+		# offset, size (the lid last)
+		[Vector3(0, h * 0.5, -hz), Vector3(hx * 2.0, h, THROW_BOX_WALL)],
+		[Vector3(0, h * 0.5, hz), Vector3(hx * 2.0, h, THROW_BOX_WALL)],
+		[Vector3(-hx, h * 0.5, 0), Vector3(THROW_BOX_WALL, h, hz * 2.0)],
+		[Vector3(hx, h * 0.5, 0), Vector3(THROW_BOX_WALL, h, hz * 2.0)],
+		[Vector3(0, h, 0), Vector3(hx * 2.0, THROW_BOX_WALL, hz * 2.0)],
+	]
+	var names := ["WallBack", "WallFront", "WallLeft", "WallRight", "Lid"]
+	for i in walls.size():
+		var offset: Vector3 = walls[i][0]
+		var size: Vector3 = walls[i][1]
+		var body := StaticBody3D.new()
+		body.name = names[i]
+		body.position = c + offset
+		body.collision_layer = 1
+		body.collision_mask = 0
+		body.physics_material_override = _gem_physics_material(0.24)
+		box.add_child(body)
+		var shape := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = size
+		shape.shape = bs
+		body.add_child(shape)
+		var mesh := BoxMesh.new()
+		mesh.size = size
+		var mi := _mesh_instance(mesh, glass, body)
+		mi.name = "Pane"
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	# A lit frame so the case reads as an object and not as a smudge.
+	for corner in [Vector3(-hx, 0, -hz), Vector3(hx, 0, -hz), Vector3(-hx, 0, hz), Vector3(hx, 0, hz)]:
+		var post := BoxMesh.new()
+		post.size = Vector3(0.05, h, 0.05)
+		var pmi := _mesh_instance(post, frame_mat, box)
+		pmi.position = c + corner + Vector3(0, h * 0.5, 0)
+
+
+## Is [param p] inside the sealed case? Tests use this to prove that a thrown
+## gem can never leave the box.
+func throw_box_contains(p: Vector3, slack := 0.05) -> bool:
+	var d := p - THROW_BOX_CENTER
+	return (absf(d.x) <= THROW_BOX_HALF.x + slack
+		and absf(d.z) <= THROW_BOX_HALF.z + slack
+		and d.y >= -slack and d.y <= THROW_BOX_HEIGHT + slack)
+
+
+## Where a gem is released: inside the box, just under the lid, on its own
+## side. The hand mimes the throw outside; the stone flies in the case.
+func throw_origin(is_part: bool) -> Vector3:
+	var side := 0.62 if is_part else -0.62
+	return THROW_BOX_CENTER + Vector3(side, THROW_BOX_HEIGHT - 0.42, 0.34)
+
+
 func _gem_physics_material(bounce: float) -> PhysicsMaterial:
 	var pm := PhysicsMaterial.new()
 	pm.bounce = bounce
@@ -607,6 +725,8 @@ func _gem_physics_material(bounce: float) -> PhysicsMaterial:
 
 
 func _build_marks() -> void:
+	if get_node_or_null("Marks") != null:
+		return
 	var marks := Node3D.new()
 	marks.name = "Marks"
 	add_child(marks)
@@ -620,6 +740,8 @@ func _build_marks() -> void:
 
 
 func _build_pips() -> void:
+	if get_node_or_null("StarPips") != null:
+		return
 	var pips := Node3D.new()
 	pips.name = "StarPips"
 	add_child(pips)
@@ -660,8 +782,12 @@ func _make_gem(slot: Vector3, color: Color, word_list: PackedStringArray, physic
 	var gem: FlatTopGem = FlatTopGemScript.new()
 	gem.gem_color = color
 	gem.physical = physical
+	# The flat top names the stone: the body-part gem is GEM MILK, the
+	# shapeshift gem is GEM MEGA.
+	gem.top_text = "GEM\nMILK" if word_list == PARTS else "GEM\nMEGA"
 	gem.set_words(word_list)
-	gem.position = slot + Vector3(0, 3.2, 0)  # starts above the truss, out of sight
+	# Waiting inside the sealed case, under the lid, out of the shot's way.
+	gem.position = THROW_BOX_CENTER + Vector3(0.0, THROW_BOX_HEIGHT - 0.3, 0.0)
 	add_child(gem)
 	_gems.append(gem)
 	return gem
@@ -750,19 +876,28 @@ func throw_gems_fixed(part_face: int, mod_face: int) -> void:
 ## Returns the face index the stones chose, or -1 when a rewind cancelled
 ## the flight (the gems were cleared under it — see _gem_epoch).
 func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: RandomNumberGenerator, epoch: int) -> int:
-	var from := aurora_hand() + (Vector3(0.16, 0.04, -0.06) if is_part else Vector3(-0.14, 0.08, -0.02))
+	var from := throw_origin(is_part)
 	_pulse_lights(2.2)
 	# Every throw is its own throw: the landing spot, the flight time and the
 	# spin come from the story RNG, so the same seed replays the same night
 	# while no two stones in one night fly alike.
-	var flight := clampf((1.0 if is_part else 0.78) + rng.randf_range(-0.12, 0.12), 0.55, 1.25)
-	var target := land + Vector3(rng.randf_range(-0.55, 0.55), 0.0, rng.randf_range(-0.35, 0.35))
-	var spin := Vector3(rng.randf_range(5.0, 9.0), rng.randf_range(7.0, 12.0), rng.randf_range(3.0, 6.0))
-	if not is_part:
-		spin = spin * -0.8
-	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin)
+
+	var flight := clampf((0.62 if is_part else 0.56) + rng.randf_range(-0.1, 0.1), 0.4, 0.9)
+	var target := land + Vector3(rng.randf_range(-0.35, 0.35), 0.0, rng.randf_range(-0.28, 0.28))
+	# Spin is drawn on every axis with a random SIGN: a spin that always turns
+	# the same way lands the same family of faces, which is a rigged stone.
+	var spin := Vector3(
+		rng.randf_range(4.0, 11.0) * (1.0 if rng.randf() < 0.5 else -1.0),
+		rng.randf_range(5.0, 13.0) * (1.0 if rng.randf() < 0.5 else -1.0),
+		rng.randf_range(4.0, 11.0) * (1.0 if rng.randf() < 0.5 else -1.0)
+	)
+	# ...and the stone leaves the hand in a random attitude, so no facet is
+	# ever "the one nearest the floor" by construction.
+	var attitude := Vector3(rng.randf_range(0.0, TAU), rng.randf_range(0.0, TAU), rng.randf_range(0.0, TAU))
+	gem.throw_with_velocity(from, _arc_velocity(from, target, flight), spin, attitude)
 	# Wait on the STAGE rather than on the body: on rewind the body is
 	# freed, and a suspended method on it would resume into a dead instance.
+	# The window is long: the stones must stop on their own inside the case.
 	await _wait_throw_rest(gem, epoch)
 	if epoch != _gem_epoch or not is_instance_valid(gem):
 		return -1
@@ -785,12 +920,12 @@ func _throw_one_physics(gem: FlatTopGem, land: Vector3, is_part: bool, rng: Rand
 ## One full throw: leave the hand, land, rest, lift onto the mark, flash the
 ## named face, present the word, and fly it to its presentation slot.
 func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch: int) -> void:
-	var from := aurora_hand() + (Vector3(0.16, 0.04, -0.06) if is_part else Vector3(-0.14, 0.08, -0.02))
+	var from := throw_origin(is_part)
 	_pulse_lights(2.2)
 	# Gravity does the rest: this is a real impulse, not a tween.
 	gem.throw_with_velocity(
 		from,
-		_arc_velocity(from, land, 1.0 if is_part else 0.78),
+		_arc_velocity(from, land, 0.62 if is_part else 0.56),
 		Vector3(7.0, 9.5, 4.5) * (1.0 if is_part else -0.8)
 	)
 	# Wait on the STAGE rather than on the body: on rewind the body is
@@ -814,16 +949,19 @@ func _throw_one(gem: FlatTopGem, land: Vector3, face: int, is_part: bool, epoch:
 func _wait_throw_rest(gem: FlatTopGem, epoch: int) -> void:
 	var elapsed := 0.0
 	var calm_frames := 0
-	while elapsed < 3.2 and epoch == _gem_epoch and is_instance_valid(gem):
+	# Seven seconds, not three: the stones are allowed to come to rest on
+	# their own inside the closed case; a short timer would cut the tumble
+	# short and decide the word for them.
+	while elapsed < 7.0 and epoch == _gem_epoch and is_instance_valid(gem):
 		await get_tree().physics_frame
 		if epoch != _gem_epoch or not is_instance_valid(gem):
 			return
 		elapsed += get_physics_process_delta_time()
 		if gem.freeze:
 			return
-		if gem.linear_velocity.length() < 0.35 and gem.angular_velocity.length() < 1.1:
+		if gem.linear_velocity.length() < 0.22 and gem.angular_velocity.length() < 0.7:
 			calm_frames += 1
-			if calm_frames >= 4:
+			if calm_frames >= 12:
 				return
 		else:
 			calm_frames = 0
@@ -1145,9 +1283,11 @@ func clear_props() -> void:
 		if _props.get_parent() != null:
 			_props.get_parent().remove_child(_props)
 		_props.queue_free()
-	_props = Node3D.new()
-	_props.name = "Props"
-	add_child(_props)
+	_props = get_node_or_null("Props") as Node3D
+	if _props == null:
+		_props = Node3D.new()
+		_props.name = "Props"
+		add_child(_props)
 	_stones.clear()
 	_bells.clear()
 	_pads.clear()
@@ -1244,7 +1384,7 @@ func build_choir() -> void:
 
 const CROSSING_Z := -1.55
 const BELL_Z := -1.0
-const CHOIR_Z := -2.35
+const CHOIR_Z := -1.45
 
 
 func _pop_in(node: Node3D) -> void:

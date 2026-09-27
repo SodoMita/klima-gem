@@ -33,11 +33,21 @@ static var _outline_color := Color(0.02, 0.05, 0.12, 0.95)
 @export var build_words := true
 ## Only the throwable gems carry colliders and gravity.
 @export var physical := false
+## Text stamped flat on the table (the fully flat top of the stone).
+## The show uses "GEM\nMEGA" on the shapeshift stone and "GEM\nMILK" on the
+## body-part stone, so a gem read from above still names itself.
+@export var top_text := ""
 
 static var word_font: Font = null
 
 var words: PackedStringArray = []
 var face_labels: Array[Label3D] = []
+## The same eight words, repeated on the crown trapezoids (the UPPER side
+## faces). A gem on the floor is read on its upper faces long before the
+## pavilion is visible, so the word has to live up there too.
+var crown_labels: Array[Label3D] = []
+## The word stamped flat on the table.
+var top_label: Label3D = null
 var body: MeshInstance3D = null
 var shape: CollisionShape3D = null
 ## True once the gem has been thrown, landed and set on its mark.
@@ -275,6 +285,107 @@ func _build_labels() -> void:
 		add_child(label)
 		face_labels.append(label)
 
+		_build_crown_label(i, font, base_size)
+
+	_build_top_label(font, base_size)
+
+
+## The UPPER side face (crown trapezoid) i: girdle[i], girdle[i+1],
+## table[i+1], table[i]. It carries the same word as the pavilion facet under
+## it, so the stone names itself whether you read it from the house or from
+## above.
+func crown_corners(i: int) -> Array[Vector3]:
+	var a := TAU * float(i) / float(SIDES)
+	var b := TAU * float(i + 1) / float(SIDES)
+	return [
+		Vector3(cos(a) * girdle_radius, 0.0, sin(a) * girdle_radius),
+		Vector3(cos(b) * girdle_radius, 0.0, sin(b) * girdle_radius),
+		Vector3(cos(b) * table_radius, crown_height, sin(b) * table_radius),
+		Vector3(cos(a) * table_radius, crown_height, sin(a) * table_radius),
+	]
+
+
+func _crown_normal(i: int) -> Vector3:
+	var c := crown_corners(i)
+	var n := (c[1] - c[0]).cross(c[3] - c[0]).normalized()
+	# Point it outward, away from the gem's axis.
+	var a := face_azimuth(i)
+	if n.dot(Vector3(cos(a), 0.0, sin(a))) < 0.0:
+		n = -n
+	return n
+
+
+func _build_crown_label(i: int, font: Font, base_size: int) -> void:
+	var c := crown_corners(i)
+	var normal := _crown_normal(i)
+	var centroid := (c[0] + c[1] + c[2] + c[3]) * 0.25
+	var label := Label3D.new()
+	label.name = "CrownWord%d" % i
+	label.text = words[i]
+	label.font = font
+	label.font_size = base_size
+	label.outline_size = 18
+	label.modulate = word_color
+	label.outline_modulate = _outline_color
+	label.shaded = false
+	label.double_sided = false
+	label.render_priority = 2
+	label.alpha_cut = Label3D.ALPHA_CUT_DISABLED
+	# Fit inside the trapezoid: the short (table) edge is the binding width,
+	# and the slant height is the binding height.
+	var short_edge := c[2].distance_to(c[3])
+	var slant := ((c[3] + c[2]) * 0.5).distance_to((c[0] + c[1]) * 0.5)
+	var text_px := font.get_string_size(words[i], HORIZONTAL_ALIGNMENT_LEFT, -1, base_size)
+	var px := (short_edge * WORD_FIT) / maxf(text_px.x, 1.0)
+	var height_units := text_px.y * px
+	var max_height := slant * 0.7
+	if height_units > max_height:
+		px *= max_height / height_units
+	label.pixel_size = px
+	label.transform = Transform3D(Basis.looking_at(-normal, Vector3.UP), centroid + normal * 0.006)
+	add_child(label)
+	crown_labels.append(label)
+
+
+## The table stamp: two short lines lying flat on the top of the stone,
+## readable from the house camera looking down at the set.
+func _build_top_label(font: Font, base_size: int) -> void:
+	if top_text.is_empty():
+		return
+	var label := Label3D.new()
+	label.name = "TopStamp"
+	label.text = top_text
+	label.font = font
+	label.font_size = base_size
+	label.outline_size = 18
+	label.modulate = word_color
+	label.outline_modulate = _outline_color
+	label.shaded = false
+	label.double_sided = false
+	label.render_priority = 3
+	label.alpha_cut = Label3D.ALPHA_CUT_DISABLED
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var widest := 1.0
+	for line in top_text.split("\n"):
+		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, base_size).x)
+	# The table is an octagon of circumradius table_radius; its inscribed
+	# square is table_radius * 2 * cos(PI/8) / sqrt(2) wide. Stay inside it.
+	var fits := table_radius * 2.0 * cos(PI / float(SIDES)) / sqrt(2.0)
+	var px := (fits * 0.92) / widest
+	var lines := float(top_text.split("\n").size())
+	var text_h := font.get_string_size("M", HORIZONTAL_ALIGNMENT_LEFT, -1, base_size).y * lines * px
+	if text_h > fits * 0.92:
+		px *= (fits * 0.92) / text_h
+	label.pixel_size = px
+	# Glyphs project up through the table; the reading direction runs toward
+	# the back of the stone so the house camera reads it right way up.
+	label.transform = Transform3D(
+		Basis.looking_at(Vector3.DOWN, Vector3.BACK),
+		Vector3(0.0, crown_height + 0.005, 0.0)
+	)
+	add_child(label)
+	top_label = label
+
 
 ## Fade each word by how squarely its facet faces the camera, so a settled
 ## gem reads as one named face rather than eight overlapping ones. Measured by
@@ -305,6 +416,12 @@ func _fade_faces() -> void:
 		var o := _outline_color
 		o.a *= a
 		label.outline_modulate = o
+		if i < crown_labels.size():
+			# The upper face carries the same word and the same fade, so the
+			# stone always shows exactly one word, twice: side and crown.
+			var cl := crown_labels[i]
+			cl.modulate = c
+			cl.outline_modulate = o
 
 
 ## How far, in radians, face [param i]'s outward normal is from a camera at
@@ -337,6 +454,8 @@ func set_words(new_words: PackedStringArray) -> void:
 		words[i] = new_words[i]
 		if i < face_labels.size():
 			face_labels[i].text = words[i]
+		if i < crown_labels.size():
+			crown_labels[i].text = words[i]
 
 
 func start_spinning(speed := 2.6) -> void:
@@ -349,7 +468,7 @@ func start_spinning(speed := 2.6) -> void:
 
 ## Real throw: leave [param from] with this velocity and this spin, under
 ## gravity, and let the stage decide where it lands.
-func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3) -> void:
+func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3, start_rotation := Vector3.ZERO) -> void:
 	_kill_hover()
 	spinning = false
 	settled = false
@@ -359,7 +478,10 @@ func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3) -> voi
 		shape.set_deferred("disabled", false)
 	freeze = false
 	sleeping = false
-	rotation = Vector3.ZERO
+	# Fairness: the stone leaves the hand in whatever attitude it was picked
+	# up in. Always starting level (rotation zero) biases which facets meet
+	# the floor first, and a biased tumble is a rigged show.
+	rotation = start_rotation
 	global_position = from
 	linear_velocity = velocity
 	angular_velocity = spin
@@ -369,7 +491,10 @@ func throw_with_velocity(from: Vector3, velocity: Vector3, spin: Vector3) -> voi
 
 ## Wait until the gem has stopped moving (or [param timeout] runs out).
 ## Returns true when it came to rest on its own.
-func wait_until_rest(timeout := 2.6, speed := 0.35) -> bool:
+## The window is generous on purpose: the stones must be allowed to stop on
+## their own, not be caught mid-tumble by an impatient timer (a timer that
+## fires early is another way of rigging the outcome).
+func wait_until_rest(timeout := 7.0, speed := 0.22) -> bool:
 	var waited := 0.0
 	var calm_frames := 0
 	while waited < timeout:
@@ -377,9 +502,9 @@ func wait_until_rest(timeout := 2.6, speed := 0.35) -> bool:
 		waited += get_physics_process_delta_time()
 		if freeze:
 			break
-		if linear_velocity.length() < speed and angular_velocity.length() < 1.1:
+		if linear_velocity.length() < speed and angular_velocity.length() < 0.7:
 			calm_frames += 1
-			if calm_frames >= 4:
+			if calm_frames >= 12:
 				return true
 		else:
 			calm_frames = 0
