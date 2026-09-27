@@ -43,11 +43,11 @@ int main(void) {
     float *buf = (float *)malloc(sizeof(float) * sr * 40 * 2);
     if (!buf) return 1;
 
-    printf("== dubstep one-shots ==\n");
+    printf("== dubstep one-shots (%d kinds) ==\n", AG_DUB_SFX_COUNT);
     for (k = 0; k < AG_DUB_SFX_COUNT; k++) {
         int n = ag_dub_sfx_render(k, 0.8f, 0, buf, sr * 4, sr);
         float p = peak_of(buf, n), rms = rms_of(buf, n);
-        printf("  %-12s frames=%6d peak=%.3f rms=%.4f\n", ag_dub_sfx_name(k), n, p, rms);
+        printf("  %-14s frames=%6d peak=%.3f rms=%.4f\n", ag_dub_sfx_name(k), n, p, rms);
         check(n > 100, "one-shot length");
         check(finite_all(buf, n), "one-shot finite");
         check(p > 0.02f, "one-shot audible");
@@ -76,6 +76,43 @@ int main(void) {
         check(peak_of(buf, n) > soft * 1.3f, "hard gem hit is louder than soft");
     }
 
+    printf("== variants check ==\n");
+    for (int v = 0; v < AG_DUB_VARIANT_COUNT; v++) {
+        AgDubstep d;
+        ag_dubstep_init(&d, sr, v, 0.0, 100 + v);
+        ag_dubstep_set_gain(&d, 1.0f, 0.05f);
+        ag_dubstep_set_intensity(&d, 0.8f, 0.05f);
+        ag_dubstep_render(&d, buf, sr * 2);
+        float p = peak_of(buf, sr * 4);
+        float r = rms_of(buf, sr * 4);
+        printf("  variant %d (bpm=%.1f root=%d): peak=%.3f rms=%.4f\n", v, d.bpm, d.root, p, r);
+        check(p > 0.05f, "variant audible");
+        check(finite_all(buf, sr * 4), "variant finite");
+    }
+
+    printf("== dynamic switching check ==\n");
+    {
+        AgDubstep d;
+        ag_dubstep_init(&d, sr, AG_DUB_VARIANT_SUSPENSE, 135.0, 42);
+        ag_dubstep_set_gain(&d, 1.0f, 0.05f);
+        ag_dubstep_set_intensity(&d, 0.6f, 0.05f);
+        ag_dubstep_render(&d, buf, sr); // 1 gem rolling suspense
+        check(d.variant == AG_DUB_VARIANT_SUSPENSE, "starts suspense");
+
+        ag_dubstep_switch_mode(&d, AG_DUB_VARIANT_GROOVE, 0.95f, 0.2f);
+        ag_dubstep_event(&d, AG_DUB_EV_DROP); // both gems placed: drop
+        ag_dubstep_render(&d, buf + sr * 2, sr);
+        check(d.variant == AG_DUB_VARIANT_GROOVE, "switched to groove");
+
+        ag_dubstep_switch_mode(&d, AG_DUB_VARIANT_VICTORY, 1.0f, 0.1f);
+        ag_dubstep_render(&d, buf + sr * 4, sr);
+        check(d.variant == AG_DUB_VARIANT_VICTORY, "switched to victory");
+
+        ag_dubstep_switch_mode(&d, AG_DUB_VARIANT_DEFEAT, 0.4f, 0.1f);
+        ag_dubstep_render(&d, buf + sr * 6, sr);
+        check(d.variant == AG_DUB_VARIANT_DEFEAT, "switched to defeat");
+    }
+
     printf("== live engine ==\n");
     {
         AgDubstep d;
@@ -84,7 +121,6 @@ int main(void) {
         ag_dubstep_init(&d, sr, AG_DUB_VARIANT_STAGE, 140.0, 20260927);
         ag_dubstep_set_gain(&d, 1.0f, 0.4f);
         ag_dubstep_set_intensity(&d, 0.6f, 0.5f);
-        /* 0-6 s groove, 6 s riser, drop resolves, event sfx, then chill */
         for (i = 0; i < 6; i++) ag_dubstep_render(&d, buf + i * sr * 2, sr);
         ag_dubstep_event(&d, AG_DUB_EV_RISER);
         for (i = 6; i < 12; i++) ag_dubstep_render(&d, buf + i * sr * 2, sr);

@@ -8,9 +8,12 @@
  *                   bass, growls, risers, drops). Rendered on demand, nothing
  *                   is baked to a loop, so intensity and events can change
  *                   while it plays. This is the "active" stage music; the calm
- *                   moods (festival) are left alone.
+ *                   moods (festival) are left alone. Supports dynamic switching
+ *                   between variants (stage, trial, chill, suspense, groove,
+ *                   victory, defeat) and picking the best mode for the game state.
  *   2. ag_dub_sfx - deterministic one-shot event sounds cut from the same
- *                   synthesis palette (gem collisions, throws, hits, drops).
+ *                   synthesis palette (gem collisions, throws, hits, drops,
+ *                   hops/jumps, cannon shots, bell chimes, choir pads).
  *
  * Self-contained DSP (osc + ladder filter + noise) so it also links into the
  * no-libc portable builds.
@@ -43,6 +46,11 @@ typedef enum {
     AG_DUB_SFX_SCRATCH,       /* vinyl scratch                             */
     AG_DUB_SFX_REVEAL,        /* word/plaque reveal: chime + sweep         */
     AG_DUB_SFX_TICK,          /* cue tick                                  */
+    AG_DUB_SFX_JUMP,          /* Aurora hops/leaps over crossing stone     */
+    AG_DUB_SFX_SHOOT,         /* Cannon fires glowing orb at bells         */
+    AG_DUB_SFX_BELL_HIT,      /* Orb strikes golden bell: resonant ring    */
+    AG_DUB_SFX_PAD_NOTE,      /* Choir pad melodic tone (pitch by energy)  */
+    AG_DUB_SFX_PLAQUE_PLACE,  /* Plaque docks in place: lock-in chime      */
     AG_DUB_SFX_COUNT
 } AgDubSfxKind;
 
@@ -60,9 +68,13 @@ const char *ag_dub_sfx_name(int kind);
 /* ------------------------------------------------------------- live engine */
 
 typedef enum {
-    AG_DUB_VARIANT_STAGE = 0, /* game-show floor: driving, mid wobble      */
-    AG_DUB_VARIANT_TRIAL,     /* challenge running: faster, tense          */
-    AG_DUB_VARIANT_CHILL,     /* half-speed, filtered, between rounds      */
+    AG_DUB_VARIANT_STAGE = 0,    /* game-show floor: driving, mid wobble      */
+    AG_DUB_VARIANT_TRIAL,        /* challenge running: faster, tense          */
+    AG_DUB_VARIANT_CHILL,        /* half-speed, filtered, between rounds      */
+    AG_DUB_VARIANT_SUSPENSE,     /* 1 gem rolling / tension: heartbeat sub    */
+    AG_DUB_VARIANT_GROOVE,       /* both gems placed: heavy peak drop groove  */
+    AG_DUB_VARIANT_VICTORY,      /* overall / challenge win: triumphant arps  */
+    AG_DUB_VARIANT_DEFEAT,       /* overall / challenge loss: dark sub decay  */
     AG_DUB_VARIANT_COUNT
 } AgDubVariant;
 
@@ -184,6 +196,8 @@ void ag_dubstep_set_variant(AgDubstep *d, int variant, double bpm);
 void ag_dubstep_set_intensity(AgDubstep *d, float intensity, float fade_sec);
 void ag_dubstep_set_gain(AgDubstep *d, float gain, float fade_sec);
 void ag_dubstep_event(AgDubstep *d, int event);
+/* Switch to best variant & intensity smoothly */
+void ag_dubstep_switch_mode(AgDubstep *d, int variant, float intensity, float fade_sec);
 /* Fire a one-shot through the music engine (same mix + limiter). */
 void ag_dubstep_trigger_sfx(AgDubstep *d, int kind, float energy, float pan, float gain);
 void ag_dubstep_release(AgDubstep *d, float fade_sec);

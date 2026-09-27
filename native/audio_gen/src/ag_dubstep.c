@@ -60,7 +60,8 @@ static float dub_clip(float x) {
 static const char *k_dub_sfx_names[AG_DUB_SFX_COUNT] = {
     "gem_hit", "gem_land", "gem_spawn", "throw", "catch", "wobble_blip",
     "sub_drop", "impact", "riser", "stab", "correct", "wrong", "win", "lose",
-    "airhorn", "scratch", "reveal", "tick"
+    "airhorn", "scratch", "reveal", "tick", "jump", "shoot", "bell_hit",
+    "pad_note", "plaque_place"
 };
 
 const char *ag_dub_sfx_name(int kind) {
@@ -71,7 +72,8 @@ const char *ag_dub_sfx_name(int kind) {
 static float k_dub_sfx_secs[AG_DUB_SFX_COUNT] = {
     0.30f, 0.26f, 0.55f, 0.42f, 0.22f, 0.36f,
     0.90f, 0.95f, 1.30f, 0.45f, 0.85f, 0.80f, 1.60f, 1.20f,
-    0.90f, 0.40f, 0.70f, 0.09f
+    0.90f, 0.40f, 0.70f, 0.09f, 0.32f, 0.38f, 0.65f,
+    0.50f, 0.48f
 };
 
 int ag_dub_sfx_frames(int kind, int sr) {
@@ -121,7 +123,6 @@ int ag_dub_sfx_render(int kind, float energy, uint64_t seed,
                 s += a * dub_sin((double)i * parts[k] / sr_d);
             }
             s += dub_noise(&rng) * dub_exp_env(t, 0.006f) * 0.5f * (0.4f + 0.6f * e);
-            /* sub thump under the clink so hits read on small speakers */
             s += dub_sin((double)i * (70.0 - 26.0 * (double)t) / sr_d)
                  * dub_exp_env(t, 0.07f) * (0.25f + 0.45f * e);
             out[i] = dub_clip(s * (0.35f + 0.65f * e));
@@ -363,6 +364,86 @@ int ag_dub_sfx_render(int kind, float energy, uint64_t seed,
         }
         break;
     }
+    case AG_DUB_SFX_JUMP: {
+        /* Aurora hops across floating stones: rising chirp + resonant whoosh */
+        for (i = 0; i < n; i++) {
+            float t = (float)i / (float)sr;
+            float u = t / k_dub_sfx_secs[kind];
+            double f = 160.0 + 520.0 * (double)(u * (2.0f - u));
+            float nz = dub_noise(&rng);
+            float s, bp;
+            ph += f / sr_d;
+            s = dub_sin(ph) * 0.65f + dub_tri(ph * 1.5) * 0.35f;
+            lp += (500.0f + 3200.0f * u) / (float)sr * 2.0f * (nz - lp);
+            hp += (250.0f + 1600.0f * u) / (float)sr * 2.0f * (lp - hp);
+            bp = (lp - hp) * 0.45f;
+            out[i] = dub_clip((s + bp) * (0.4f + 0.6f * e) * dub_exp_env(t, 0.12f));
+        }
+        break;
+    }
+    case AG_DUB_SFX_SHOOT: {
+        /* Cannon fires glowing orb: snap transient + pitch falling sine + bass punch */
+        for (i = 0; i < n; i++) {
+            float t = (float)i / (float)sr;
+            double f = 450.0 * pow(0.08, (double)t / 0.25) + 55.0;
+            float nz = dub_noise(&rng);
+            float s, body;
+            ph += f / sr_d;
+            body = dub_sin(ph) * dub_exp_env(t, 0.15f) * 1.1f;
+            lp += 0.25f * (nz - lp);
+            s = body + (nz - lp) * dub_exp_env(t, 0.018f) * 0.8f + lp * dub_exp_env(t, 0.09f) * 0.5f;
+            out[i] = dub_clip(s * (0.5f + 0.5f * e));
+        }
+        break;
+    }
+    case AG_DUB_SFX_BELL_HIT: {
+        /* Golden bell struck by orb: bright metallic inharmonic chime */
+        double f0 = 920.0 + 200.0 * (double)e;
+        double partials[4] = { 1.0, 1.74, 2.82, 4.15 };
+        float p_amps[4] = { 0.55f, 0.35f, 0.22f, 0.12f };
+        for (i = 0; i < n; i++) {
+            float t = (float)i / (float)sr;
+            float s = 0.0f;
+            int k;
+            for (k = 0; k < 4; k++) {
+                float a = p_amps[k] * dub_exp_env(t, 0.22f / (1.0f + 0.5f * (float)k));
+                s += a * dub_sin((double)i * f0 * partials[k] / sr_d);
+            }
+            s += dub_noise(&rng) * dub_exp_env(t, 0.008f) * 0.4f;
+            out[i] = dub_clip(s * (0.4f + 0.6f * e));
+        }
+        break;
+    }
+    case AG_DUB_SFX_PAD_NOTE: {
+        /* Echo Choir musical pad notes: energy selects pentatonic degree */
+        static const double pad_midis[4] = { 65.0, 69.0, 72.0, 76.0 }; /* F4, A4, C5, E5 */
+        int note_idx = (int)(e * 3.99f);
+        double f = ag_midi_to_freq(pad_midis[note_idx < 4 ? note_idx : 3]);
+        for (i = 0; i < n; i++) {
+            float t = (float)i / (float)sr;
+            float s, env;
+            ph += f / sr_d;
+            ph2 += (f * 1.004) / sr_d;
+            env = (t < 0.04f ? t / 0.04f : 1.0f) * dub_exp_env(t - 0.04f, 0.25f);
+            s = (dub_sin(ph) * 0.6f + dub_tri(ph2) * 0.35f) * env;
+            s = ladder_process(&lad, s, 1800.0f, 0.2f);
+            out[i] = dub_clip(s * 1.2f);
+        }
+        break;
+    }
+    case AG_DUB_SFX_PLAQUE_PLACE: {
+        /* Plaque arrives on its pedestal: crystal latch chime + sub bump */
+        for (i = 0; i < n; i++) {
+            float t = (float)i / (float)sr;
+            float s;
+            ph += ag_midi_to_freq(77.0) / sr_d;
+            ph2 += ag_midi_to_freq(84.0) / sr_d;
+            s = (dub_sin(ph) * 0.45f + dub_sin(ph2) * 0.35f) * dub_exp_env(t, 0.16f);
+            s += dub_sin((double)i * 68.0 / sr_d) * dub_exp_env(t, 0.06f) * 0.4f;
+            out[i] = dub_clip(s * (0.4f + 0.6f * e));
+        }
+        break;
+    }
     case AG_DUB_SFX_TICK:
     default: {
         for (i = 0; i < n; i++) {
@@ -393,26 +474,91 @@ int ag_dub_sfx_render(int kind, float energy, uint64_t seed,
 static const double k_dub_divs[8] = { 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0 };
 
 static void dub_build_pattern(AgDubstep *d) {
-    /* minor pentatonic riff, halftime phrasing: long notes with gaps */
-    static const int degrees[5] = { 0, 3, 5, 7, 10 };
     int i;
     for (i = 0; i < AG_DUB_STEPS; i++) {
-        double r = ag_rng_next_f64(&d->rng);
-        int hold = (i % 4) == 0;
         d->bass_note[i] = -1;
         d->bass_gate[i] = 0;
-        if (hold || r < 0.45) {
-            int deg = degrees[(int)(ag_rng_next_f64(&d->rng) * 5.0) % 5];
-            int oct = (r > 0.88) ? 12 : 0;
-            d->bass_note[i] = deg + oct;
-            d->bass_gate[i] = 1;
-        }
-        d->wob_div[i] = (int)(ag_rng_next_f64(&d->rng) * 8.0) % 8;
+        d->wob_div[i] = 2;
     }
-    /* anchor the bar: root on 1 */
-    d->bass_note[0] = 0;
-    d->bass_gate[0] = 1;
-    d->wob_div[0] = 2;
+
+    switch (d->variant) {
+    case AG_DUB_VARIANT_SUSPENSE: {
+        /* 1 gem rolling / tension: heartbeat-like pulse on 0 and 6, quiet wobble */
+        d->bass_note[0] = 0;
+        d->bass_gate[0] = 1;
+        d->wob_div[0] = 1;
+        if (ag_rng_next_f64(&d->rng) < 0.6) {
+            d->bass_note[6] = 3;
+            d->bass_gate[6] = 1;
+            d->wob_div[6] = 0;
+        }
+        break;
+    }
+    case AG_DUB_VARIANT_GROOVE: {
+        /* Both gems placed: driving syncopated groove, aggressive wobble */
+        static const int groove_deg[6] = { 0, 3, 5, 7, 10, 12 };
+        for (i = 0; i < AG_DUB_STEPS; i++) {
+            double r = ag_rng_next_f64(&d->rng);
+            if ((i % 2) == 0 || r < 0.4) {
+                int deg = groove_deg[(int)(r * 6.0) % 6];
+                d->bass_note[i] = deg;
+                d->bass_gate[i] = 1;
+                d->wob_div[i] = (int)(ag_rng_next_f64(&d->rng) * 8.0) % 8;
+            }
+        }
+        d->bass_note[0] = 0;
+        d->bass_gate[0] = 1;
+        d->wob_div[0] = 4;
+        break;
+    }
+    case AG_DUB_VARIANT_VICTORY: {
+        /* Major pentatonic fanfare arps: 0, 4, 7, 9, 12, 16 */
+        static const int maj_deg[6] = { 0, 4, 7, 9, 12, 16 };
+        for (i = 0; i < AG_DUB_STEPS; i++) {
+            if ((i % 2) == 0) {
+                d->bass_note[i] = maj_deg[(i / 2) % 6];
+                d->bass_gate[i] = 1;
+                d->wob_div[i] = 3;
+            }
+        }
+        d->bass_note[0] = 0;
+        d->bass_gate[0] = 1;
+        break;
+    }
+    case AG_DUB_VARIANT_DEFEAT: {
+        /* Dark falling minor notes */
+        static const int dark_deg[4] = { 10, 7, 3, 0 };
+        for (i = 0; i < 4; i++) {
+            int step = i * 4;
+            d->bass_note[step] = dark_deg[i];
+            d->bass_gate[step] = 1;
+            d->wob_div[step] = 1;
+        }
+        break;
+    }
+    case AG_DUB_VARIANT_TRIAL:
+    case AG_DUB_VARIANT_STAGE:
+    case AG_DUB_VARIANT_CHILL:
+    default: {
+        /* minor pentatonic riff, halftime phrasing: long notes with gaps */
+        static const int degrees[5] = { 0, 3, 5, 7, 10 };
+        for (i = 0; i < AG_DUB_STEPS; i++) {
+            double r = ag_rng_next_f64(&d->rng);
+            int hold = (i % 4) == 0;
+            if (hold || r < 0.45) {
+                int deg = degrees[(int)(ag_rng_next_f64(&d->rng) * 5.0) % 5];
+                int oct = (r > 0.88) ? 12 : 0;
+                d->bass_note[i] = deg + oct;
+                d->bass_gate[i] = 1;
+            }
+            d->wob_div[i] = (int)(ag_rng_next_f64(&d->rng) * 8.0) % 8;
+        }
+        d->bass_note[0] = 0;
+        d->bass_gate[0] = 1;
+        d->wob_div[0] = 2;
+        break;
+    }
+    }
 }
 
 void ag_dubstep_init(AgDubstep *d, int sr, int variant, double bpm, uint64_t seed) {
@@ -432,11 +578,10 @@ void ag_dubstep_init(AgDubstep *d, int sr, int variant, double bpm, uint64_t see
     d->step = -1;
     d->step_timer = 0.0;
     ladder_init(&d->ladder, (float)d->sr);
-    d->delay_len = d->sr * 3 / 8;          /* dotted-ish 1/8 echo */
+    d->delay_len = d->sr * 3 / 8;
     if (d->delay_len > AG_DUB_DELAY_MAX) d->delay_len = AG_DUB_DELAY_MAX - 1;
     d->delay_fb = 0.32f;
     ag_dubstep_set_variant(d, variant, bpm);
-    dub_build_pattern(d);
 }
 
 void ag_dubstep_set_variant(AgDubstep *d, int variant, double bpm) {
@@ -447,6 +592,10 @@ void ag_dubstep_set_variant(AgDubstep *d, int variant, double bpm) {
         switch (variant) {
         case AG_DUB_VARIANT_TRIAL: bpm = 150.0; break;
         case AG_DUB_VARIANT_CHILL: bpm = 128.0; break;
+        case AG_DUB_VARIANT_SUSPENSE: bpm = 135.0; break;
+        case AG_DUB_VARIANT_GROOVE: bpm = 142.0; break;
+        case AG_DUB_VARIANT_VICTORY: bpm = 145.0; break;
+        case AG_DUB_VARIANT_DEFEAT: bpm = 110.0; break;
         default: bpm = 140.0; break;
         }
     }
@@ -457,9 +606,18 @@ void ag_dubstep_set_variant(AgDubstep *d, int variant, double bpm) {
         d->root = 34; d->growl = 0.85f; d->wob_open = 220.0f; d->delay_fb = 0.28f; break;
     case AG_DUB_VARIANT_CHILL:
         d->root = 31; d->growl = 0.25f; d->wob_open = 140.0f; d->delay_fb = 0.42f; break;
+    case AG_DUB_VARIANT_SUSPENSE:
+        d->root = 33; d->growl = 0.35f; d->wob_open = 120.0f; d->delay_fb = 0.36f; break;
+    case AG_DUB_VARIANT_GROOVE:
+        d->root = 36; d->growl = 0.90f; d->wob_open = 240.0f; d->delay_fb = 0.30f; break;
+    case AG_DUB_VARIANT_VICTORY:
+        d->root = 38; d->growl = 0.60f; d->wob_open = 300.0f; d->delay_fb = 0.35f; break;
+    case AG_DUB_VARIANT_DEFEAT:
+        d->root = 31; d->growl = 0.20f; d->wob_open = 90.0f;  d->delay_fb = 0.45f; break;
     default:
         d->root = 33; d->growl = 0.55f; d->wob_open = 180.0f; d->delay_fb = 0.32f; break;
     }
+    dub_build_pattern(d);
 }
 
 void ag_dubstep_set_intensity(AgDubstep *d, float intensity, float fade_sec) {
@@ -475,6 +633,14 @@ void ag_dubstep_set_gain(AgDubstep *d, float gain, float fade_sec) {
     if (fade_sec < 0.01f) fade_sec = 0.01f;
     d->master_step = 1.0f / (fade_sec * (float)d->sr);
     if (d->master_target > 0.0f) d->active = 1;
+}
+
+void ag_dubstep_switch_mode(AgDubstep *d, int variant, float intensity, float fade_sec) {
+    if (!d) return;
+    ag_dubstep_set_variant(d, variant, 0.0);
+    if (intensity >= 0.0f) {
+        ag_dubstep_set_intensity(d, intensity, fade_sec);
+    }
 }
 
 void ag_dubstep_event(AgDubstep *d, int event) {
@@ -562,15 +728,25 @@ static void dub_step_advance(AgDubstep *d) {
     if (d->drop_steps > 0) d->drop_steps--;
     if (d->break_steps > 0) d->break_steps--;
     if (d->build_steps == 1 && d->build_total > 0) {
-        /* the riser resolves into a drop */
         d->build_total = 0;
         ag_dubstep_event(d, AG_DUB_EV_DROP);
     }
 
     /* ---- drums: halftime, kick on 1 (+ ghosts), snare on 9 ---- */
-    if (inten > 0.12f && d->break_steps <= 0) {
+    if (d->variant == AG_DUB_VARIANT_SUSPENSE) {
+        /* Heartbeat sub kicks, muted snare, ticking */
+        if (s == 0 || s == 6) {
+            d->kick_env = 0.75f;
+            d->kick_pitch = 0.6f;
+            d->kick_click = 0.1f;
+            d->kick_phase = 0.0;
+            d->hits_kick++;
+        }
+        if ((s % 2) == 1) d->hat_env = 0.25f;
+    } else if (inten > 0.12f && d->break_steps <= 0) {
         int kick = (s == 0) || (s == 6 && inten > 0.5f) || (s == 10 && inten > 0.75f);
         int snare = (s == 8) || (d->fill_bar && (s == 14));
+        if (d->variant == AG_DUB_VARIANT_VICTORY && (s == 4 || s == 12)) kick = 1;
         if (d->fill_bar && (s % 2) == 0 && s >= 8) snare = 1;
         if (kick) {
             d->kick_env = 1.0f;
@@ -655,11 +831,11 @@ void ag_dubstep_render(AgDubstep *d, float *out, int frames) {
         if (d->wob_freq <= 0.0) d->wob_freq = ag_midi_to_freq(d->root);
         if (d->lfo_rate <= 0.0) d->lfo_rate = d->bpm / 60.0;
         {
-            float mod, cut, s, f_in, form;
+            float mod, cut, s, form;
             d->lfo_phase += d->lfo_rate * inv_sr;
             if (d->lfo_phase > 1.0) d->lfo_phase -= 1.0;
             mod = 0.5f + 0.5f * dub_sin(d->lfo_phase);
-            mod = mod * mod * (3.0f - 2.0f * mod);            /* smoothstep-ish */
+            mod = mod * mod * (3.0f - 2.0f * mod);
             d->wob_p1 += d->wob_freq * inv_sr;
             d->wob_p2 += d->wob_freq * 1.007 * inv_sr;
             d->wob_p3 += d->wob_freq * 0.5 * inv_sr;
@@ -667,7 +843,6 @@ void ag_dubstep_render(AgDubstep *d, float *out, int frames) {
             if (d->wob_env < 0.0f) d->wob_env = 0.0f;
             s = dub_saw(d->wob_p1) * 0.5f + dub_saw(d->wob_p2) * 0.42f
                 + dub_sqr(d->wob_p3, 0.35 + 0.25 * (double)mod) * 0.3f;
-            /* growl: feed the LFO into a resonant formant peak too */
             form = s - d->form_z1;
             d->form_z1 += (350.0f + 1800.0f * mod) * inv_sr * 2.0f * form;
             d->form_z2 += (120.0f + 900.0f * mod) * inv_sr * 2.0f * (d->form_z1 - d->form_z2);
@@ -702,9 +877,9 @@ void ag_dubstep_render(AgDubstep *d, float *out, int frames) {
         }
         if (d->hat_env > 0.0f) {
             float nz = dub_noise(&d->rng);
-            float hp = nz - d->hp_z;
+            float hp_val = nz - d->hp_z;
             d->hp_z += 0.55f * (nz - d->hp_z);
-            mono += hp * d->hat_env * 0.22f * drums;
+            mono += hp_val * d->hat_env * 0.22f * drums;
             d->hat_env -= inv_sr * 42.0f;
             if (d->hat_env < 0.0f) d->hat_env = 0.0f;
         }

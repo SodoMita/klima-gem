@@ -80,6 +80,7 @@ static NameBuf sn_amb_set_gain;
 static NameBuf sn_amb_add_source;
 static NameBuf sn_dub_start;
 static NameBuf sn_dub_intensity;
+static NameBuf sn_dub_switch_mode;
 static NameBuf sn_dub_event;
 static NameBuf sn_dub_trigger;
 static NameBuf sn_dub_render;
@@ -468,6 +469,17 @@ static void m_dub_intensity(void *userdata, GDExtensionClassInstancePtr inst, co
     return_nil(ret,err);
 }
 
+static void m_dub_switch_mode(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
+    (void)userdata;
+    if(!inst || argc<1){ return_nil(ret,err); return; }
+    AgGDE *g=(AgGDE*)inst; dub_ensure(g);
+    int variant = (int)read_int_arg(args[0]);
+    float intensity = argc>=2 ? (float)read_float_arg(args[1]) : -1.0f;
+    float fade = argc>=3 ? (float)read_float_arg(args[2]) : 0.6f;
+    ag_dubstep_switch_mode(&g->dub, variant, intensity, fade);
+    return_nil(ret,err);
+}
+
 static void m_dub_event(void *userdata, GDExtensionClassInstancePtr inst, const GDExtensionConstVariantPtr *args, GDExtensionInt argc, GDExtensionVariantPtr ret, GDExtensionCallError *err) {
     (void)userdata;
     if(!inst || argc<1){ return_nil(ret,err); return; }
@@ -672,6 +684,7 @@ static void register_class(void) {
     make_name(&sn_amb_add_source,"add_point_source");
     make_name(&sn_dub_start,"dub_start");
     make_name(&sn_dub_intensity,"dub_set_intensity");
+    make_name(&sn_dub_switch_mode,"dub_switch_mode");
     make_name(&sn_dub_event,"dub_event");
     make_name(&sn_dub_trigger,"dub_trigger");
     make_name(&sn_dub_render,"dub_render");
@@ -727,6 +740,10 @@ static void register_class(void) {
 
         bind_method(&sn_dub_start, m_dub_start, GDEXTENSION_VARIANT_TYPE_NIL,0, t_dub_start, n_dub_start,4);
         bind_method(&sn_dub_intensity, m_dub_intensity, GDEXTENSION_VARIANT_TYPE_NIL,0, t_f_f, n_int_fade,2);
+        GDExtensionVariantType t_switch[3]={GDEXTENSION_VARIANT_TYPE_INT,GDEXTENSION_VARIANT_TYPE_FLOAT,GDEXTENSION_VARIANT_TYPE_FLOAT};
+        const NameBuf *n_switch[3]={&sn_variant,&sn_intensity,&sn_fade};
+        bind_method(&sn_dub_switch_mode, m_dub_switch_mode, GDEXTENSION_VARIANT_TYPE_NIL,0, t_switch, n_switch,3);
+
         bind_method(&sn_dub_event, m_dub_event, GDEXTENSION_VARIANT_TYPE_NIL,0, t_i, n_kind,1);
         bind_method(&sn_dub_trigger, m_dub_trigger, GDEXTENSION_VARIANT_TYPE_NIL,0, t_trigger, n_trigger,4);
         bind_method(&sn_dub_render, m_dub_render, GDEXTENSION_VARIANT_TYPE_NIL,0, t_v2, n_frames,1);

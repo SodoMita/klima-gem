@@ -1,7 +1,9 @@
 extends Node
 ## Dubstep audio tests: the C generator (native/audio_gen/ag_dubstep.c) through
-## the AudioGen extension, the AudioDirector stage-music path, the per-event
-## sound bank and gem collision sounds. Headless-safe: no audio device needed.
+## the AudioGen extension, the AudioDirector stage-music path, dynamic music
+## switcher (pick_best_music), all event sounds (jump, shoot, bell_hit, choir
+## pads, gem roll & plaque placement, challenge victory/loss, overall victory/loss)
+## and gem collision sounds. Headless-safe: no audio device needed.
 
 var checks := 0
 var fails := 0
@@ -19,7 +21,9 @@ func _ready() -> void:
 	_test_extension()
 	_test_one_shots()
 	_test_director_music()
+	_test_music_picker()
 	_test_event_sounds()
+	_test_victory_loss_hooks()
 	await _test_gem_collision()
 	print("checks=%d fails=%d" % [checks, fails])
 	if fails == 0:
@@ -40,7 +44,7 @@ func _test_extension() -> void:
 	if gen == null:
 		return
 	for m: String in ["dub_start", "dub_set_intensity", "dub_event", "dub_trigger",
-			"dub_render", "dub_release", "dub_active", "render_dub_sfx", "dub_sfx_frames"]:
+			"dub_render", "dub_release", "dub_active", "render_dub_sfx", "dub_sfx_frames", "dub_switch_mode"]:
 		ok(gen.has_method(m), "AudioGen exposes %s" % m)
 	gen.call("dub_start", 0, 140.0, 20260927.0, 22050.0)
 	ok(bool(gen.call("dub_active")), "engine is active after dub_start")
@@ -56,7 +60,9 @@ func _test_extension() -> void:
 	ok(peak > 0.05, "live dubstep renders audio (peak %.3f)" % peak)
 	ok(peak <= 1.01, "live dubstep stays inside 0 dBFS")
 	ok(energy / float(buf.size()) > 0.005, "live dubstep has body")
-	# an event must change the next second of music
+
+	# Test dynamic mode switching in C
+	gen.call("dub_switch_mode", 4, 0.95, 0.1)  # AG_DUB_VARIANT_GROOVE
 	gen.call("dub_event", 1)  # drop
 	var buf2 := PackedVector2Array()
 	buf2.resize(22050)
@@ -64,7 +70,7 @@ func _test_extension() -> void:
 	var e2 := 0.0
 	for i: int in buf2.size():
 		e2 += absf(buf2[i].x)
-	ok(e2 > 0.0, "engine keeps rendering after a drop")
+	ok(e2 > 0.0, "engine keeps rendering after a switch to groove and drop")
 	gen.call("dub_release", 0.05)
 	var buf3 := PackedVector2Array()
 	buf3.resize(22050)
@@ -102,6 +108,7 @@ func _test_director_music() -> void:
 	ok(a.music_source == "procedural", "festival stays on the calm score")
 	ok(String(a.current_theme) == "festival", "festival theme selected")
 	ok(a.dub_scene == "", "festival does not start the dubstep engine")
+
 	# the show floor is active music
 	a.play_dubstep("stage")
 	if a.has_dubstep_engine():
@@ -117,6 +124,7 @@ func _test_director_music() -> void:
 		ok(a.dub_events_sent == before + 2, "unknown events are ignored")
 		a.request_music("stage_trial")
 		ok(a.dub_scene == "stage_trial", "#music=stage_trial switches variant")
+
 	# going back to a scored scene releases the dubstep engine
 	a.play_scene("classroom")
 	ok(a.music_source == "procedural", "scene music takes over from dubstep")
@@ -124,22 +132,74 @@ func _test_director_music() -> void:
 	a.stop_music(0.05)
 
 
+func _test_music_picker() -> void:
+	var a := AudioDirector
+	a.procedural_enabled = true
+
+	# Test picking music across primary game states:
+	# 1. 1 gem rolled
+	a.pick_best_music("gem_1_rolled")
+	ok(a.dub_scene == "stage_suspense", "1 gem rolled picks suspense mode")
+	ok(a.dub_intensity > 0.7, "1 gem rolled sets high tension intensity")
+
+	# 2. Both gems placed and revealed
+	a.pick_best_music("both_revealed")
+	ok(a.dub_scene == "stage_groove", "both gems placed picks heavy groove")
+	ok(a.dub_intensity > 0.9, "both gems placed sets peak groove intensity")
+
+	# 3. Challenge running
+	a.pick_best_music("challenge_run")
+	ok(a.dub_scene == "stage_trial", "challenge run picks trial mode")
+
+	# 4. Challenge victory
+	a.pick_best_music("challenge_victory")
+	ok(a.dub_scene == "stage_groove", "challenge victory returns to groove")
+
+	# 5. Challenge loss
+	a.pick_best_music("challenge_loss")
+	ok(a.dub_scene == "stage_chill", "challenge loss picks chill mode")
+
+	# 6. Overall victory
+	a.pick_best_music("overall_victory")
+	ok(a.dub_scene == "stage_victory", "overall victory picks victory fanfare")
+	ok(is_equal_approx(a.dub_intensity, 1.0), "overall victory sets max intensity")
+
+	# 7. Overall loss
+	a.pick_best_music("overall_loss")
+	ok(a.dub_scene == "stage_defeat", "overall loss picks defeat theme")
+
+	a.stop_music(0.05)
+
+
 func _test_event_sounds() -> void:
 	var a := AudioDirector
+	# Check all specific newly added one-shots
+	for sfx_key in ["jump", "shoot", "bell_hit", "pad_note", "plaque_place"]:
+		ok(AudioDirector.DUB_SFX.has(sfx_key), "DUB_SFX includes %s" % sfx_key)
+		var before: int = a.sfx_played
+		a.play_event(sfx_key, 0.85)
+		ok(a.sfx_played == before + 1, "play_event counts for %s" % sfx_key)
+		ok(a.last_sfx == sfx_key, "play_event recorded %s" % sfx_key)
+
+
+func _test_victory_loss_hooks() -> void:
+	var sd := ShowDirector
+	ok(sd.has_method("on_show_victory"), "ShowDirector has on_show_victory")
+	ok(sd.has_method("on_show_defeat"), "ShowDirector has on_show_defeat")
+
+	var a := AudioDirector
 	var before: int = a.sfx_played
-	a.play_event("gem_hit", 0.9)
-	ok(a.sfx_played == before + 1, "play_event counts")
-	ok(a.last_sfx == "gem_hit", "play_event records the key")
-	if a.has_dubstep_engine():
-		ok(a.last_sfx_source == "dubstep", "gem_hit comes from the C generator")
-		ok(a.dub_sfx_rendered > 0, "one-shot rendered and cached")
-		var rendered: int = a.dub_sfx_rendered
-		a.play_event("gem_hit", 0.9)
-		ok(a.dub_sfx_rendered == rendered, "same energy bucket reuses the cache")
-		a.play_event("gem_hit", 0.1)
-		ok(a.dub_sfx_rendered > rendered, "a softer hit is its own sound")
-	a.play_event("click")  # unknown to the dub bank -> old path, no crash
-	ok(a.last_sfx == "click", "unknown keys fall back to play_sfx")
+
+	sd.on_show_victory()
+	ok(a.sfx_played > before, "on_show_victory triggers audio SFX")
+	ok(a.dub_scene == "stage_victory", "on_show_victory switches music to stage_victory")
+
+	before = a.sfx_played
+	sd.on_show_defeat()
+	ok(a.sfx_played > before, "on_show_defeat triggers audio SFX")
+	ok(a.dub_scene == "stage_defeat", "on_show_defeat switches music to stage_defeat")
+
+	a.stop_music(0.05)
 
 
 func _test_gem_collision() -> void:

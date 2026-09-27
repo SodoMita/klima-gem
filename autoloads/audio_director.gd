@@ -47,11 +47,23 @@ const SCENE_LOOPS: Dictionary = {
 ## Scenes that run the C dubstep engine instead of the pad/pluck score.
 ## festival stays the calm party score; the show floor gets the wobble.
 const DUB_SCENES: Dictionary = {
-	"stage": 0,        ## AG_DUB_VARIANT_STAGE
-	"stage_trial": 1,  ## AG_DUB_VARIANT_TRIAL
-	"stage_chill": 2,  ## AG_DUB_VARIANT_CHILL
+	"stage": 0,           ## AG_DUB_VARIANT_STAGE (general active stage floor)
+	"stage_trial": 1,     ## AG_DUB_VARIANT_TRIAL (challenge / precision round)
+	"stage_chill": 2,     ## AG_DUB_VARIANT_CHILL (between rounds / rest)
+	"stage_suspense": 3,  ## AG_DUB_VARIANT_SUSPENSE (1 gem rolled / suspense)
+	"stage_groove": 4,    ## AG_DUB_VARIANT_GROOVE (both placed / peak drop)
+	"stage_victory": 5,   ## AG_DUB_VARIANT_VICTORY (overall / challenge win)
+	"stage_defeat": 6,    ## AG_DUB_VARIANT_DEFEAT (overall / challenge loss)
 }
-const DUB_BPM: Dictionary = {"stage": 140.0, "stage_trial": 150.0, "stage_chill": 128.0}
+const DUB_BPM: Dictionary = {
+	"stage": 140.0,
+	"stage_trial": 150.0,
+	"stage_chill": 128.0,
+	"stage_suspense": 135.0,
+	"stage_groove": 142.0,
+	"stage_victory": 145.0,
+	"stage_defeat": 110.0,
+}
 
 ## #music_event= / music_event() names -> AgDubEvent.
 const DUB_EVENTS: Dictionary = {
@@ -64,6 +76,7 @@ const DUB_SFX: Dictionary = {
 	"wobble_blip": 5, "sub_drop": 6, "impact": 7, "riser": 8, "stab": 9,
 	"correct": 10, "wrong": 11, "win": 12, "lose": 13, "airhorn": 14,
 	"scratch": 15, "reveal": 16, "tick": 17,
+	"jump": 18, "shoot": 19, "bell_hit": 20, "pad_note": 21, "plaque_place": 22,
 }
 
 ## Procedural score: chords as scale degrees; plucks/bass_hits per bar.
@@ -645,6 +658,70 @@ func music_event(name: String) -> void:
 		return
 	dub_events_sent += 1
 	_dub.call("dub_event", int(DUB_EVENTS[name]))
+
+
+
+## Pick the best music variant / intensity for the current gameplay phase,
+## or switch smoothly between them.
+func pick_best_music(phase: String) -> void:
+	match phase:
+		"entrance", "host", "idle":
+			switch_dubstep("stage", 0.55, 0.8)
+		"rolling", "gem_throw", "throw_1":
+			switch_dubstep("stage_suspense", 0.70, 0.4)
+		"gem_1_rolled", "1_gem_rolled":
+			# when 1 gem rolled: tension tick, intermediate hold
+			switch_dubstep("stage_suspense", 0.78, 0.3)
+			music_event("stab")
+		"throw_2":
+			switch_dubstep("stage_suspense", 0.82, 0.4)
+		"both_revealed", "both_placed", "gems_ready":
+			# when both labeled already revealed and moved to place:
+			# full active driving dubstep groove, beat drop!
+			switch_dubstep("stage_groove", 0.92, 0.2)
+			music_event("drop")
+		"challenge_build", "trial_intro":
+			switch_dubstep("stage_trial", 0.85, 0.5)
+			music_event("fill")
+		"challenge_run", "trial_active":
+			switch_dubstep("stage_trial", 0.95, 0.3)
+			music_event("riser")
+		"challenge_victory", "trial_win":
+			switch_dubstep("stage_groove", 0.88, 0.3)
+			music_event("drop")
+		"challenge_loss", "trial_loss":
+			switch_dubstep("stage_chill", 0.45, 0.4)
+			music_event("break")
+		"overall_victory", "show_win":
+			# Overall victory in show: triumphant fanfare, peak energy
+			switch_dubstep("stage_victory", 1.0, 0.2)
+			music_event("drop")
+		"overall_loss", "show_loss":
+			# Overall loss in show: dark sub decay, melancholy chill
+			switch_dubstep("stage_defeat", 0.35, 0.6)
+			music_event("break")
+		"chill", "rest":
+			switch_dubstep("stage_chill", 0.40, 0.8)
+		_:
+			if DUB_SCENES.has(phase):
+				switch_dubstep(phase)
+
+
+## Dynamic smooth switch between dubstep variants
+func switch_dubstep(scene_key: String, target_intensity: float = -1.0, fade: float = 0.6) -> void:
+	if not DUB_SCENES.has(scene_key):
+		return
+	var variant: int = int(DUB_SCENES[scene_key])
+	dub_scene = scene_key
+	current_theme = StringName(scene_key)
+	music_source = "dubstep"
+	if target_intensity >= 0.0:
+		dub_intensity = clampf(target_intensity, 0.0, 1.0)
+	if _dub != null:
+		if _dub.has_method("dub_switch_mode"):
+			_dub.call("dub_switch_mode", variant, dub_intensity, fade)
+		else:
+			_dub.call("dub_set_intensity", dub_intensity, fade)
 
 
 func _stop_dubstep(fade: float = 0.8) -> void:

@@ -363,6 +363,11 @@ func set_aurora_expression(emotion: String, fresh := false) -> void:
 	var gs := _gs()
 	if gs != null:
 		gs.show_aurora_key = key
+		if int(gs.show_round) >= 3:
+			if emotion in ["gorgeous", "happy"]:
+				on_show_victory()
+			elif emotion == "sad":
+				on_show_defeat()
 	if replaying():
 		return
 	_spawn_actor("aurora", key, ShowStageScript.AURORA_MARK, ShowStageScript.AURORA_BASE_HEIGHT)
@@ -601,15 +606,22 @@ func run_challenge() -> void:
 		return
 	music_heat(0.95, 0.4)
 	music_cue("riser")
+	var a := _audio()
+	if a != null and a.has_method("pick_best_music"):
+		a.pick_best_music("challenge_run")
 	await st.play_challenge(int(gs.show_round), bool(gs.last_success), _pattern)
 	if not _is_current(epoch, st):
 		return
 	if gs.last_success:
 		snd("correct", 1.0)
 		music_cue("drop")
+		if a != null and a.has_method("pick_best_music"):
+			a.pick_best_music("challenge_victory")
 	else:
 		snd("wrong", 0.9)
 		music_cue("impact")
+		if a != null and a.has_method("pick_best_music"):
+			a.pick_best_music("challenge_loss")
 	music_heat(0.6, 1.2)
 	gs.show_scored_round = need
 	if gs.last_success and not already_scored:
@@ -624,12 +636,31 @@ func run_challenge() -> void:
 
 
 ## Golden rain for a perfect show.
+
+## Overall victory: 2 or 3 stars, golden confetti, triumphant dubstep
+func on_show_victory() -> void:
+	if replaying():
+		return
+	snd("win", 1.0)
+	snd("airhorn", 0.85)
+	var a := _audio()
+	if a != null and a.has_method("pick_best_music"):
+		a.pick_best_music("overall_victory")
+
+
+## Overall defeat: 0 or 1 star, melancholic sub chill
+func on_show_defeat() -> void:
+	if replaying():
+		return
+	snd("lose", 0.85)
+	var a := _audio()
+	if a != null and a.has_method("pick_best_music"):
+		a.pick_best_music("overall_loss")
+
 func finale_confetti() -> void:
+	on_show_victory()
 	var st := stage()
 	if st != null and not replaying():
-		snd("win", 1.0)
-		music_cue("drop")
-		music_heat(1.0, 0.3)
 		st.confetti_burst()
 
 

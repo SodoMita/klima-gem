@@ -1,4 +1,5 @@
 class_name ShowStage extends Node3D
+
 ## The KLIMA GEM television studio. The set is AUTHORED in show_stage.tscn
 ## (platform, glass throw box, star cloth, beams, lights, audience, star
 ## pips, colliders); this script only animates it. Geometry only — no painted backdrop, no imported image. A round platform under
@@ -352,15 +353,22 @@ func throw_gems(rng: RandomNumberGenerator) -> Array:
 	# own reveal, and its own word before the body-part stone flies.
 	# Every await is epoch-guarded: a rewind clears the gems mid-flight, and
 	# this choreography must stop when its stones are gone.
+	_pick_music("rolling")
 	var mod_face := await _throw_one_physics(gem_mod, LAND_MOD, false, rng, epoch)
 	if epoch != _gem_epoch or mod_face < 0:
 		return []
+	# 1 gem rolled! Plaque placed, suspense music
+	_play_event("plaque_place", 0.85)
+	_pick_music("gem_1_rolled")
 	await get_tree().create_timer(0.25).timeout
 	if epoch != _gem_epoch:
 		return []
 	var part_face := await _throw_one_physics(gem_part, LAND_PART, true, rng, epoch)
 	if epoch != _gem_epoch or part_face < 0:
 		return []
+	# Both labeled already revealed and moved to place!
+	_play_event("plaque_place", 1.0)
+	_pick_music("both_revealed")
 	await get_tree().create_timer(0.3).timeout
 	if epoch != _gem_epoch:
 		return []
@@ -740,7 +748,12 @@ func rethrow_gem(which: int, rng: RandomNumberGenerator) -> int:
 	var is_part := which == 0
 	# A re-roll takes the old word down before the stone flies (human 95).
 	_clear_plaque(is_part)
-	return await _throw_one_physics(gem, LAND_PART if is_part else LAND_MOD, is_part, rng, _gem_epoch)
+	_pick_music("rolling")
+	var face: int = await _throw_one_physics(gem, LAND_PART if is_part else LAND_MOD, is_part, rng, _gem_epoch)
+	if face >= 0:
+		_play_event("plaque_place", 0.85)
+		_pick_music("gem_1_rolled")
+	return face
 
 
 ## Deterministic single re-throw for tests: lands, then lifts the REQUESTED
@@ -1089,6 +1102,7 @@ func _play_crossing(success: bool) -> void:
 		var fail_here := (not success) and i == 2
 		await _hop(quad, stone_pos + Vector3(0, 0.08, 0.12), fail_here)
 		if fail_here:
+			_play_event("scratch", 0.7)
 			# The stone dips, flickers red, and she slides back down.
 			var mat := _stones[i].material_override as StandardMaterial3D
 			if mat != null:
@@ -1114,6 +1128,7 @@ func _play_crossing(success: bool) -> void:
 
 
 func _hop(quad: Node3D, to: Vector3, falter: bool) -> void:
+	_play_event("jump", 0.85)
 	var from := quad.position
 	var tw := create_tween()
 	tw.tween_method(
@@ -1125,6 +1140,8 @@ func _hop(quad: Node3D, to: Vector3, falter: bool) -> void:
 	)
 	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	await tw.finished
+	if not falter:
+		_play_event("gem_land", 0.4)
 
 
 func _play_bells(success: bool) -> void:
@@ -1180,6 +1197,7 @@ func _fire_orb() -> void:
 			break
 	if aim == null:
 		return
+	_play_event("shoot", 0.95)
 	var orb := _mesh_instance(SphereMesh.new(), _mat(Color(1.0, 0.6, 0.3), 0.3, 0.2, Color(1.0, 0.55, 0.25), 2.0), _props)
 	(orb.mesh as SphereMesh).radius = 0.09
 	(orb.mesh as SphereMesh).height = 0.18
@@ -1203,6 +1221,7 @@ func _fire_orb() -> void:
 			if not is_instance_valid(orb):
 				return
 			if hit and not _bells.is_empty() and is_instance_valid(_props):
+				_play_event("bell_hit", 0.95)
 				var nearest := _bells[0]
 				for bell in _bells:
 					if bell.global_position.distance_to(orb.position) < nearest.global_position.distance_to(orb.position):
@@ -1211,6 +1230,7 @@ func _fire_orb() -> void:
 				pulse.tween_property(nearest, "scale", Vector3.ONE * 1.3, 0.12)
 				pulse.tween_property(nearest, "scale", Vector3.ONE, 0.25)
 			else:
+				_play_event("impact", 0.4)
 				var om := orb.material_override as StandardMaterial3D
 				if om != null:
 					om.albedo_color = Color(0.4, 0.35, 0.35)
@@ -1240,6 +1260,7 @@ func _play_choir(success: bool, pattern: Array) -> void:
 		if _pads.is_empty():
 			break
 		var pad := _pads[idx]
+		_play_event("pad_note", float(idx) / 3.0)
 		var mat := pad.material_override as StandardMaterial3D
 		var tw := create_tween()
 		if mat != null:
@@ -1421,3 +1442,17 @@ func reset_show() -> void:
 	reset_aurora_fx()
 	_free_now(_stamp)
 	_stamp = null
+
+# ---------------------------------------------------------------------- audio
+func _audio() -> Node:
+	return get_node_or_null("/root/AudioDirector")
+
+func _play_event(key: String, energy: float = 0.8, pitch: float = 1.0) -> void:
+	var a := _audio()
+	if a != null and a.has_method("play_event"):
+		a.play_event(key, energy, pitch)
+
+func _pick_music(phase: String) -> void:
+	var a := _audio()
+	if a != null and a.has_method("pick_best_music"):
+		a.pick_best_music(phase)
