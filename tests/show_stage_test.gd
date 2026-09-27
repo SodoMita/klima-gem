@@ -107,7 +107,7 @@ func _run_tests() -> void:
 	gs.show_mod = "GIANT"
 	check(director.mod_stacks().get("GIANT", 0) == 2, "two GIANT parts count as a x2 stack")
 	check(director.stack_word("GIANT") == "x2 — doubled", "x2 stack has its word")
-	var giant_x2 := director.edge_for(1)
+	var giant_x2: int = director.edge_for(1)
 	# parts: HANDS + LEGS crossing edges, mods: 2 x (-1 * 2)
 	var parts_only := int((director.PART_EDGE["HANDS"] as Array)[0]) + int((director.PART_EDGE["LEGS"] as Array)[0])
 	check(giant_x2 == parts_only - 4, "a doubled GIANT counts twice per part (%d)" % giant_x2)
