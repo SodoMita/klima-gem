@@ -185,8 +185,34 @@ func _run_tests() -> void:
 	check((stage.aurora_quad == null) or (stage.aurora_quad as Node3D).global_position.is_equal_approx(ShowStageScript.AURORA_MARK), "guest stands on her mark after restore")
 
 	# --- the story compiles ----------------------------------------------------
+	var raw: String = FileAccess.open("res://dialogue/klima_gem_show.dialogue", FileAccess.READ).get_as_text()
+	var compile_result = DMCompiler.compile_string(raw, "show")
+	check(compile_result.errors.size() == 0, "show dialogue compiles with zero errors (%d)" % compile_result.errors.size())
+	for e in compile_result.errors:
+		printerr("    dialogue error, line %s: %s" % [e.line_number, e.message])
 	var story: Resource = load("res://dialogue/klima_gem_show.dialogue")
-	check(story != null, "show dialogue compiles")
+	check(story != null, "show dialogue resource loads")
+	# The loaded artifact must match the source: a stale import silently runs
+	# an old story. The combo-condition block is our canary.
+	var gs_probe: Node = get_node("/root/GameState")
+	gs_probe.show_part = "EYES"
+	gs_probe.show_mod = "MAGNET"
+	var dm_guard: Node = get_node("/root/DialogueManager")
+	var guard_key := "gem_round"
+	var combo_seen: Array = []
+	for i in 30:
+		var probe_line = await dm_guard.get_next_dialogue_line(story, guard_key, [])
+		if probe_line == null:
+			break
+		var t := str(probe_line.text)
+		if t.begins_with("When I try") or t.begins_with("I can see the infrastructure") or t.begins_with("My chest has a ballast"):
+			combo_seen.append(t.substr(0, 20))
+		if t.begins_with("The stage is set"):
+			break
+		guard_key = probe_line.next_id
+	check(combo_seen.is_empty(), "combo-specific lines stay hidden unless rolled (%s)" % [combo_seen])
+	gs_probe.show_part = ""
+	gs_probe.show_mod = ""
 	if story != null:
 		var states: PackedStringArray = story.using_states
 		check(states.has("GameState") and states.has("ShowDirector"), "story declares both states")

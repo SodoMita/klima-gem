@@ -109,7 +109,9 @@ func _build_mesh() -> void:
 	mat.emission_enabled = true
 	mat.emission = gem_color * 0.55
 	mat.emission_energy_multiplier = 0.7
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Depth pre-pass: the near facets write depth, so the far-side words stop
+	# ghosting through the stone mirrored.
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
 	mat.cull_mode = BaseMaterial3D.CULL_BACK
 	body.material_override = mat
 	body.mesh = mesh
@@ -141,6 +143,9 @@ func _build_labels() -> void:
 		label.outline_modulate = Color(0.03, 0.08, 0.16, 0.9)
 		label.pixel_size = 0.0032
 		label.no_depth_test = false
+		# Opaque pre-pass: back-face words are depth-rejected by the near
+		# facets instead of ghosting through the stone.
+		label.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS
 		label.render_priority = 2
 
 		var a := face_azimuth(i)

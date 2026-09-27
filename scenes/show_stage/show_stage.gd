@@ -35,8 +35,8 @@ const AURORA_BASE_HEIGHT := 1.72
 ## Gem stations: the shapeshift (modification) gem hangs on the LEFT, the
 ## body-part gem on the RIGHT. Their settled words fly onward to the
 ## presentation slots, same sides, higher up.
-const GEM_SLOT_MOD := Vector3(-0.44, 1.78, 2.0)
-const GEM_SLOT_PART := Vector3(0.44, 1.78, 2.0)
+const GEM_SLOT_MOD := Vector3(-0.68, 1.78, 2.0)
+const GEM_SLOT_PART := Vector3(0.68, 1.78, 2.0)
 const PRESENT_POS_MOD := Vector3(-1.62, 2.55, 2.0)
 const PRESENT_POS_PART := Vector3(1.62, 2.55, 2.0)
 const PIP_BASE := Vector3(-3.62, 3.42, 3.02)
@@ -73,6 +73,13 @@ func _ready() -> void:
 	add_to_group("show_stage")
 	_cosmetic.seed = 20260927
 	_build_environment()
+	# Where standing portraits live (Y-billboard quads are parented here).
+	var world := Node3D.new()
+	world.name = "World3D"
+	add_child(world)
+	var chars := Node3D.new()
+	chars.name = "Characters"
+	world.add_child(chars)
 	_build_hall()
 	_build_set()
 	_build_truss_and_lights()
@@ -245,7 +252,7 @@ func _build_set() -> void:
 	star_mi.material_override = star_mat
 	set_root.add_child(star_mi)
 
-	var sign := _label("KLIMA GEM", 160, Color(0.55, 0.9, 1.0), Color(0.02, 0.06, 0.16, 0.95), 0.009)
+	var sign := _label("KLIMA GEM", 110, Color(0.55, 0.9, 1.0), Color(0.02, 0.06, 0.16, 0.95), 0.009)
 	sign.position = Vector3(0, 4.0, -3.55)
 	set_root.add_child(sign)
 	var sub := _label("TWO GEMS  -  THREE TRIALS", 54, Color(0.75, 0.85, 1.0, 0.9), Color(0.02, 0.05, 0.12, 0.9), 0.008)
@@ -385,7 +392,7 @@ func _build_pedestal() -> void:
 	ring.bottom_radius = 0.27
 	ring.height = 0.035
 	ring.radial_segments = 24
-	var ring_mi := _mesh_instance(ring, _mat(Color(0.4, 0.8, 1.0), 0.2, 0.5, Color(0.45, 0.85, 1.0), 2.0), ped)
+	var ring_mi := _mesh_instance(ring, _mat(Color(0.4, 0.8, 1.0), 0.2, 0.5, Color(0.45, 0.85, 1.0), 1.1), ped)
 	ring_mi.position = Vector3(0, STAGE_TOP + 0.87, 2.0)
 
 

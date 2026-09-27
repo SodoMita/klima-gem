@@ -18,8 +18,7 @@ Ren: The first gem names a body part. The second names a modification. Body part
 Ren: Then we play three trials on this stage. The gems stack her odds before we ever roll. The stage provides the obstacles. The crowd provides the noise.
 Ren: And now — the moment the ratings wait for. From the Chrono Nexus itself, trembling politely at her own mark... my guest... AURORA!
 do aurora_enters()
-[#sfx=open]
-Aurora: H-hello! Um. Aurora. Subsystem construct of the Chrono Nexus, and — apparently — tonight's contestant.
+Aurora: H-hello! Um. Aurora. [#sfx=open] Subsystem construct of the Chrono Nexus, and — apparently — tonight's contestant.
 Aurora: I did read the contract. The one sentence I understood said the show is not responsible for gravity.
 Ren: That sentence is the show, Aurora. Now — the crowd wants to know what kind of night this will be. How do we open?
 - Big lights, big voice. Give them a finale before we even begin.
@@ -56,21 +55,22 @@ do set_aurora_expression("serious")
 Ren: Two gems. Eight words each. One body, about to be renegotiated. [#sfx=open]
 do throw_gem_round()
 Ren: The flat tops settle... and the words step OUT of the stone, glowing! Read them with me — first, the body!
-Ren: {{show_part}}!
-[#sfx=confirm]
+Ren: {{show_part}}! [#sfx=confirm]
 do set_aurora_expression("surprised")
 Ren: And the shapeshift that tags along with it...
-Ren: {{show_mod}}!
-[#sfx=confirm]
+Ren: {{show_mod}}! [#sfx=confirm]
 Ren: By decree of two rocks: {{show_part}} x {{show_mod}}. The show accepts. Reality complies.
 do apply_mods()
 %3 The crowd loses its collective mind. Somewhere in the dark a horn section hits a note it will regret by morning.
 %2 A ripple runs the length of the glowstick wave. Even the painted stars on the cloth seem to lean in.
 do set_aurora_expression("surprised")
 Aurora: I can FEEL it. That is... aggressively my {{show_part}} now.
-[if show_part == "VOICE" and show_mod == "STICKY"]Aurora: When I try to speak, words come out... attached to things. This is going to be a legal situation.[/if]
-[if show_part == "EYES" and show_mod == "GLOWING"]Aurora: I can see the infrastructure of the stage. The scaffolding of reality has [b]EXPOSED BOLTS[/b], Ren.[/if]
-[if show_part == "HEART" and show_mod == "HEAVY"]Aurora: My chest has a ballast now. Emotionally I remain very light. Physically the engineers disagree.[/if]
+if show_part == "VOICE" and show_mod == "STICKY":
+	Aurora: When I try to speak, words come out... attached to things. This is going to be a legal situation.
+if show_part == "EYES" and show_mod == "GLOWING":
+	Aurora: I can see the infrastructure of the stage. The scaffolding of reality has [b]EXPOSED BOLTS[/b], Ren.
+if show_part == "HEART" and show_mod == "HEAVY":
+	Aurora: My chest has a ballast now. Emotionally I remain very light. Physically the engineers disagree.
 if show_outlook == "advantage":
 	Ren: And read the board, folks — the odds just leaned HER way. That combination is an advantage!
 	%2 Aurora: The gems like me tonight. I have decided to be terrified by that in a productive way.

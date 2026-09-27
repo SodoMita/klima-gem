@@ -1,0 +1,16 @@
+[remap]
+
+importer="dialogue_manager"
+importer_version=18
+type="Resource"
+uid="uid://cc0utmxnobujd"
+path="res://.godot/imported/_cond_test.dialogue-136af8899ae9d148f6a2f48f01c1266b.tres"
+
+[deps]
+
+source_file="res://dialogue/_cond_test.dialogue"
+dest_files=["res://.godot/imported/_cond_test.dialogue-136af8899ae9d148f6a2f48f01c1266b.tres"]
+
+[params]
+
+defaults=true

@@ -63,14 +63,27 @@ func stage() -> Node3D:
 
 
 func _motion() -> Node:
-	var balloon := get_tree().root.get_node_or_null("VNBalloon")
+	var balloon := _balloon()
 	if balloon == null:
 		return null
 	return balloon.get_node_or_null("MotionDirector")
 
 
 func _balloon() -> Node:
-	return get_tree().root.get_node_or_null("VNBalloon")
+	# DialogueManager parents the balloon to the current scene, so look there
+	# first; the root is only a fallback.
+	var tree := get_tree()
+	if tree == null:
+		return null
+	var scene := tree.current_scene
+	if scene != null:
+		var direct := scene.get_node_or_null("VNBalloon")
+		if direct != null:
+			return direct
+		for child in scene.get_children():
+			if child is VNBalloon:
+				return child
+	return tree.root.get_node_or_null("VNBalloon")
 
 
 # ------------------------------------------------------------- show control
