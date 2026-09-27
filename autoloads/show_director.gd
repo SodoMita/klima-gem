@@ -382,6 +382,23 @@ func _spawn_actor(alias: String, tex_key: String, at: Vector3, height: float) ->
 	var st := stage()
 	if motion == null or balloon == null or st == null:
 		return
+	if alias == "aurora" and AURORA_PARTS_RIG.parts_available() and st.has_method("free_aurora_actor"):
+		# Nine layer quads, so every kept shift sits on its own body part.
+		# Same spawn discipline as motion.spawn_quad: replace atomically.
+		st.free_aurora_actor()
+		var rig: AuroraPartsRig = AURORA_PARTS_RIG.new()
+		rig.name = "Sprite3D_aurora"
+		st.characters_parent().add_child(rig)
+		rig.setup()
+		rig.world_height = height
+		rig.position = at
+		rig.set_expression(tex_key)
+		st.set_actor(alias, rig)
+		var worn := body_mods()
+		if not worn.is_empty():
+			var gsv := _gs()
+			rig.set_part_mods(worn, (gsv.show_mod_counts as Dictionary) if gsv != null and "show_mod_counts" in gsv else {})
+		return
 	var tex: Texture2D = balloon.sprites.get(tex_key)
 	if tex == null:
 		push_warning("ShowDirector: no portrait key '%s'" % tex_key)
@@ -399,6 +416,12 @@ func _spawn_actor(alias: String, tex_key: String, at: Vector3, height: float) ->
 ## expressions by tools/generate_aurora_mod_sprites.py. No second character,
 ## icon card or opaque JPEG is ever drawn in the shot.
 const AURORA_MOD_SPRITES := "res://assets/characters/mods/"
+
+## Aurora's body, layered by gem part: when assets/characters/parts exists the
+## standing guest is an AuroraPartsRig whose NINE layers answer the BODY PART
+## gem directly (GIANT HANDS grows only her hands). The full-body plates above
+## remain the fallback for a build without the part art.
+const AURORA_PARTS_RIG := preload("res://scenes/show_stage/aurora_parts.gd")
 
 
 func _modded_aurora_texture(key: String, original: Texture2D, mods: Dictionary) -> Texture2D:
@@ -425,6 +448,11 @@ func _refresh_aurora_sprite() -> void:
 	var st := stage()
 	var balloon := _balloon()
 	if gs == null or st == null or balloon == null:
+		return
+	if st.aurora_quad is AuroraPartsRig:
+		var rig := st.aurora_quad as AuroraPartsRig
+		rig.set_expression(str(gs.show_aurora_key))
+		rig.set_part_mods(body_mods(), (gs.show_mod_counts as Dictionary) if "show_mod_counts" in gs else {})
 		return
 	var quad := st.aurora_quad as Sprite3DQuad
 	if quad == null:
@@ -717,7 +745,12 @@ func sync_from_state() -> void:
 		var motion := _motion()
 		if motion != null:
 			motion.remove_quad("aurora")
-		st.aurora_quad = null
+		# Rigs are not motion-tracked quads: detach them for real, or a rewind
+		# to before the show leaves a ghost guest standing beside the new one.
+		if st.has_method("free_aurora_actor"):
+			st.free_aurora_actor()
+		else:
+			st.aurora_quad = null
 	if str(gs.show_part) != "" and int(gs.show_part_face) >= 0:
 		st.place_gems_settled(str(gs.show_part), int(gs.show_part_face), str(gs.show_mod), int(gs.show_mod_face))
 		st.apply_mod_chip(str(gs.show_part), str(gs.show_mod), st.chip_anchor(), gs.show_body_mods)

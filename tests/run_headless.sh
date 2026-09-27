@@ -161,6 +161,13 @@ echo ""
 echo "=== Step 10b: transformed Aurora sprite tests ==="
 bash tests/aurora_mod_sprites_test.sh
 
+# Step 10b-rig: the BODY PART gem now reaches the sprite itself. Nine aligned
+# placeholder layers (Python-drawn, lossless WebP, human-redrawable), one rig,
+# per-part transforms with compounding stacks.
+echo ""
+echo "=== Step 10b-rig: layered body-part rig tests ==="
+bash tests/aurora_parts_rig_test.sh
+
 echo ""
 echo "=== Step 10c: dubstep audio tests (C generator, stage music, event + collision sounds) ==="
 bash tests/dubstep_audio_test.sh

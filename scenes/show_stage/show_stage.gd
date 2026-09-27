@@ -195,6 +195,21 @@ func set_actor(alias: String, quad: Node3D) -> void:
 		aurora_quad = quad
 
 
+## Replace discipline for the guest's stand-in, twin of StageDirector's
+## remove_quad: detach immediately so the old portrait/rig is never visible
+## (or countable) for a frame, then release safely at frame end.
+func free_aurora_actor() -> void:
+	_clear_aurora_bob()
+	if is_instance_valid(aurora_quad):
+		var old := aurora_quad
+		aurora_quad = null
+		if old.get_parent() != null:
+			old.get_parent().remove_child(old)
+		old.queue_free()
+	else:
+		aurora_quad = null
+
+
 ## Parent for standing portraits (the StageDirector's quads, or anything else
 ## that wants to stand on the stage floor).
 func characters_parent() -> Node3D:
@@ -906,6 +921,21 @@ func apply_aurora_fx(part: String, mod: String) -> void:
 func apply_body_mods(mods: Dictionary) -> void:
 	if not is_instance_valid(aurora_quad):
 		return
+	if aurora_quad is AuroraPartsRig:
+		# Layered body: the shift lands on the part the gem named, never on
+		# the whole silhouette. Stacks come from the same account ShowDirector
+		# edges use, so x2/x3 read identically in her body and on the board.
+		var stacks := {}
+		var gs_node := get_node_or_null("/root/GameState")
+		if gs_node != null and "show_mod_counts" in gs_node:
+			stacks = (gs_node.show_mod_counts as Dictionary).duplicate()
+		(aurora_quad as AuroraPartsRig).set_part_mods(mods, stacks)
+		var hop := false
+		for part in mods:
+			if str(mods[part]) == "BOUNCY":
+				hop = true
+		_bob_aurora(hop)
+		return
 	var target := AURORA_BASE_HEIGHT
 	var tint := Color(1, 1, 1, 1)
 	var bouncy := false
@@ -931,6 +961,12 @@ func apply_body_mods(mods: Dictionary) -> void:
 		aurora_quad.set("world_height", target)
 	if "modulate" in aurora_quad:
 		aurora_quad.set("modulate", tint)
+	_bob_aurora(bouncy)
+
+
+## The happy little hop a BOUNCY body earns. Shared by the legacy portrait
+## and the layered rig, in whose case the whole rig hops as one body.
+func _bob_aurora(bouncy: bool) -> void:
 	if _aurora_bob != null and _aurora_bob.is_valid():
 		_aurora_bob.kill()
 		_aurora_bob = null
@@ -955,6 +991,8 @@ func _clear_aurora_bob() -> void:
 
 func reset_aurora_fx() -> void:
 	_clear_aurora_bob()
+	if aurora_quad is AuroraPartsRig:
+		(aurora_quad as AuroraPartsRig).reset_mods()
 	if is_instance_valid(aurora_quad) and "world_height" in aurora_quad:
 		aurora_quad.set("world_height", AURORA_BASE_HEIGHT)
 		aurora_quad.set("modulate", Color(1, 1, 1, 1))
