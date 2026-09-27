@@ -64,12 +64,13 @@ const PEDESTAL_HEAD := 1.55
 ## presentation slots, same sides, higher up.
 const GEM_SLOT_MOD := Vector3(-0.62, 2.16, 3.3)
 const GEM_SLOT_PART := Vector3(0.62, 2.16, 3.3)
-const PRESENT_POS_MOD := Vector3(-1.62, 2.38, 3.9)
-const PRESENT_POS_PART := Vector3(1.62, 2.38, 3.9)
+const PRESENT_POS_MOD := Vector3(-2.2, 1.95, 4.2)
+const PRESENT_POS_PART := Vector3(2.2, 1.95, 4.2)
 
-## The star board on the star cloth: three prize gems under the sign.
-const PIP_BASE := Vector3(-0.62, 2.28, -3.72)
-const PIP_STEP := Vector3(0.62, 0.0, 0.0)
+## The star board is three prize gems standing on the altar, so the reward
+## for a cleared trial lands somewhere the audience is already looking.
+const PIP_BASE := Vector3(-0.42, 1.63, 3.45)
+const PIP_STEP := Vector3(0.42, 0.0, 0.0)
 
 ## Where each thrown gem is aimed on the stage floor. Different landing spots
 ## keep the two bodies from shoving each other around.
@@ -313,7 +314,7 @@ func _build_set() -> void:
 
 	# Wings: dark masses at the far left and right, well outside the frame's
 	# readable area, so the studio has depth without crowding the shot.
-	var wing_mat := _mat(Color(0.03, 0.04, 0.1), 0.85, 0.15, Color(0.07, 0.16, 0.36), 0.25)
+	var wing_mat := _mat(Color(0.03, 0.035, 0.085), 0.9, 0.1, Color(0.06, 0.12, 0.28), 0.18)
 	for sx in [-1.0, 1.0]:
 		var wing := BoxMesh.new()
 		wing.size = Vector3(1.2, 4.2, 3.4)
@@ -321,7 +322,7 @@ func _build_set() -> void:
 		wm.position = Vector3(4.6 * sx, 2.1, 1.6)
 		var drape := BoxMesh.new()
 		drape.size = Vector3(0.16, 3.6, 1.9)
-		var dm := _mesh_instance(drape, _mat(Color(0.16, 0.06, 0.3), 0.7, 0.25), _set_root)
+		var dm := _mesh_instance(drape, _mat(Color(0.13, 0.06, 0.24), 0.75, 0.2), _set_root)
 		dm.position = Vector3(4.02 * sx, 1.8, 2.6)
 
 
@@ -354,21 +355,13 @@ func _build_star_cloth() -> void:
 	star_mi.material_override = star_mat
 	cloth.add_child(star_mi)
 
-	# The sign. High enough to be a headline, low enough that the whole name
-	# sits inside the frame with air under it.
+	# The sign. The only thing on the back wall: the tagline lives on the
+	# title card, and a second line of type up here only collided with the
+	# word plaques.
 	var sign := _label("KLIMA GEM", 160, Color(0.6, 0.92, 1.0), Color(0.02, 0.07, 0.18, 0.95), 0.0072)
 	sign.name = "Sign"
 	sign.position = Vector3(0, 3.62, -3.8)
 	cloth.add_child(sign)
-	var sub := _label("TWO GEMS   \u00b7   THREE TRIALS", 54, Color(0.78, 0.88, 1.0, 0.92), Color(0.02, 0.05, 0.12, 0.9), 0.0062)
-	sub.name = "Subtitle"
-	sub.position = Vector3(0, 2.98, -3.8)
-	cloth.add_child(sub)
-
-	var caption := _label("STARS", 54, Color(0.8, 0.9, 1.0, 0.9), Color(0.02, 0.05, 0.12, 0.9), 0.0046)
-	caption.name = "StarsCaption"
-	caption.position = Vector3(-1.28, 2.28, -3.72)
-	cloth.add_child(caption)
 
 
 ## Lighting beams: additive cones that fade as they fall, so the stage is lit
@@ -396,10 +389,10 @@ void fragment() {
 	for sx in [-1.0, 0.0, 1.0]:
 		var rig := Node3D.new()
 		beams.add_child(rig)
-		rig.position = Vector3(1.55 * sx, 0.0, 1.15)
+		rig.position = Vector3(1.72 * sx, 0.0, 1.15)
 		var cone := CylinderMesh.new()
 		cone.top_radius = 0.05
-		cone.bottom_radius = 1.15
+		cone.bottom_radius = 0.92
 		cone.height = 3.9
 		cone.radial_segments = 28
 		cone.cap_top = false
@@ -409,7 +402,7 @@ void fragment() {
 		var bm := ShaderMaterial.new()
 		bm.shader = beam_shader
 		bm.set_shader_parameter("beam_color", Color(0.58, 0.82, 1.0) if sx != 0.0 else Color(0.86, 0.92, 1.0))
-		bm.set_shader_parameter("strength", 0.20 if sx != 0.0 else 0.26)
+		bm.set_shader_parameter("strength", 0.075 if sx != 0.0 else 0.10)
 		cmi.material_override = bm
 		cmi.position = Vector3(0, 3.1, 0)
 		rig.rotation_degrees = Vector3(-6.0, 0, 4.0 * sx)
@@ -513,27 +506,45 @@ func _build_pedestal() -> void:
 	ped.name = "Pedestal"
 	add_child(ped)
 	var column := CylinderMesh.new()
-	column.top_radius = 0.34
-	column.bottom_radius = 0.44
+	column.top_radius = 0.24
+	column.bottom_radius = 0.34
 	column.height = 1.05
 	column.radial_segments = 10
-	var col_mi := _mesh_instance(column, _mat(Color(0.09, 0.1, 0.22), 0.35, 0.6, Color(0.2, 0.45, 0.8), 0.45), ped)
+	var col_mi := _mesh_instance(column, _mat(Color(0.045, 0.05, 0.12), 0.22, 0.85, Color(0.1, 0.22, 0.45), 0.3), ped)
 	col_mi.name = "Column"
 	col_mi.position = Vector3(0, STAGE_TOP + 0.525, PEDESTAL_Z)
+	# A lit band around the neck, so the altar reads as built rather than as
+	# one extruded shape.
+	var band := CylinderMesh.new()
+	band.top_radius = 0.275
+	band.bottom_radius = 0.275
+	band.height = 0.05
+	band.radial_segments = 10
+	var band_mi := _mesh_instance(band, _mat(Color(0.5, 0.85, 1.0), 0.15, 0.4, Color(0.45, 0.8, 1.0), 1.1), ped)
+	band_mi.name = "NeckBand"
+	band_mi.position = Vector3(0, STAGE_TOP + 0.9, PEDESTAL_Z)
+	var base := CylinderMesh.new()
+	base.top_radius = 0.5
+	base.bottom_radius = 0.58
+	base.height = 0.12
+	base.radial_segments = 24
+	var base_mi := _mesh_instance(base, _mat(Color(0.06, 0.07, 0.16), 0.35, 0.8), ped)
+	base_mi.name = "Base"
+	base_mi.position = Vector3(0, STAGE_TOP + 0.06, PEDESTAL_Z)
 	var plate := CylinderMesh.new()
-	plate.top_radius = 0.52
-	plate.bottom_radius = 0.46
+	plate.top_radius = 0.46
+	plate.bottom_radius = 0.40
 	plate.height = 0.09
 	plate.radial_segments = 24
-	var plate_mi := _mesh_instance(plate, _mat(Color(0.11, 0.12, 0.24), 0.3, 0.7, Color(0.25, 0.5, 0.9), 0.5), ped)
+	var plate_mi := _mesh_instance(plate, _mat(Color(0.06, 0.07, 0.16), 0.2, 0.85, Color(0.2, 0.42, 0.8), 0.4), ped)
 	plate_mi.name = "Plate"
 	plate_mi.position = Vector3(0, PEDESTAL_HEAD - 0.045, PEDESTAL_Z)
 	var ring := CylinderMesh.new()
-	ring.top_radius = 0.30
-	ring.bottom_radius = 0.30
-	ring.height = 0.03
+	ring.top_radius = 0.24
+	ring.bottom_radius = 0.24
+	ring.height = 0.025
 	ring.radial_segments = 24
-	var ring_mi := _mesh_instance(ring, _mat(Color(0.4, 0.8, 1.0), 0.2, 0.5, Color(0.45, 0.85, 1.0), 2.0), ped)
+	var ring_mi := _mesh_instance(ring, _mat(Color(0.4, 0.8, 1.0), 0.2, 0.5, Color(0.45, 0.85, 1.0), 0.9), ped)
 	ring_mi.name = "HeadGlow"
 	ring_mi.position = Vector3(0, PEDESTAL_HEAD + 0.015, PEDESTAL_Z)
 
@@ -615,10 +626,10 @@ func _build_pips() -> void:
 		pip.name = "Pip%d" % i
 		pip.build_words = false
 		pip.gem_color = Color(0.16, 0.18, 0.26, 0.8)
-		pip.girdle_radius = 0.22
-		pip.table_radius = 0.11
-		pip.crown_height = 0.09
-		pip.pavilion_height = 0.24
+		pip.girdle_radius = 0.17
+		pip.table_radius = 0.085
+		pip.crown_height = 0.07
+		pip.pavilion_height = 0.19
 		pip.position = PIP_BASE + PIP_STEP * float(i)
 		pip.rotation_degrees = Vector3(0, -18, 0)
 		pips.add_child(pip)
@@ -784,8 +795,8 @@ func _make_word_plaque(word: String, is_part: bool) -> Node3D:
 	label.text = word
 	label.font = FlatTopGemScript._font()
 	label.font_size = 170
-	label.pixel_size = 0.00135
-	label.outline_size = 32
+	label.pixel_size = 0.0009
+	label.outline_size = 30
 	label.render_priority = 3
 	if is_part:
 		label.modulate = Color(0.82, 0.97, 1.0)
@@ -796,18 +807,37 @@ func _make_word_plaque(word: String, is_part: bool) -> Node3D:
 	root.add_child(label)
 	var halo := MeshInstance3D.new()
 	var quad := QuadMesh.new()
-	quad.size = Vector2(1.35, 0.34)
+	quad.size = Vector2(1.15, 0.34)
 	halo.mesh = quad
-	halo.position = Vector3(0, 0.02, -0.02)
-	var hm := StandardMaterial3D.new()
-	hm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	hm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	hm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	hm.albedo_color = Color(0.25, 0.6, 0.9, 0.20) if is_part else Color(0.85, 0.35, 0.7, 0.20)
+	halo.position = Vector3(0, 0.0, -0.02)
+	var hm := ShaderMaterial.new()
+	hm.shader = _halo_shader()
+	hm.set_shader_parameter("glow_color", Color(0.30, 0.72, 1.0) if is_part else Color(0.95, 0.42, 0.80))
+	hm.set_shader_parameter("strength", 0.34)
 	halo.material_override = hm
 	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(halo)
 	return root
+
+
+## A soft radial glow behind a presented word, so the plaque reads as light
+## rather than as a rectangle with a hard edge.
+func _halo_shader() -> Shader:
+	var sh := Shader.new()
+	sh.code = """
+shader_type spatial;
+render_mode blend_add, unshaded, cull_disabled, depth_draw_never, shadows_disabled;
+uniform vec4 glow_color : source_color = vec4(0.3, 0.7, 1.0, 1.0);
+uniform float strength : hint_range(0.0, 1.0) = 0.3;
+void fragment() {
+	vec2 uv = UV * 2.0 - 1.0;
+	float d = length(vec2(uv.x, uv.y * 1.7));
+	float a = clamp(1.0 - d, 0.0, 1.0);
+	ALBEDO = glow_color.rgb;
+	ALPHA = a * a * strength;
+}
+"""
+	return sh
 
 
 func _camera_azimuth() -> float:
@@ -1356,11 +1386,11 @@ func fly_star(earned: bool, star_index: int) -> void:
 	var chip := FlatTopGemScript.new()
 	chip.build_words = false
 	chip.gem_color = Color(1.0, 0.85, 0.35, 0.95) if earned else Color(0.4, 0.4, 0.48, 0.9)
-	chip.girdle_radius = 0.22
-	chip.table_radius = 0.11
-	chip.crown_height = 0.09
-	chip.pavilion_height = 0.24
-	chip.scale = Vector3.ONE * 0.8
+	chip.girdle_radius = 0.17
+	chip.table_radius = 0.085
+	chip.crown_height = 0.07
+	chip.pavilion_height = 0.19
+	chip.scale = Vector3.ONE * 0.9
 	chip.position = Vector3(0, 2.16, 3.3)
 	add_child(chip)
 	var tw := create_tween()

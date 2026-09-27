@@ -62,7 +62,7 @@ do set_aurora_expression("surprised")
 Ren: And the shapeshift that tags along with it...
 Ren: {{show_mod}}!
 [#sfx=confirm]
-Ren: By decree of two rocks: {{show_part}} x {{show_mod}}. The show accepts. Reality complies.
+Ren: By decree of two rocks\: {{show_part}} x {{show_mod}}. The show accepts. Reality complies.
 do apply_mods()
 %3 The crowd loses its collective mind. Somewhere in the dark a horn section hits a note it will regret by morning.
 %2 A ripple runs the length of the glowstick wave. Even the painted stars on the cloth seem to lean in.

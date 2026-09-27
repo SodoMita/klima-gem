@@ -28,6 +28,7 @@ const WORD_HEIGHT_LIMIT := 0.42
 @export var pavilion_height := 0.44
 @export var gem_color := Color(0.55, 0.85, 1.0, 0.62)
 @export var word_color := Color(0.94, 0.99, 1.0)
+static var _outline_color := Color(0.02, 0.05, 0.12, 0.95)
 ## Star pips and prize chips are the same silhouette without the words.
 @export var build_words := true
 ## Only the throwable gems carry colliders and gravity.
@@ -190,8 +191,8 @@ func _build_mesh() -> void:
 	body.name = "Body"
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = gem_color
-	mat.metallic = 0.55
-	mat.roughness = 0.12
+	mat.metallic = 0.85
+	mat.roughness = 0.06
 	mat.emission_enabled = true
 	mat.emission = gem_color * 0.55
 	mat.emission_energy_multiplier = 0.7
@@ -228,12 +229,15 @@ func _build_labels() -> void:
 		label.font_size = base_size
 		label.outline_size = 18
 		label.modulate = word_color
-		label.outline_modulate = Color(0.02, 0.05, 0.12, 0.95)
+		label.outline_modulate = _outline_color
 		label.no_depth_test = false
 		label.render_priority = 2
 		label.shaded = false
 		label.double_sided = false
-		label.alpha_cut = Label3D.ALPHA_CUT_DISCARD
+		# Alpha blending, not an alpha scissor: the facing fade is what keeps
+		# seven of the eight words off the screen, and a scissor would make
+		# that fade a hard pop instead.
+		label.alpha_cut = Label3D.ALPHA_CUT_DISABLED
 		# Fit the whole word inside the triangle it names.
 		var text_px := font.get_string_size(words[i], HORIZONTAL_ALIGNMENT_LEFT, -1, base_size)
 		var px := target_width / maxf(text_px.x, 1.0)
@@ -259,30 +263,54 @@ func _build_labels() -> void:
 
 
 ## Fade each word by how squarely its facet faces the camera, so a settled
-## gem reads as one named face rather than eight overlapping ones.
+## gem reads as one named face rather than eight overlapping ones. Measured by
+## azimuth, not by the dot product: the pavilion normals lean 44 degrees up,
+## so a dot with a nearly level camera never comes close to 1 and every face
+## looked "front".
 func _fade_faces() -> void:
 	if face_labels.is_empty():
 		return
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return
-	var to_cam := (cam.global_position - global_position).normalized()
-	var yaw := Basis(Vector3.UP, rotation.y)
-	var best := -2.0
-	var best_i := 0
+	var to_cam := cam.global_position - global_position
+	var cam_az := atan2(to_cam.z, to_cam.x)
+	_front_face = front_face_for_azimuth(cam_az)
 	for i in face_labels.size():
-		var n := (yaw * _face_normal(i)).normalized()
-		var d := n.dot(to_cam)
-		if d > best:
-			best = d
-			best_i = i
-		# 0.18 for a face turned away, 1.0 for one square to the camera.
-		var a: float = lerpf(0.18, 1.0, clampf((d + 0.15) / 1.15, 0.0, 1.0))
+		var delta := _azimuth_off(i, cam_az)
+		# 1.0 out to 20 degrees off the view axis (which is where the front
+		# face always sits on an octagon), gone by 36 degrees, so the
+		# 45-degree neighbours draw nothing at all.
+		var a := clampf((0.62 - delta) / 0.27, 0.0, 1.0)
 		var label := face_labels[i]
 		var c := word_color
 		c.a = a
 		label.modulate = c
-	_front_face = best_i
+		# The outline does NOT follow modulate's alpha in Label3D, so a hidden
+		# word would still smear its dark border across the facet. Fade it too.
+		var o := _outline_color
+		o.a *= a
+		label.outline_modulate = o
+
+
+## How far, in radians, face [param i]'s outward normal is from a camera at
+## azimuth [param cam_az]. A yaw of +y carries face azimuth a to a - y (Godot
+## turns clockwise seen from above), which is the convention
+## [method lift_to] settles with.
+func _azimuth_off(i: int, cam_az: float) -> float:
+	return absf(wrapf(face_azimuth(i) - rotation.y - cam_az, -PI, PI))
+
+
+## The face a camera at azimuth [param cam_az] is looking at squarest.
+func front_face_for_azimuth(cam_az: float) -> int:
+	var best := 99.0
+	var best_i := 0
+	for i in face_labels.size():
+		var delta := _azimuth_off(i, cam_az)
+		if delta < best:
+			best = delta
+			best_i = i
+	return best_i
 
 
 ## The face the camera is currently reading.

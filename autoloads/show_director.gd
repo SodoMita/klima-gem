@@ -63,14 +63,35 @@ func stage() -> Node3D:
 
 
 func _motion() -> Node:
-	var balloon := get_tree().root.get_node_or_null("VNBalloon")
+	var balloon := _balloon()
 	if balloon == null:
 		return null
 	return balloon.get_node_or_null("MotionDirector")
 
 
+## The dialogue balloon is parented to whatever the current scene happens to
+## be, not to /root — so asking /root for "VNBalloon" finds nothing once the
+## game boots (the show ran for a whole review with no portrait on the stage
+## because of exactly this). Search the tree for it instead.
 func _balloon() -> Node:
-	return get_tree().root.get_node_or_null("VNBalloon")
+	var tree := get_tree()
+	if tree == null or tree.root == null:
+		return null
+	var direct := tree.root.get_node_or_null("VNBalloon")
+	if direct != null:
+		return direct
+	return _find_balloon(tree.root)
+
+
+func _find_balloon(node: Node) -> Node:
+	for child in node.get_children():
+		if str(child.name).begins_with("VNBalloon") and "sprites" in child:
+			return child
+		if child.get_child_count() > 0:
+			var found := _find_balloon(child)
+			if found != null:
+				return found
+	return null
 
 
 # ------------------------------------------------------------- show control
