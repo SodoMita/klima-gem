@@ -403,6 +403,48 @@ func presentation_basis(face: int, to_viewer: Vector3) -> Basis:
 	return Basis(x_t, y_t, z_t) * f.inverse()
 
 
+## The twin word that faces DOWN when the stone rests on sector [param face]
+## (a sector carries its word on the pavilion facet and on the crown facet;
+## whichever lies against the glass is the one an under-view camera reads).
+func under_label(face: int) -> Label3D:
+	if face == TOP_FACE:
+		return top_label
+	if face < 0 or face >= SIDES:
+		return null
+	var a := face_labels[face]
+	var b := crown_labels[face]
+	if a == null:
+		return b
+	if b == null:
+		return a
+	return a if a.global_basis.z.y < b.global_basis.z.y else b
+
+
+## Basis that lays the stone down with result [param face]'s facet against
+## the glass floor — the pose a real throw leaves it in — text pointing away
+## from the house so it reads upright from below.
+func rest_basis(face: int) -> Basis:
+	var label := label_for(face)
+	var f: Basis = TOP_BASIS if label == null else label.transform.basis
+	f = f.orthonormalized()
+	var z_t := Vector3.DOWN
+	var y_t := Vector3.FORWARD
+	var x_t := y_t.cross(z_t)
+	return Basis(x_t, y_t, z_t) * f.inverse()
+
+
+## Instant restore: the stone lies on [param target] (a point on the glass
+## floor) with [param face] down, exactly as physics would have left it.
+func snap_rest(target: Vector3, face: int) -> void:
+	_freeze_as_scenery()
+	settled = true
+	var t := Transform3D(rest_basis(face), target)
+	if is_inside_tree():
+		global_transform = t
+	else:
+		transform = t
+
+
 func word_for(face: int) -> String:
 	if face == TOP_FACE:
 		return top_word
