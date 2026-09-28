@@ -286,10 +286,13 @@ jobs:
         run: |
           set -euo pipefail
           NOTES="$(printf 'Klima Gem %s\n\nPlay in the browser: https://sodomita.github.io/klima-gem/\nitch.io: https://delatel.itch.io/klima-gem\n\nBuilt from %s (%s) by the release pipeline.\n' "$VERSION" "$GITHUB_SHA" "$GITHUB_REF_NAME")"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.zip --clobber
+          # No checkout in this job: gh cannot infer the repo from a git
+          # directory, so every call names it explicitly (broke run dev15.8).
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip --clobber --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$TAG" dist/*.zip \
+              --repo "$GITHUB_REPOSITORY" \
               --title "Klima Gem $VERSION" \
               --notes "$NOTES" \
               --target "$GITHUB_SHA" \
