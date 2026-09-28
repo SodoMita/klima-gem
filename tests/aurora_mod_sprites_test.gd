@@ -1,10 +1,10 @@
 extends Node
-## One Aurora, no icon cards: each transformation uses a lossless transparent
-## full-body sprite made from the SAME expression, including after save/load.
+## Aurora is one stage actor assembled from nine independent, direct-drawn
+## layers. Every shift must alter only its selected body part and survive
+## expression changes/save restore without producing combination plates.
 
-const EXPRESSIONS := ["serious", "surprised", "sad", "happy", "gorgeous"]
+const PARTS := ["HANDS", "EYES", "LEGS", "VOICE", "HAIR", "BACK", "HEART", "SKIN", "MILK"]
 const MODS := ["GIANT", "TINY", "STICKY", "BOUNCY", "GLASS", "MAGNET", "HEAVY", "GLOWING", "MEGA"]
-const ROOT := "res://assets/characters/"
 var failures := 0
 
 
@@ -16,7 +16,7 @@ func check(ok: bool, detail: String) -> void:
 		printerr("  FAIL: ", detail)
 
 
-func _quad_count(stage: ShowStage) -> int:
+func _actor_count(stage: ShowStage) -> int:
 	var count := 0
 	var parent := stage.characters_parent()
 	if parent == null:
@@ -25,6 +25,12 @@ func _quad_count(stage: ShowStage) -> int:
 		if child is Sprite3DQuad:
 			count += 1
 	return count
+
+
+func _same_pose(a: Sprite3DQuad, b_scale: Vector3, b_position: Vector3, b_tint: Color) -> bool:
+	return a.scale.is_equal_approx(b_scale) \
+		and a.position.is_equal_approx(b_position) \
+		and a.modulate.is_equal_approx(b_tint)
 
 
 func _ready() -> void:
@@ -42,51 +48,77 @@ func _ready() -> void:
 		return
 	var saved: Dictionary = gs.snapshot()
 
-	for expression in EXPRESSIONS:
-		var base: Texture2D = load(ROOT + "aurora_%s.webp" % expression)
-		check(base != null, "%s has an original Aurora expression" % expression)
-		if base == null:
-			continue
-		for mod in MODS:
-			var key := "aurora_%s_%s.webp" % [expression, mod.to_lower()]
-			var path := ROOT + "mods/" + key
-			var tex: Texture2D = load(path)
-			check(tex != null, "%s has a full-body transformation sprite" % key)
-			if tex != null:
-				check(tex.get_size() == base.get_size(), "%s retains its expression's outline/aspect" % key)
-				var img: Image = tex.get_image()
-				check(img != null and img.get_pixel(0, 0).a < 0.02, "%s has a truly transparent background" % key)
-
 	director.set_aurora_expression("serious", true)
-	var quad := stage.aurora_quad as Sprite3DQuad
-	check(quad != null and _quad_count(stage) == 1, "Aurora starts as one original portrait")
+	var host := stage.aurora_quad as Sprite3DQuad
+	var body := stage.aurora_body()
+	check(host != null and _actor_count(stage) == 1, "one Aurora actor stands on the stage")
+	check(host != null and host.texture != null and host.texture.resource_path == "", "actor host has no old full-body plate")
+	check(body != null and body.layer_count() == 9, "Aurora is assembled from all nine semantic layers")
+	if body == null:
+		get_tree().quit(1)
+		return
+	for part in PARTS:
+		var layer := body.layer(part)
+		check(layer != null, "%s has an independent layer" % part)
+		if layer != null:
+			check(layer.texture.resource_path.begins_with("res://assets/characters/parts/aurora/"), "%s uses fresh modular art" % part)
+	check(body.layer("SKIN").texture.resource_path.ends_with("/body.webp"), "SKIN uses the standalone body/torso sprite")
+	check(body.layer("MILK").texture.resource_path.ends_with("/breast.webp"), "MILK uses the standalone breast-only sprite")
+	check(body.layer("SKIN").texture != body.layer("MILK").texture, "body and female breast are separate texture resources")
+
+	# Exhaustively prove that each possible pairing changes its target and
+	# leaves a neighboring body part byte-for-byte equivalent in transform/tint.
+	for part_index in PARTS.size():
+		var part: String = PARTS[part_index]
+		var untouched: String = PARTS[(part_index + 1) % PARTS.size()]
+		for mod in MODS:
+			body.reset_mods()
+			var target := body.layer(part)
+			var other := body.layer(untouched)
+			var target_scale := target.scale
+			var target_position := target.position
+			var target_tint := target.modulate
+			var other_scale := other.scale
+			var other_position := other.position
+			var other_tint := other.modulate
+			body.apply_mods({part: mod})
+			check(not _same_pose(target, target_scale, target_position, target_tint), "%s %s visibly changes only its layer" % [part, mod])
+			check(_same_pose(other, other_scale, other_position, other_tint), "%s %s leaves %s unchanged" % [part, mod, untouched])
+			check(body.current_mod(part) == mod, "%s remembers its %s state" % [part, mod])
+	body.reset_mods()
+
+	# Exercise the real state/director path, not only the component API.
 	gs.show_part = "EYES"
 	gs.show_mod = "GLASS"
 	gs.show_body_mods = {"EYES": "GLASS"}
 	director.sync_from_state()
-	quad = stage.aurora_quad as Sprite3DQuad
-	check(quad != null and quad.texture.resource_path.ends_with("aurora_serious_glass.webp"),
-		"GLASS dresses Aurora herself, not a separate icon")
-	check(_quad_count(stage) == 1, "GLASS keeps one and only one standing character")
+	host = stage.aurora_quad as Sprite3DQuad
+	body = stage.aurora_body()
+	check(body != null and body.current_mod("EYES") == "GLASS", "state restore applies GLASS to EYES")
+	check(body != null and body.layer("LEGS").modulate.is_equal_approx(Color.WHITE), "GLASS EYES does not make LEGS transparent")
+	check(_actor_count(stage) == 1, "part modification does not create another character")
+
 	director.set_aurora_expression("happy")
-	quad = stage.aurora_quad as Sprite3DQuad
-	check(quad != null and quad.texture.resource_path.ends_with("aurora_happy_glass.webp"),
-		"a happy expression retains the GLASS transformation")
-	check(_quad_count(stage) == 1, "expression swap does not duplicate Aurora")
+	body = stage.aurora_body()
+	check(body != null and body.expression == "happy", "expression changes use modular redraws")
+	check(body != null and body.layer("EYES").texture.resource_path.ends_with("expressions/happy/eyes.webp"), "happy eyes replace only the EYES art")
+	check(body != null and body.layer("VOICE").texture.resource_path.ends_with("expressions/happy/voice.webp"), "happy mouth replaces only the VOICE art")
+	check(body != null and body.current_mod("EYES") == "GLASS", "expression swap retains the EYES shift")
+	check(_actor_count(stage) == 1, "expression swap still has one Aurora actor")
+
 	gs.show_part = "BACK"
 	gs.show_mod = "MEGA"
 	await director.apply_mods()
-	quad = stage.aurora_quad as Sprite3DQuad
-	check(quad != null and quad.texture.resource_path.ends_with("aurora_happy_mega.webp"),
-		"a new shift replaces the sprite, keeping Aurora's smile")
-	check(gs.show_body_mods.has("EYES") and gs.show_body_mods.has("BACK"),
-		"the previous GLASS shift is still carried alongside MEGA")
+	body = stage.aurora_body()
+	check(body != null and body.current_mod("EYES") == "GLASS", "previous part shift remains composed")
+	check(body != null and body.current_mod("BACK") == "MEGA", "new BACK shift composes concurrently")
+	check(gs.show_body_mods.has("EYES") and gs.show_body_mods.has("BACK"), "state stores both independent part shifts")
 
 	gs.restore(saved)
 	director.set_aurora_expression("serious", true)
-	quad = stage.aurora_quad as Sprite3DQuad
-	var original_tex: Texture2D = balloon.sprites.get("aurora_serious")
-	check(quad != null and quad.texture == original_tex, "rewind to before the shift restores the original sprite")
-	check(_quad_count(stage) == 1, "restore still has exactly one Aurora")
-	print("AURORA MOD SPRITES: ", "PASS" if failures == 0 else "FAIL (%d)" % failures)
+	body = stage.aurora_body()
+	check(body != null and body.mods().is_empty(), "rewind before shifts restores every layer")
+	check(body != null and body.expression == "serious", "rewind restores the expression redraw")
+	check(_actor_count(stage) == 1, "restore still has exactly one Aurora actor")
+	print("AURORA MODULAR BODY: ", "PASS" if failures == 0 else "FAIL (%d)" % failures)
 	get_tree().quit(0 if failures == 0 else 1)
