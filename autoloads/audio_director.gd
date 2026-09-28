@@ -267,6 +267,8 @@ var _sfx_muted := false
 ## per frame afterwards), "auto" picks baked on mobile web / mobile.
 var music_mode: String = "auto"
 var _baked_key: String = ""        ## cache key of the sounding baked loop
+var _bake_job: Dictionary = {}     ## in-flight incremental bake (empty = idle)
+const BAKE_BUDGET_USEC: int = 4000 ## per-frame slice of bake work (~1/4 frame)
 var _max_push: int = 8192          ## per-frame push cap (bigger on web)
 
 
@@ -328,6 +330,8 @@ func _make_music_player(node_name: String) -> AudioStreamPlayer:
 func _process(_delta: float) -> void:
 	if _music_muted:
 		return  # volume 0: the C engines render nothing at all
+	if not _bake_job.is_empty():
+		_pump_bake()
 	if music_source == "dubstep":
 		_pump_dubstep()
 		return
@@ -677,6 +681,7 @@ func play_dubstep(scene_key: String = "stage", mood: String = "") -> void:
 		# zero DSP per frame afterwards (chat msg 154).
 		_play_baked_dub(scene_key, mood)
 		return
+	_bake_job = {}  # live mode owns _dub now; a mid-flight bake would corrupt it
 	if _engine != null:
 		_engine.call("release")
 	_fade_out_loops()
@@ -785,6 +790,7 @@ func switch_dubstep(scene_key: String, target_intensity: float = -1.0, fade: flo
 
 func _stop_dubstep(fade: float = 0.8) -> void:
 	dub_scene = ""
+	_bake_job = {}
 	_baked_key = ""
 	if _dub != null:
 		_dub.call("dub_release", maxf(0.05, fade))
@@ -937,41 +943,139 @@ func _play_baked_dub(scene_key: String, mood: String = "") -> void:
 		_gen_player.stop()
 	_playback = null
 	var stream: AudioStream = _dub_cache.get(cache_key)
-	if stream == null:
-		stream = _bake_dub_loop(variant, bpm, bucket)
-		if stream == null:
-			play_music_loop(_scene_loop_path(scene_key, mood), true)
-			return
-		_dub_cache[cache_key] = stream
-	_crossfade_to_stream(stream)
-
-
-func _bake_dub_loop(variant: int, bpm: float, bucket: int) -> AudioStreamWAV:
+	if stream != null:
+		_bake_job = {}  # a cache hit supersedes any in-flight bake
+		_crossfade_to_stream(stream)
+		return
 	if _dub == null:
-		return null
+		play_music_loop(_scene_loop_path(scene_key, mood), true)
+		return
+	# Cache miss: bake INCREMENTALLY (chat: "on slow mobile music play with
+	# stutters" — a synchronous 4-bar render froze a frame on every first
+	# play and every intensity-bucket move). The scene's OGG loop bridges
+	# the gap; _pump_bake crossfades to the baked WAV when it is ready.
+	_start_bake_job(cache_key, variant, bpm, bucket, scene_key, mood)
+
+
+func _start_bake_job(cache_key: String, variant: int, bpm: float, bucket: int, scene_key: String, mood: String) -> void:
+	if not _bake_job.is_empty() and str(_bake_job.get("key")) == cache_key:
+		return  # already baking exactly this loop
 	var bar: int = int(float(SAMPLE_RATE) * 60.0 / bpm * 4.0)
-	var keep: int = bar * 2
-	var warm: int = bar * 2  # let intensity ramps/fills settle before the kept bars
 	_dub.call("dub_start", variant, bpm, float((music_seed ^ (variant * 7919)) & 0x7fffffff), float(SAMPLE_RATE))
 	_dub.call("dub_set_intensity", float(bucket) / 4.0, 0.0)
-	var out := PackedVector2Array()
-	out.resize(keep)
-	var chunk := PackedVector2Array()
-	var done: int = 0
-	var total: int = warm + keep
-	while done < total:
-		var n: int = mini(16384, total - done)
-		if chunk.size() != n:
-			chunk.resize(n)
-		_dub.call("dub_render", chunk)
-		var base: int = done - warm
-		for i: int in n:
-			var idx: int = base + i
-			if idx >= 0:
-				out[idx] = chunk[i]
-		done += n
-	_dub.call("dub_release", 0.01)
-	return _to_wav_stereo(out)
+	_bake_job = {
+		"key": cache_key,
+		"phase": "render",
+		"warm_left": bar * 2,  # ramps/fills settle before the kept bars
+		"keep_left": bar * 2,
+		"frames": PackedVector2Array(),
+		"encode_pos": 0,
+		"data": PackedByteArray(),
+	}
+	# Bridge: keep music sounding while the bake trickles in.
+	if not _loop_a.playing and not _loop_b.playing:
+		var bridge: String = _scene_loop_path(scene_key, mood)
+		music_source = "baked"  # play_music_loop would overwrite these
+		var keep_key := _baked_key
+		var keep_theme := current_theme
+		play_music_loop(bridge, true)
+		music_source = "baked"
+		_baked_key = keep_key
+		current_theme = keep_theme
+	# Headless/tests and the very first boot frame: _process may not run
+	# this frame, so do one slice right away.
+	_pump_bake()
+
+
+## One time-budgeted slice of bake work per frame. Renders through the C
+## engine in small chunks, then encodes to 16-bit in slices; never more
+## than ~BAKE_BUDGET_USEC per frame, so no frame ever hitches.
+func _pump_bake() -> void:
+	if _bake_job.is_empty():
+		return
+	if _dub == null or music_source == "dubstep":
+		_bake_job = {}  # live engine owns _dub; the bake is stale
+		return
+	var deadline: int = Time.get_ticks_usec() + BAKE_BUDGET_USEC
+	while Time.get_ticks_usec() < deadline:
+		match str(_bake_job["phase"]):
+			"render":
+				var chunk := PackedVector2Array()
+				var warm: int = int(_bake_job["warm_left"])
+				var keep: int = int(_bake_job["keep_left"])
+				var n: int = mini(4096, warm + keep)
+				if n <= 0:
+					_bake_job["phase"] = "encode"
+					_dub.call("dub_release", 0.01)
+					var total: int = (_bake_job["frames"] as PackedVector2Array).size()
+					var data: PackedByteArray = _bake_job["data"]
+					data.resize(total * 4)
+					_bake_job["data"] = data
+					continue
+				chunk.resize(n)
+				_dub.call("dub_render", chunk)
+				if warm > 0:
+					_bake_job["warm_left"] = warm - n  # discarded
+				else:
+					_bake_job["keep_left"] = keep - n
+					var frames: PackedVector2Array = _bake_job["frames"]
+					frames.append_array(chunk)  # C-speed copy, no GDScript loop
+					_bake_job["frames"] = frames
+			"encode":
+				var frames: PackedVector2Array = _bake_job["frames"]
+				var data: PackedByteArray = _bake_job["data"]
+				var pos: int = int(_bake_job["encode_pos"])
+				var stop: int = mini(pos + 8192, frames.size())
+				while pos < stop:
+					data.encode_s16(pos * 4, int(clampf(frames[pos].x, -1.0, 1.0) * 32767.0))
+					data.encode_s16(pos * 4 + 2, int(clampf(frames[pos].y, -1.0, 1.0) * 32767.0))
+					pos += 1
+				_bake_job["data"] = data
+				_bake_job["encode_pos"] = pos
+				if pos >= frames.size():
+					_finish_bake_job()
+					return
+			_:
+				_bake_job = {}
+				return
+
+
+func _finish_bake_job() -> void:
+	var frames: PackedVector2Array = _bake_job["frames"]
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = SAMPLE_RATE
+	wav.stereo = true
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_begin = 0
+	wav.loop_end = frames.size()
+	wav.data = _bake_job["data"]
+	var key := str(_bake_job["key"])
+	_dub_cache[key] = wav
+	_bake_job = {}
+	# Only crossfade if this bake is still the loop the director wants.
+	if music_source == "baked" and _baked_key == key:
+		_crossfade_to_stream(wav)
+
+
+## Synchronous bake for tests/tools: drives the same incremental job to
+## completion in one call. Gameplay never calls this.
+func bake_dub_loop_now(scene_key: String, intensity: float = -1.0) -> AudioStreamWAV:
+	if _dub == null:
+		return null
+	if intensity >= 0.0:
+		dub_intensity = clampf(intensity, 0.0, 1.0)
+	var variant: int = int(DUB_SCENES.get(scene_key, 0))
+	var bucket: int = clampi(int(round(dub_intensity * 4.0)), 0, 4)
+	var cache_key := "bake|%d|%d" % [variant, bucket]
+	if _dub_cache.has(cache_key):
+		return _dub_cache[cache_key]
+	_start_bake_job(cache_key, variant, float(DUB_BPM.get(scene_key, 140.0)), bucket, scene_key, "")
+	var guard: int = 0
+	while not _bake_job.is_empty() and guard < 100000:
+		_pump_bake()
+		guard += 1
+	return _dub_cache.get(cache_key)
 
 
 ## Wrap stereo frames in a forward-looped 16-bit WAV.

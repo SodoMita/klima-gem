@@ -24,7 +24,7 @@ func _ready() -> void:
 	_test_music_picker()
 	_test_event_sounds()
 	_test_victory_loss_hooks()
-	_test_baked_mode()
+	await _test_baked_mode()
 	await _test_mute_kill_switch()
 	_test_generated_toggle()
 	await _test_gem_collision()
@@ -229,8 +229,21 @@ func _test_baked_mode() -> void:
 	a.play_dubstep("stage")
 	ok(a.music_source == "baked", "baked mode plays a baked loop, not the live engine")
 	ok(a.dub_scene == "stage", "baked mode still records the dub scene")
+	# The bake is INCREMENTAL now (slow-mobile stutter fix): a bridge loop
+	# starts instantly and never a whole-loop render in one frame.
+	ok(not a._bake_job.is_empty(), "a bake job is in flight, not a one-frame render")
+	var bridge_playing := false
+	for p_name in ["LoopA", "LoopB"]:
+		var p: AudioStreamPlayer = a.get_node(p_name)
+		if p.playing:
+			bridge_playing = true
+	ok(bridge_playing, "a bridge loop covers the bake gap")
 	var loop_playing := false
 	var wav_ok := false
+	for i in 2000:
+		await get_tree().process_frame
+		if a._bake_job.is_empty():
+			break
 	for p_name in ["LoopA", "LoopB"]:
 		var p: AudioStreamPlayer = a.get_node(p_name)
 		if p.playing and p.stream is AudioStreamWAV:
@@ -238,11 +251,15 @@ func _test_baked_mode() -> void:
 			var wav: AudioStreamWAV = p.stream
 			wav_ok = wav.stereo and wav.mix_rate == a.SAMPLE_RATE \
 				and wav.loop_mode == AudioStreamWAV.LOOP_FORWARD and wav.data.size() > 0
-	ok(loop_playing, "a loop player carries the baked WAV")
+	ok(loop_playing, "a loop player carries the baked WAV after the job finishes")
 	ok(wav_ok, "baked WAV is stereo, 48 kHz, forward-looped, non-empty")
 	var cached: int = a._dub_cache.size()
 	a.play_dubstep("stage")
 	ok(a._dub_cache.size() == cached, "re-entering the scene reuses the baked cache")
+	ok(a._bake_job.is_empty(), "a cache hit does not start a new bake job")
+	# Synchronous helper for tools/tests drives the same job to completion.
+	var wav_now: AudioStreamWAV = a.bake_dub_loop_now("stage_chill", 0.5)
+	ok(wav_now != null and wav_now.data.size() > 0, "bake_dub_loop_now returns a finished WAV")
 	a.switch_dubstep("stage_trial", 0.9)
 	ok(a.music_source == "baked" and a.dub_scene == "stage_trial", "baked switch changes variant")
 	var before: int = a.dub_events_sent
@@ -250,6 +267,7 @@ func _test_baked_mode() -> void:
 	ok(a.dub_events_sent == before + 1, "baked music events count (one-shot accent)")
 	a.set_music_mode("live")
 	a.play_dubstep("stage")
+	ok(a._bake_job.is_empty(), "switching to live cancels any in-flight bake")
 	ok(a.music_source == "dubstep", "live mode returns to the streaming engine")
 	a.stop_music(0.05)
 
@@ -263,6 +281,7 @@ func _test_mute_kill_switch() -> void:
 	a.procedural_enabled = true
 	a.set_music_mode("live")
 	a.play_dubstep("stage")
+	ok(a._bake_job.is_empty(), "switching to live cancels any in-flight bake")
 	var gen: AudioStreamPlayer = a.get_node("ProceduralMusic")
 	ok(gen.playing, "generator player runs while unmuted")
 	a.set_bus_percent("Music", 0.0)
@@ -290,6 +309,7 @@ func _test_generated_toggle() -> void:
 	a.procedural_enabled = true
 	a.set_music_mode("live")
 	a.play_dubstep("stage")
+	ok(a._bake_job.is_empty(), "switching to live cancels any in-flight bake")
 	ok(a.music_source == "dubstep", "dubstep runs before the toggle")
 	a.set_procedural_enabled(false)
 	ok(a.music_source == "loop", "toggle OFF during dubstep switches to the OGG loop")
