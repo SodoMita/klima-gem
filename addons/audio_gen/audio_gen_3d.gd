@@ -1,5 +1,6 @@
 extends RefCounted
-## 3D Ambience wrapper - GDScript fallback + C engine if available
+## 3D Ambience wrapper for the AudioGenAmbience C engine.
+## Without the engine it renders SILENCE: no GDScript DSP (chat msg 139).
 ## Provides biome, weather, point sources, listener, soundscapes
 
 const BIOMES = {
@@ -44,7 +45,7 @@ func _init() -> void:
 		_has_engine = _engine != null
 	# For live playback, create a generator
 	_gen = AudioStreamGenerator.new()
-	_gen.mix_rate = 44100
+	_gen.mix_rate = 48000
 	_gen.buffer_length = 0.1
 	_player = AudioStreamPlayer.new()
 	_player.stream = _gen
@@ -103,85 +104,12 @@ func clear_point_sources() -> void:
 func set_master_gain(gain: float, fade_sec: float = 0.5) -> void:
 	_master_gain = clampf(gain, 0.0, 1.5)
 
-## Render fallback (procedural, not using C)
+## Without the C engine: silence. GDScript must not generate audio.
 func _render_fallback(frames: int) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(frames)
-	var sr: float = 44100.0
-	for i in frames:
-		_time += 1.0 / sr
-		var mix_l: float = 0.0
-		var mix_r: float = 0.0
-
-		# Wind base
-		var wind: float = (randf()*2.0-1.0) * 0.05
-		# Apply simple LP via smoothing
-		wind *= 0.3
-		mix_l += wind
-		mix_r += wind
-
-		# Water based on biome
-		if _biome == "ocean" or _biome == "beach":
-			var swell: float = sin(_time * 0.07 * TAU) * 0.2
-			var n: float = (randf()*2.0-1.0) * 0.2
-			mix_l += (n + swell*0.1) * 0.4
-			mix_r += (n + swell*0.1) * 0.4
-		elif _biome == "river" or _biome == "forest":
-			var n: float = (randf()*2.0-1.0) * 0.1
-			mix_l += n * 0.2
-			mix_r += n * 0.2
-
-		# Birds (day)
-		var day_factor: float = sin(_time_of_day * PI)
-		if day_factor > 0.3 and _biome in ["forest","jungle","grassland","river","beach"]:
-			if randf() < 0.002 * day_factor:
-				var chirp: float = sin(_time * 3000.0 * TAU) * 0.3 * exp(-fmod(_time,1.0)*5.0)
-				mix_l += chirp * 0.2
-				mix_r += chirp * 0.2
-
-		# Crickets (night)
-		var night_factor: float = 1.0 - day_factor
-		if night_factor > 0.4:
-			if fmod(_time, 0.2) < 0.05:
-				var cricket: float = sin(_time * 4500.0 * TAU) * 0.15 * sin(_time * 30.0 * TAU)
-				mix_l += cricket
-				mix_r += cricket
-
-		# Weather
-		if _weather != "clear" and _weather_intensity > 0.01:
-			var rain: float = 0.0
-			if _weather.begins_with("rain") or _weather == "thunderstorm":
-				if randf() < 0.05 * _weather_intensity:
-					rain = (randf()*2.0-1.0) * 0.3 * _weather_intensity
-			mix_l += rain
-			mix_r += rain
-
-		# Point sources with simple panning
-		for ps in _point_sources:
-			var pos: Vector3 = ps["pos"]
-			var to_src: Vector3 = pos - _listener_pos
-			var dist: float = to_src.length()
-			if dist < 0.1:
-				dist = 0.1
-			var att: float = 1.0 / (1.0 + dist * 0.2)
-			var dir: Vector3 = to_src.normalized()
-			var right_dot: float = dir.dot(_listener_forward.cross(_listener_up).normalized())
-			var pan: float = clampf(right_dot, -1.0, 1.0)
-			var angle: float = (pan*0.5+0.5) * PI * 0.5
-			var gl: float = cos(angle)
-			var gr: float = sin(angle)
-			var freq: float = float(ps.get("freq", 440.0))
-			var s: float = sin(_time * freq * TAU) * 0.1 * att * float(ps.get("gain",1.0))
-			mix_l += s * gl
-			mix_r += s * gr
-
-		# Soft clip
-		mix_l = mix_l / (1.0 + absf(mix_l)) * 1.4
-		mix_r = mix_r / (1.0 + absf(mix_r)) * 1.4
-		mix_l *= _master_gain
-		mix_r *= _master_gain
-		out[i] = Vector2(mix_l, mix_r)
 	return out
+
 
 ## Public render - uses C if available, else fallback
 func render(frames: int = 1024) -> PackedVector2Array:

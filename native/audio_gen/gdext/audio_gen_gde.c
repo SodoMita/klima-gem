@@ -143,7 +143,7 @@ static GDExtensionObjectPtr create_instance(void *userdata, GDExtensionBool noti
     AgGDE *g = (AgGDE*)api.mem_alloc(sizeof(AgGDE));
     if(!g) return 0;
     memset(g,0,sizeof(*g));
-    g->sr = 44100;
+    g->sr = 48000;
     ag_proc_mixer_init(&g->mixer, g->sr);
     ag_rng_seed(&g->rng, 1);
     GDExtensionObjectPtr obj = api.classdb_construct_object3(&sn_parent);
@@ -167,7 +167,7 @@ static GDExtensionObjectPtr create_amb_instance(void *userdata, GDExtensionBool 
     AgAmbienceGDE *g = (AgAmbienceGDE*)api.mem_alloc(sizeof(AgAmbienceGDE));
     if(!g) return 0;
     memset(g,0,sizeof(*g));
-    g->sr=44100;
+    g->sr=48000;
     ag_ambience_3d_init(&g->amb, g->sr, ag_vec3(0,0,0));
     ag_ambience_3d_preset_forest(&g->amb);
     GDExtensionObjectPtr obj = api.classdb_construct_object3(&sn_parent);
@@ -249,7 +249,7 @@ static void m_render_sfx(void *userdata, GDExtensionClassInstancePtr inst, const
         /* render mono then duplicate */
         float *tmp = (float*)api.mem_alloc(sizeof(float)*n);
         if(tmp){
-            ag_sfx_render(&sp, tmp, (int)n, 44100);
+            ag_sfx_render(&sp, tmp, (int)n, inst ? (int)((AgGDE*)inst)->sr : 48000);
             for(int64_t i=0;i<n;i++){ base[i*2]=tmp[i]; base[i*2+1]=tmp[i]; }
             api.mem_free(tmp);
         }
@@ -265,7 +265,7 @@ static void m_render_sfx(void *userdata, GDExtensionClassInstancePtr inst, const
         /* proper path would use temp buffer */
         float *tmp = (float*)api.mem_alloc(sizeof(float)*n);
         if(tmp){
-            ag_sfx_render(&sp, tmp, (int)n, 44100);
+            ag_sfx_render(&sp, tmp, (int)n, inst ? (int)((AgGDE*)inst)->sr : 48000);
             for(int64_t i=0;i<n;i++){
                 float *slot=(float*)api.packed_v2_op(arr,i);
                 if(slot){ slot[0]=tmp[i]; slot[1]=tmp[i]; }
@@ -287,7 +287,7 @@ static void m_render_drum(void *userdata, GDExtensionClassInstancePtr inst, cons
     AgDrumParams dp; ag_drum_params_default(&dp, (AgDrumType)type);
     float *tmp = (float*)api.mem_alloc(sizeof(float)*n);
     if(tmp){
-        ag_drum_render(&dp, tmp, (int)n, 44100);
+        ag_drum_render(&dp, tmp, (int)n, inst ? (int)((AgGDE*)inst)->sr : 48000);
         for(int64_t i=0;i<n;i++){
             float *slot=(float*)api.packed_v2_op(arr,i);
             if(slot){ slot[0]=tmp[i]; slot[1]=tmp[i]; }
@@ -306,7 +306,7 @@ static void m_render_fm(void *userdata, GDExtensionClassInstancePtr inst, const 
     void *arr = api.packed_v2_ptr((GDExtensionVariantPtr)args[1]);
     int64_t n = call_size(args[1]);
     if(n<=0){ return_nil(ret,err); return; }
-    AgFmVoice2 v; ag_fm_voice2_init(&v, 44100, (float)freq, 2.0f);
+    AgFmVoice2 v; ag_fm_voice2_init(&v, inst ? (float)((AgGDE*)inst)->sr : 48000.0f, (float)freq, 2.0f);
     if(preset<0) preset=0; if(preset>=AG_FM_PRESET_COUNT) preset=0;
     ag_fm_apply_preset_2op(&v, (AgFmPreset)preset);
     ag_fm_voice2_note_on(&v, (float)freq, 0.8f);
@@ -437,7 +437,7 @@ static void m_amb_set_gain(void *userdata, GDExtensionClassInstancePtr inst, con
 
 static void dub_ensure(AgGDE *g) {
     if (!g->dub_started) {
-        ag_dubstep_init(&g->dub, g->sr > 0 ? g->sr : 44100, AG_DUB_VARIANT_STAGE, 140.0, 20260927);
+        ag_dubstep_init(&g->dub, g->sr > 0 ? g->sr : 48000, AG_DUB_VARIANT_STAGE, 140.0, 20260927);
         g->dub_started = 1;
     }
 }
@@ -451,7 +451,7 @@ static void m_dub_start(void *userdata, GDExtensionClassInstancePtr inst, const 
     double bpm = argc>=2 ? read_float_arg(args[1]) : 140.0;
     uint64_t seed = argc>=3 ? (uint64_t)read_int_arg(args[2]) : 20260927u;
     int sr = argc>=4 ? (int)read_int_arg(args[3]) : g->sr;
-    if(sr<8000||sr>192000) sr = g->sr>0?g->sr:44100;
+    if(sr<8000||sr>192000) sr = g->sr>0?g->sr:48000;
     g->sr = sr;
     ag_dubstep_init(&g->dub, sr, variant, bpm, seed);
     ag_dubstep_set_gain(&g->dub, 1.0f, 0.35f);
@@ -542,7 +542,7 @@ static void m_dub_sfx(void *userdata, GDExtensionClassInstancePtr inst, const GD
             float *tmp = (float*)api.mem_alloc(sizeof(float)*(size_t)n);
             if(tmp){
                 AgGDE *g = (AgGDE*)inst;
-                int sr = (g && g->sr>0) ? g->sr : 44100;
+                int sr = (g && g->sr>0) ? g->sr : 48000;
                 uint64_t seed = 0;
                 if(g){ seed = ag_rng_next_u64(&g->rng); }
                 written = ag_dub_sfx_render(kind, energy, seed, tmp, (int)n, sr);
@@ -565,7 +565,7 @@ static void m_dub_sfx_len(void *userdata, GDExtensionClassInstancePtr inst, cons
     int64_t n = 0;
     if(argc>=1){
         AgGDE *g=(AgGDE*)inst;
-        n = ag_dub_sfx_frames((int)read_int_arg(args[0]), (g&&g->sr>0)?g->sr:44100);
+        n = ag_dub_sfx_frames((int)read_int_arg(args[0]), (g&&g->sr>0)?g->sr:48000);
     }
     api.from_int(ret,&n);
     set_ok(err);

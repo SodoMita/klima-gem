@@ -1,7 +1,8 @@
 extends RefCounted
 ## High-level GDScript wrapper for the AudioGen C library.
-## Falls back to GDScript synthesis if the GDExtension is missing.
 ## Provides: SFX, drums, FM, chiptune, procedural music, ambient.
+## If the GDExtension is missing the render helpers return SILENCE:
+## GDScript never synthesizes audio (chat msg 139).
 
 const MOODS = {
 	"calm": 0, "warm": 1, "tense": 2, "night": 3,
@@ -34,49 +35,28 @@ func has_engine() -> bool:
 	return _has_engine
 
 ## Render helpers - return PackedVector2Array of stereo frames
-func render_sfx(type: String, frames: int = 22050) -> PackedVector2Array:
+func render_sfx(type: String, frames: int = 24000) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(frames)
 	if _has_engine:
 		var t: int = SFX.get(type, 0)
 		_engine.call("render_sfx", t, out)
-	else:
-		# GDScript fallback: simple sine blip
-		for i in frames:
-			var ph: float = float(i) / 44100.0 * 880.0 * TAU
-			var env: float = 1.0 - float(i)/frames
-			var s: float = sin(ph) * env * 0.5
-			out[i] = Vector2(s,s)
 	return out
 
-func render_drum(type: String, frames: int = 22050) -> PackedVector2Array:
+func render_drum(type: String, frames: int = 24000) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(frames)
 	if _has_engine:
 		var t: int = DRUMS.get(type, 0)
 		_engine.call("render_drum", t, out)
-	else:
-		# fallback: noise burst for snare, sine for kick
-		for i in frames:
-			var s: float = 0.0
-			if type == "kick":
-				var env: float = exp(-float(i)/44100.0*20.0)
-				s = sin(float(i)/44100.0*60.0*TAU) * env
-			else:
-				s = (randf()*2.0-1.0) * exp(-float(i)/44100.0*15.0) * 0.5
-			out[i] = Vector2(s,s)
 	return out
 
-func render_fm(preset: String, frames: int = 44100, freq: float = 110.0) -> PackedVector2Array:
+func render_fm(preset: String, frames: int = 48000, freq: float = 110.0) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(frames)
 	if _has_engine:
 		var p: int = FM_PRESETS.get(preset, 0)
 		_engine.call("render_fm", p, out, freq)
-	else:
-		for i in frames:
-			var s: float = sin(float(i)/44100.0*freq*TAU) * 0.3
-			out[i] = Vector2(s,s)
 	return out
 
 ## Procedural music - live score
@@ -98,7 +78,7 @@ func render_proc(frames: int = 1024) -> PackedVector2Array:
 	return _proc_buf
 
 ## Utility: write to WAV via AudioStreamWAV (editor only)
-func save_wav(path: String, data: PackedVector2Array, sr: int = 44100) -> bool:
+func save_wav(path: String, data: PackedVector2Array, sr: int = 48000) -> bool:
 	# Convert stereo to mono for simplicity, or keep as stereo via interleaving?
 	# Use FileAccess to write minimal WAV float32
 	var f := FileAccess.open(path, FileAccess.WRITE)
