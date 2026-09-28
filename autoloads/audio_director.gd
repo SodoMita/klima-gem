@@ -10,7 +10,6 @@ extends Node
 
 
 const SAMPLE_RATE: int = 48000        ## stream rate (48 kHz, chat msg 140)
-const MAX_PUSH_PER_FRAME: int = 8192  ## ~0.17 s of audio per process frame
 const LOOP_DB: float = -8.0           ## OGG loop level ...
 const LOOP_SILENT_DB: float = -60.0   ## ... and its faded-out floor (dB)
 
@@ -256,17 +255,35 @@ var dub_sfx_rendered: int = 0       ## one-shots pulled out of the C generator
 var _dub_cache: Dictionary = {}     ## key|energy bucket -> AudioStreamWAV
 var _push := PackedVector2Array()  ## reused generator buffer
 
+## Mixer percents as last set through set_bus_percent (settings sliders).
+## Volume 0 must STOP the audio system, not just mute it: on a phone the
+## C engines would keep rendering 48k frames nobody hears (chat msg 154).
+var _bus_percent: Dictionary = {"Master": 100.0, "Music": 100.0, "Voice": 100.0, "SFX": 100.0}
+var _music_muted := false
+var _sfx_muted := false
+
+## Music mode (chat msg 154): "live" pumps the C engines every frame,
+## "baked" renders each dubstep variant ONCE into a looped WAV (zero DSP
+## per frame afterwards), "auto" picks baked on mobile web / mobile.
+var music_mode: String = "auto"
+var _baked_key: String = ""        ## cache key of the sounding baked loop
+var _max_push: int = 8192          ## per-frame push cap (bigger on web)
+
 
 func _ready() -> void:
 	_ensure_audio_buses()
 	# The saved mixer sliders must be live before the FIRST note: the main
 	# menu plays its theme long before any balloon exists to apply them.
 	apply_saved_volumes()
+	music_mode = _read_music_mode()
 	_gen = AudioStreamGenerator.new()
 	_gen.mix_rate = SAMPLE_RATE
 	# Web nothreads renders on the main thread: a longer buffer rides out GC
 	# and raycast spikes that underrun a 0.25 s one.
-	_gen.buffer_length = 0.5 if OS.has_feature("web") else 0.25
+	_gen.buffer_length = 1.0 if OS.has_feature("web") else 0.25
+	# Bigger recovery pushes on web: after a main-thread jank spike the
+	# buffer refills in a few frames instead of draining forever.
+	_max_push = 16384 if OS.has_feature("web") else 8192
 	_gen_player = AudioStreamPlayer.new()
 	# Godot 4.3+ defaults WEB playback to "Sample"; a generator stream cannot
 	# be sampled, so the C engines would be silent on Pages without this.
@@ -309,6 +326,8 @@ func _make_music_player(node_name: String) -> AudioStreamPlayer:
 
 
 func _process(_delta: float) -> void:
+	if _music_muted:
+		return  # volume 0: the C engines render nothing at all
 	if music_source == "dubstep":
 		_pump_dubstep()
 		return
@@ -444,10 +463,16 @@ func play_music_loop(path: String, as_fallback: bool = false) -> void:
 		return
 	if stream is AudioStreamOggVorbis:
 		stream.loop = true
+	_crossfade_to_stream(stream)
+
+
+## Crossfade the loop player pair onto a new looped stream (OGG or baked WAV).
+func _crossfade_to_stream(stream: AudioStream) -> void:
 	var fresh := _loop_b if _loop_a.playing else _loop_a
 	var stale := _loop_a if fresh == _loop_b else _loop_b
 	fresh.stream = stream
 	fresh.volume_db = LOOP_SILENT_DB
+	fresh.stream_paused = false
 	fresh.play()
 	var tw := create_tween()
 	tw.set_parallel(true)
@@ -500,10 +525,14 @@ func set_procedural_enabled(on: bool) -> void:
 			var theme := _last_theme
 			_last_theme = &""
 			play_theme(theme)
-	elif music_source == "procedural":
+	elif music_source in ["procedural", "dubstep", "baked"]:
+		# The old check only knew "procedural": flipping the toggle while the
+		# DUBSTEP engine played did nothing at all (chat msg 154).
+		if music_source != "procedural":
+			_stop_dubstep(0.4)
 		var theme: StringName = current_theme if current_theme != &"" else _last_theme
 		_last_theme = theme
-		play_music_loop(_scene_loop_path(String(theme), _scene_mood), true)
+		play_music_loop(_scene_loop_path(_scene_key if _scene_key != "" else String(theme), _scene_mood), true)
 
 
 ## Tag helper: #music=stop | loop:<file> | <theme>.
@@ -553,6 +582,8 @@ func hold_start() -> void:
 	sfx_played += 1
 	last_sfx = "hold"
 	last_sfx_source = "dubstep"
+	if _sfx_muted:
+		return
 	if _hold_player.stream == null:
 		_hold_player.stream = _engine_tone_stream()
 	if _hold_player.stream == null:
@@ -576,7 +607,7 @@ func hold_stop() -> void:
 
 
 func _play_stream(stream: AudioStream, pitch: float = 1.0) -> void:
-	if stream == null:
+	if stream == null or _sfx_muted:
 		return
 	for p: AudioStreamPlayer in _sfx_pool:
 		if not p.playing:
@@ -641,6 +672,11 @@ func play_dubstep(scene_key: String = "stage", mood: String = "") -> void:
 		# Never a GDScript synth again (chat msgs 136-139).
 		play_music_loop(_scene_loop_path(scene_key, mood), true)
 		return
+	if _baked_music():
+		# Mobile / user choice: render this variant once, loop the WAV,
+		# zero DSP per frame afterwards (chat msg 154).
+		_play_baked_dub(scene_key, mood)
+		return
 	if _engine != null:
 		_engine.call("release")
 	_fade_out_loops()
@@ -665,15 +701,29 @@ func play_dubstep(scene_key: String = "stage", mood: String = "") -> void:
 ## 0 = sub and hats only, 1 = full drop energy.
 func set_music_intensity(intensity: float, fade: float = 0.6) -> void:
 	dub_intensity = clampf(intensity, 0.0, 1.0)
+	if music_source == "baked" and dub_scene != "":
+		_play_baked_dub(dub_scene, _scene_mood)  # re-bake/crossfade if the bucket moved
+		return
 	if _dub != null:
 		_dub.call("dub_set_intensity", dub_intensity, fade)
 
 
 ## riser | drop | impact | fill | stab | break
+const BAKED_EVENT_SFX: Dictionary = {
+	"riser": "riser", "build": "riser", "drop": "sub_drop",
+	"impact": "impact", "stab": "stab", "fill": "tick", "break": "scratch",
+}
+
+
 func music_event(name: String) -> void:
 	if _dub == null or not DUB_EVENTS.has(name):
 		return
 	dub_events_sent += 1
+	if music_source == "baked":
+		# The baked loop cannot take live events; the matching one-shot
+		# (also C-rendered, cached) carries the accent instead.
+		play_event(str(BAKED_EVENT_SFX.get(name, "stab")), clampf(dub_intensity + 0.2, 0.0, 1.0))
+		return
 	_dub.call("dub_event", int(DUB_EVENTS[name]))
 
 
@@ -705,6 +755,11 @@ func switch_dubstep(scene_key: String, target_intensity: float = -1.0, fade: flo
 	if not DUB_SCENES.has(scene_key):
 		return
 	var variant: int = int(DUB_SCENES[scene_key])
+	if target_intensity >= 0.0 and _baked_music() and _dub != null:
+		dub_intensity = clampf(target_intensity, 0.0, 1.0)
+	if _baked_music() and _dub != null:
+		_play_baked_dub(scene_key, _scene_mood)
+		return
 	var running := false
 	if _dub != null and _dub.has_method("dub_active"):
 		running = bool(_dub.call("dub_active"))
@@ -730,10 +785,14 @@ func switch_dubstep(scene_key: String, target_intensity: float = -1.0, fade: flo
 
 func _stop_dubstep(fade: float = 0.8) -> void:
 	dub_scene = ""
+	_baked_key = ""
 	if _dub != null:
 		_dub.call("dub_release", maxf(0.05, fade))
 	if music_source == "dubstep":
 		music_source = ""
+	elif music_source == "baked":
+		music_source = ""
+		_fade_out_loops()
 
 
 func _pump_dubstep() -> void:
@@ -743,7 +802,7 @@ func _pump_dubstep() -> void:
 	_ensure_playback()
 	if _playback == null:
 		return
-	var frames: int = mini(_playback.get_frames_available(), MAX_PUSH_PER_FRAME)
+	var frames: int = mini(_playback.get_frames_available(), _max_push)
 	if frames <= 0:
 		return
 	if _push.size() != frames:
@@ -811,6 +870,128 @@ func _dub_stream(key: String, energy: float) -> AudioStream:
 	return stream
 
 
+## ------------------------------------------------------------ baked mode --
+## "auto" bakes on phones: web mobile and native mobile lack the headroom to
+## run the 48 kHz engines live every frame (chat msg 154).
+func _baked_music() -> bool:
+	if music_mode == "baked":
+		return true
+	if music_mode == "live":
+		return false
+	return OS.has_feature("web_android") or OS.has_feature("web_ios") \
+		or (OS.has_feature("mobile") and not OS.has_feature("web"))
+
+
+## Settings: {"music_mode": "auto"|"live"|"baked"} or legacy {"music_baked": true}.
+func _read_music_mode() -> String:
+	if not FileAccess.file_exists(SETTINGS_PATH):
+		return "auto"
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(SETTINGS_PATH))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return "auto"
+	var data: Dictionary = parsed
+	var mode := str(data.get("music_mode", ""))
+	if mode in ["auto", "live", "baked"]:
+		return mode
+	if bool(data.get("music_baked", false)):
+		return "baked"
+	return "auto"
+
+
+## Settings hook. Re-triggers the sounding dubstep scene so the switch is
+## audible immediately (live engine <-> baked loop).
+func set_music_mode(mode: String) -> void:
+	if mode not in ["auto", "live", "baked"] or mode == music_mode:
+		return
+	music_mode = mode
+	var key := dub_scene
+	if key != "" and music_source in ["dubstep", "baked"]:
+		var mood := _scene_mood
+		dub_scene = ""
+		music_source = ""
+		_baked_key = ""
+		play_dubstep(key, mood)
+
+
+## Render 2 bars of a dubstep variant through the C engine into a looped
+## 16-bit stereo WAV. Runs ONCE per (variant, intensity bucket) and is
+## cached; the first render costs one hitch, every later frame costs zero.
+func _play_baked_dub(scene_key: String, mood: String = "") -> void:
+	var variant: int = int(DUB_SCENES.get(scene_key, 0))
+	var bpm: float = float(DUB_BPM.get(scene_key, 140.0))  # no jitter: cache hits
+	var bucket: int = clampi(int(round(dub_intensity * 4.0)), 0, 4)
+	var cache_key := "bake|%d|%d" % [variant, bucket]
+	_scene_key = scene_key
+	_scene_mood = mood
+	_last_theme = StringName(scene_key)
+	dub_scene = scene_key
+	current_theme = StringName(scene_key)
+	_auto_loop = false
+	if music_source == "baked" and _baked_key == cache_key:
+		return
+	music_source = "baked"
+	_baked_key = cache_key
+	if _engine != null:
+		_engine.call("release")
+	if _gen_player.playing:
+		_gen_player.stop()
+	_playback = null
+	var stream: AudioStream = _dub_cache.get(cache_key)
+	if stream == null:
+		stream = _bake_dub_loop(variant, bpm, bucket)
+		if stream == null:
+			play_music_loop(_scene_loop_path(scene_key, mood), true)
+			return
+		_dub_cache[cache_key] = stream
+	_crossfade_to_stream(stream)
+
+
+func _bake_dub_loop(variant: int, bpm: float, bucket: int) -> AudioStreamWAV:
+	if _dub == null:
+		return null
+	var bar: int = int(float(SAMPLE_RATE) * 60.0 / bpm * 4.0)
+	var keep: int = bar * 2
+	var warm: int = bar * 2  # let intensity ramps/fills settle before the kept bars
+	_dub.call("dub_start", variant, bpm, float((music_seed ^ (variant * 7919)) & 0x7fffffff), float(SAMPLE_RATE))
+	_dub.call("dub_set_intensity", float(bucket) / 4.0, 0.0)
+	var out := PackedVector2Array()
+	out.resize(keep)
+	var chunk := PackedVector2Array()
+	var done: int = 0
+	var total: int = warm + keep
+	while done < total:
+		var n: int = mini(16384, total - done)
+		if chunk.size() != n:
+			chunk.resize(n)
+		_dub.call("dub_render", chunk)
+		var base: int = done - warm
+		for i: int in n:
+			var idx: int = base + i
+			if idx >= 0:
+				out[idx] = chunk[i]
+		done += n
+	_dub.call("dub_release", 0.01)
+	return _to_wav_stereo(out)
+
+
+## Wrap stereo frames in a forward-looped 16-bit WAV.
+func _to_wav_stereo(frames: PackedVector2Array) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = SAMPLE_RATE
+	wav.stereo = true
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_begin = 0
+	wav.loop_end = frames.size()
+	var data := PackedByteArray()
+	data.resize(frames.size() * 4)
+	for i: int in frames.size():
+		data.encode_s16(i * 4, int(clampf(frames[i].x, -1.0, 1.0) * 32767.0))
+		data.encode_s16(i * 4 + 2, int(clampf(frames[i].y, -1.0, 1.0) * 32767.0))
+	wav.data = data
+	return wav
+
+
 func _attach_engine() -> void:
 	if not ClassDB.class_exists("SceneScore"):
 		push_warning("AudioDirector: SceneScore extension is not loaded; using the GDScript mixer.")
@@ -853,6 +1034,8 @@ func _pack_score(score: Dictionary) -> PackedFloat64Array:
 
 
 func _ensure_playback() -> void:
+	if _music_muted:
+		return
 	if not _gen_player.playing:
 		_gen_player.play()
 	if _playback == null:
@@ -863,7 +1046,7 @@ func _pump_engine() -> void:
 	_ensure_playback()
 	if _playback == null:
 		return
-	var frames: int = mini(_playback.get_frames_available(), MAX_PUSH_PER_FRAME)
+	var frames: int = mini(_playback.get_frames_available(), _max_push)
 	if frames <= 0:
 		return
 	if _push.size() != frames:
@@ -967,6 +1150,35 @@ func set_bus_percent(bus_name: String, percent: float) -> void:
 		return
 	var linear: float = clampf(percent, 0.0, 100.0) / 100.0
 	AudioServer.set_bus_volume_db(index, linear_to_db(linear) if linear > 0.0 else -80.0)
+	_bus_percent[bus_name] = clampf(percent, 0.0, 100.0)
+	_update_mute_state()
+
+
+## Volume 0 turns the audio SYSTEM off, not just the fader (chat msg 154):
+## the generator player stops (no dub_render/render_into calls at all) and
+## the loop players pause their decoders. Unmuting resumes and refills.
+func _update_mute_state() -> void:
+	var music_off: bool = _bus_percent.get("Master", 100.0) <= 0.0 \
+		or _bus_percent.get("Music", 100.0) <= 0.0
+	_sfx_muted = _bus_percent.get("Master", 100.0) <= 0.0 \
+		or _bus_percent.get("SFX", 100.0) <= 0.0
+	if _sfx_muted and _hold_player != null and _hold_player.playing:
+		_hold_player.stop()
+	if music_off == _music_muted:
+		return
+	_music_muted = music_off
+	if _music_muted:
+		if _gen_player != null and _gen_player.playing:
+			_gen_player.stop()
+		_playback = null
+		for p: AudioStreamPlayer in [_loop_a, _loop_b]:
+			if p != null:
+				p.stream_paused = true
+	else:
+		for p: AudioStreamPlayer in [_loop_a, _loop_b]:
+			if p != null:
+				p.stream_paused = false
+	# The generator restarts through _ensure_playback on the next pump.
 
 
 func _ensure_audio_buses() -> void:

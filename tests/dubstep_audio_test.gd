@@ -24,6 +24,9 @@ func _ready() -> void:
 	_test_music_picker()
 	_test_event_sounds()
 	_test_victory_loss_hooks()
+	_test_baked_mode()
+	await _test_mute_kill_switch()
+	_test_generated_toggle()
 	await _test_gem_collision()
 	print("checks=%d fails=%d" % [checks, fails])
 	if fails == 0:
@@ -210,6 +213,88 @@ func _test_victory_loss_hooks() -> void:
 	ok(a.sfx_played > before, "on_show_defeat triggers audio SFX")
 	ok(a.dub_scene in ["stage_defeat", "stage_chill"], "on_show_defeat switches music to a defeat variant (%s)" % a.dub_scene)
 
+	a.stop_music(0.05)
+
+
+## Chat msg 154: baked mode renders a variant once into a looped WAV and
+## plays it through the loop players — zero per-frame DSP afterwards.
+func _test_baked_mode() -> void:
+	var a := AudioDirector
+	if not a.has_dubstep_engine():
+		print("SKIP: baked mode needs the AudioGen extension")
+		return
+	a.procedural_enabled = true
+	a.set_music_mode("baked")
+	ok(a.music_mode == "baked", "music_mode switches to baked")
+	a.play_dubstep("stage")
+	ok(a.music_source == "baked", "baked mode plays a baked loop, not the live engine")
+	ok(a.dub_scene == "stage", "baked mode still records the dub scene")
+	var loop_playing := false
+	var wav_ok := false
+	for p_name in ["LoopA", "LoopB"]:
+		var p: AudioStreamPlayer = a.get_node(p_name)
+		if p.playing and p.stream is AudioStreamWAV:
+			loop_playing = true
+			var wav: AudioStreamWAV = p.stream
+			wav_ok = wav.stereo and wav.mix_rate == a.SAMPLE_RATE \
+				and wav.loop_mode == AudioStreamWAV.LOOP_FORWARD and wav.data.size() > 0
+	ok(loop_playing, "a loop player carries the baked WAV")
+	ok(wav_ok, "baked WAV is stereo, 48 kHz, forward-looped, non-empty")
+	var cached: int = a._dub_cache.size()
+	a.play_dubstep("stage")
+	ok(a._dub_cache.size() == cached, "re-entering the scene reuses the baked cache")
+	a.switch_dubstep("stage_trial", 0.9)
+	ok(a.music_source == "baked" and a.dub_scene == "stage_trial", "baked switch changes variant")
+	var before: int = a.dub_events_sent
+	a.music_event("drop")
+	ok(a.dub_events_sent == before + 1, "baked music events count (one-shot accent)")
+	a.set_music_mode("live")
+	a.play_dubstep("stage")
+	ok(a.music_source == "dubstep", "live mode returns to the streaming engine")
+	a.stop_music(0.05)
+
+
+## Chat msg 154: volume 0 must stop the audio system, not just fade it.
+func _test_mute_kill_switch() -> void:
+	var a := AudioDirector
+	if not a.has_dubstep_engine():
+		print("SKIP: mute kill switch needs the AudioGen extension")
+		return
+	a.procedural_enabled = true
+	a.set_music_mode("live")
+	a.play_dubstep("stage")
+	var gen: AudioStreamPlayer = a.get_node("ProceduralMusic")
+	ok(gen.playing, "generator player runs while unmuted")
+	a.set_bus_percent("Music", 0.0)
+	ok(not gen.playing, "Music at 0 stops the generator player")
+	var pushed: int = a.frames_pushed
+	await get_tree().process_frame
+	await get_tree().process_frame
+	ok(a.frames_pushed == pushed, "no frames are rendered while muted")
+	a.set_bus_percent("Music", 80.0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	ok(a.frames_pushed > pushed, "unmuting resumes rendering")
+	a.set_bus_percent("Master", 0.0)
+	ok(not gen.playing, "Master at 0 also stops the generator")
+	a.set_bus_percent("Master", 100.0)
+	a.stop_music(0.05)
+
+
+## Chat msg 154: the Generated-music toggle must also work DURING dubstep.
+func _test_generated_toggle() -> void:
+	var a := AudioDirector
+	if not a.has_dubstep_engine():
+		print("SKIP: toggle test needs the AudioGen extension")
+		return
+	a.procedural_enabled = true
+	a.set_music_mode("live")
+	a.play_dubstep("stage")
+	ok(a.music_source == "dubstep", "dubstep runs before the toggle")
+	a.set_procedural_enabled(false)
+	ok(a.music_source == "loop", "toggle OFF during dubstep switches to the OGG loop")
+	a.set_procedural_enabled(true)
+	ok(a.music_source == "dubstep", "toggle ON returns to the dubstep engine")
 	a.stop_music(0.05)
 
 
