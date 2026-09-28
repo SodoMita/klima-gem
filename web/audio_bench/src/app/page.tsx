@@ -1,4 +1,5 @@
 import Instrument from "@/components/Instrument";
+import MastheadImage from "@/components/MastheadImage";
 import { db } from "@/db";
 import { benchRuns, bakes, type Bake, type BenchRun } from "@/db/schema";
 import { loadManifest } from "@/lib/manifest";
@@ -57,15 +58,8 @@ export default async function Home() {
   return (
     <div className="grain relative min-h-screen overflow-x-hidden">
       {/* ---------------------------------------------------------- masthead */}
-      <header className="relative isolate overflow-hidden border-b border-ink/15">
-        <img
-          src="/images/chassis.jpg"
-          alt="Warm grey anodised studio component with a dark instrument face and one orange switch"
-          className="absolute inset-0 h-full w-full object-cover object-right"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-        />
+      <header className="relative isolate overflow-hidden border-b border-ink/15 bg-paper-2">
+        <MastheadImage />
         <div className="absolute inset-0 bg-gradient-to-r from-paper via-paper/92 to-paper/25" />
         <div className="relative mx-auto flex max-w-[1400px] flex-col gap-8 px-6 pb-10 pt-8 lg:px-10">
           <div className="flex flex-wrap items-center gap-4">

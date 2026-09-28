@@ -574,7 +574,13 @@ export default function Instrument({
             </button>
             <button
               type="button"
-              onClick={() => trigger(sfxItems[3] ?? sfxItems[0], 0, 1)}
+              onClick={() =>
+                trigger(
+                  sfxItems.find((s) => s.id === "impact") ?? sfxItems[0],
+                  0,
+                  1,
+                )
+              }
               className="btn-hard rounded-[2px] border border-white/25 px-5 py-3 label text-glass hover:border-signal hover:text-signal"
             >
               ⚡ Impact
@@ -787,7 +793,7 @@ export default function Instrument({
             >
               <div className="label text-glass">{item.id}</div>
               <div className="readout mt-2 text-[10px] text-warm-2">
-                {item.label.slice(0, 30)}
+                {item.seconds.toFixed(2)}s · pk {item.peak.toFixed(2)}
               </div>
             </button>
           ))}
