@@ -31,3 +31,5 @@ characters/**/_wip/
 .venv/
 # Render shots are local artifacts (lossless WebP); never commit them.
 tests/render_samples/
+
+/build/
