@@ -202,6 +202,7 @@ const DisplayScale = preload("res://scenes/display_scale.gd")
 @onready var sfx_vol_slider: HSlider = %SfxVolSlider
 @onready var sfx_vol_value: Label = %SfxVolValue
 @onready var procedural_music_check: CheckBox = %ProceduralMusicCheck
+@onready var bake_music_check: CheckBox = %BakeMusicCheck
 @onready var stat_strip: Label = %StatStrip
 @onready var button_sfx_check: CheckBox = %ButtonSfxCheck
 
@@ -287,6 +288,7 @@ var sync_voice: bool = false
 ## Whether music is generated at runtime (Settings "Generated music"); off
 ## falls back to the mood-matched OGG loops in assets/music.
 var procedural_music: bool = true
+var bake_music: bool = false
 ## Typewriter audio was removed. Text still reveals; it does not tick.
 ## Whether UI buttons/overlays/choices play feedback (Settings "Button sound").
 var button_sfx: bool = true
@@ -461,6 +463,8 @@ func _ready() -> void:
 	_apply_display_quality()
 	if audio != null:
 		audio.set_procedural_enabled(procedural_music)
+		if audio.has_method("set_bake_music"):
+			audio.set_bake_music(bake_music)
 	# Apply slider defaults even on a fresh install (set_value-less first run).
 	_on_text_size_changed(text_size_slider.value)
 	_on_skip_speed_changed(skip_speed_slider.value)
@@ -1641,6 +1645,11 @@ func _load_settings() -> void:
 	if data.has("procedural_music"):
 		procedural_music = bool(data.procedural_music)
 		procedural_music_check.button_pressed = procedural_music
+	if data.has("bake_music"):
+		bake_music = bool(data.bake_music)
+	elif audio != null:
+		bake_music = bool(audio.bake_music)
+	bake_music_check.button_pressed = bake_music
 	if data.has("sfx_buttons"):
 		button_sfx = bool(data.sfx_buttons)
 		button_sfx_check.button_pressed = button_sfx
@@ -1680,6 +1689,7 @@ func _save_settings() -> void:
 		"vol_voice": voice_vol_slider.value,
 		"vol_sfx": sfx_vol_slider.value,
 		"procedural_music": procedural_music_check.button_pressed,
+		"bake_music": bake_music_check.button_pressed,
 		"sfx_buttons": button_sfx_check.button_pressed,
 	}))
 	file.close()
@@ -1923,7 +1933,8 @@ const UI_TEXT_KEYS: Array = [
 	["AudioHeader", "Audio"], ["MasterVolRowLabel", "Master volume"],
 	["MusicVolRowLabel", "Music volume"], ["VoiceVolRowLabel", "Voice volume"],
 	["SfxVolRowLabel", "SFX volume"], ["ProceduralMusicRowLabel", "Generated music"],
-	["ProceduralMusicCheck", "on"], ["ButtonSfxRowLabel", "Button sound"],
+	["ProceduralMusicCheck", "on"], ["BakeMusicRowLabel", "Baked music"],
+	["BakeMusicCheck", "on"], ["ButtonSfxRowLabel", "Button sound"],
 	["ButtonSfxCheck", "on"], ["SpritesHeader", "Sprites"],
 	["SpriteScaleRowLabel", "Sprite scale"], ["SpriteYRowLabel", "Sprite Y offset"],
 	["SettingsHint", "Settings are saved automatically. Use Close or X to exit."],
@@ -2334,11 +2345,15 @@ func _ensure_audio_buses() -> void:
 
 
 func _set_bus_volume(bus_name: String, volume: float) -> void:
+	if audio != null and audio.has_method("set_bus_percent"):
+		audio.set_bus_percent(bus_name, volume)
+		return
 	var index: int = AudioServer.get_bus_index(bus_name)
 	if index == -1:
 		return
 	var linear: float = clampf(volume, 0.0, 100.0) / 100.0
-	AudioServer.set_bus_volume_db(index, linear_to_db(linear) if linear > 0.0 else -80.0)
+	AudioServer.set_bus_mute(index, linear <= 0.0005)
+	AudioServer.set_bus_volume_db(index, linear_to_db(linear) if linear > 0.0005 else -80.0)
 
 
 func _on_master_vol_changed(v: float) -> void:
@@ -2369,6 +2384,13 @@ func _on_procedural_music_toggled(on: bool) -> void:
 	procedural_music = on
 	if audio != null:
 		audio.set_procedural_enabled(on)
+	_save_settings()
+
+
+func _on_bake_music_toggled(on: bool) -> void:
+	bake_music = on
+	if audio != null and audio.has_method("set_bake_music"):
+		audio.set_bake_music(on)
 	_save_settings()
 
 

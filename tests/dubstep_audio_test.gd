@@ -21,6 +21,7 @@ func _ready() -> void:
 	_test_extension()
 	_test_one_shots()
 	_test_director_music()
+	_test_bake_and_silence()
 	_test_music_picker()
 	_test_event_sounds()
 	_test_victory_loss_hooks()
@@ -102,6 +103,9 @@ func _test_one_shots() -> void:
 
 func _test_director_music() -> void:
 	var a := AudioDirector
+	a.bake_music = false
+	a.music_suspended = false
+	a.bus_percent = {"Master": 100.0, "Music": 100.0, "Voice": 100.0, "SFX": 100.0}
 	a.procedural_enabled = true
 	# festival is the calm one and must stay on the pad/pluck score
 	a.play_scene("festival")
@@ -241,3 +245,42 @@ func _test_gem_collision() -> void:
 	if not hits.is_empty():
 		ok(hits[0] > 0.0 and hits[0] <= 1.0, "impact energy is normalised (%.2f)" % hits[0])
 	root.queue_free()
+
+
+func _test_bake_and_silence() -> void:
+	var a := AudioDirector
+	a.bake_music = false
+	a.music_suspended = false
+	a.bus_percent = {"Master": 100.0, "Music": 100.0, "Voice": 100.0, "SFX": 100.0}
+	a.set_bus_percent("Master", 80)
+	a.set_bus_percent("Music", 80)
+	a.play_dubstep("stage")
+	if a.has_dubstep_engine():
+		ok(a.music_source == "dubstep", "live mode still streams the C engine")
+		a.set_procedural_enabled(false)
+		ok(a.music_source == "loop", "Generated music off stops dubstep and plays the loop")
+		ok(a.dub_scene == "", "dubstep released when generated music is off")
+		a.set_procedural_enabled(true)
+		a.set_bake_music(true)
+		ok(a.music_source == "baked", "bake mode does not run the live pump")
+		var guard := 0
+		while not a._bake_job.is_empty() and guard < 800:
+			a._pump_bake()
+			guard += 1
+		ok(a._bake_job.is_empty(), "C bake finishes (guard %d)" % guard)
+		ok(a._bake_player != null and a._bake_player.stream != null, "baked music is a WAV loop")
+		ok(a.music_source == "baked", "playback stays on the baked loop")
+	a.set_bus_percent("Music", 0)
+	ok(a.music_suspended, "music volume 0 suspends playback")
+	ok(not a._gen_player.playing, "generator stopped at music volume 0")
+	if a._bake_player != null:
+		ok(not a._bake_player.playing, "baked player stopped at music volume 0")
+	a.set_bus_percent("Master", 0)
+	var master := AudioServer.get_bus_index("Master")
+	ok(master != -1 and AudioServer.is_bus_mute(master), "master volume 0 mutes the bus")
+	a.set_bus_percent("Master", 80)
+	a.set_bus_percent("Music", 80)
+	a.bake_music = false
+	a.set_procedural_enabled(true)
+	a.stop_music(0.01)
+
