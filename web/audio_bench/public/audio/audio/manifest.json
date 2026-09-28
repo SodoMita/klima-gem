@@ -1,0 +1,30 @@
+{
+  "sampleRate": 48000,
+  "bpm": 120.0,
+  "bars": 2,
+  "engine": "native/audio_gen/src/ag_dubstep.c",
+  "items": [
+    {"file":"loop_stage.wav","type":"loop","id":"stage","label":"game-show floor: driving mid wobble","variant":0,"channels":2,"frames":192000,"seconds":4.0000,"peak":0.99990,"rms":0.35862,"bpm":120.0,"seed":"0x11009e7"},
+    {"file":"loop_trial.wav","type":"loop","id":"trial","label":"challenge running: faster, tense","variant":1,"channels":2,"frames":192000,"seconds":4.0000,"peak":1.00000,"rms":0.39442,"bpm":120.0,"seed":"0x11028d6"},
+    {"file":"loop_chill.wav","type":"loop","id":"chill","label":"half-speed, filtered, between rounds","variant":2,"channels":2,"frames":192000,"seconds":4.0000,"peak":0.99995,"rms":0.36374,"bpm":120.0,"seed":"0x11047c5"},
+    {"file":"loop_suspense.wav","type":"loop","id":"suspense","label":"one gem rolling: heartbeat sub","variant":3,"channels":2,"frames":192000,"seconds":4.0000,"peak":0.97884,"rms":0.25963,"bpm":120.0,"seed":"0x11066b4"},
+    {"file":"loop_groove.wav","type":"loop","id":"groove","label":"both gems placed: peak drop groove","variant":4,"channels":2,"frames":192000,"seconds":4.0000,"peak":0.99999,"rms":0.38459,"bpm":120.0,"seed":"0x11085a3"},
+    {"file":"loop_victory.wav","type":"loop","id":"victory","label":"triumphant arps over the wobble","variant":5,"channels":2,"frames":192000,"seconds":4.0000,"peak":1.00000,"rms":0.40998,"bpm":120.0,"seed":"0x110a492"},
+    {"file":"loop_defeat.wav","type":"loop","id":"defeat","label":"dark sub decay","variant":6,"channels":2,"frames":192000,"seconds":4.0000,"peak":1.00000,"rms":0.35475,"bpm":120.0,"seed":"0x110c381"},
+    {"file":"sfx_gem_hit.wav","type":"sfx","id":"gem_hit","label":"gem_hit","kind":0,"channels":1,"frames":14408,"seconds":0.3002,"peak":0.99806,"rms":0.17170,"bpm":0,"seed":"0x5eed1234"},
+    {"file":"sfx_gem_land.wav","type":"sfx","id":"gem_land","label":"gem_land","kind":1,"channels":1,"frames":12488,"seconds":0.2602,"peak":0.86348,"rms":0.20356,"bpm":0,"seed":"0x5eeeab4d"},
+    {"file":"sfx_gem_spawn.wav","type":"sfx","id":"gem_spawn","label":"gem_spawn","kind":2,"channels":1,"frames":26408,"seconds":0.5502,"peak":0.22577,"rms":0.10293,"bpm":0,"seed":"0x5ef04466"},
+    {"file":"sfx_throw.wav","type":"sfx","id":"throw","label":"throw","kind":3,"channels":1,"frames":20168,"seconds":0.4202,"peak":0.35845,"rms":0.07082,"bpm":0,"seed":"0x5ef1dd7f"},
+    {"file":"sfx_impact.wav","type":"sfx","id":"impact","label":"impact","kind":7,"channels":1,"frames":45608,"seconds":0.9502,"peak":1.00000,"rms":0.27005,"bpm":0,"seed":"0x5ef37698"},
+    {"file":"sfx_riser.wav","type":"sfx","id":"riser","label":"riser","kind":8,"channels":1,"frames":62407,"seconds":1.3001,"peak":0.76314,"rms":0.12290,"bpm":0,"seed":"0x5ef50fb1"},
+    {"file":"sfx_stab.wav","type":"sfx","id":"stab","label":"stab","kind":9,"channels":1,"frames":21608,"seconds":0.4502,"peak":0.80196,"rms":0.16917,"bpm":0,"seed":"0x5ef6a8ca"},
+    {"file":"sfx_sub_drop.wav","type":"sfx","id":"sub_drop","label":"sub_drop","kind":6,"channels":1,"frames":43208,"seconds":0.9002,"peak":0.97104,"rms":0.35918,"bpm":0,"seed":"0x5ef841e3"},
+    {"file":"sfx_airhorn.wav","type":"sfx","id":"airhorn","label":"airhorn","kind":14,"channels":1,"frames":43208,"seconds":0.9002,"peak":0.80900,"rms":0.41740,"bpm":0,"seed":"0x5ef9dafc"},
+    {"file":"sfx_reveal.wav","type":"sfx","id":"reveal","label":"reveal","kind":16,"channels":1,"frames":33608,"seconds":0.7002,"peak":0.46267,"rms":0.11579,"bpm":0,"seed":"0x5efb7415"},
+    {"file":"sfx_bell_hit.wav","type":"sfx","id":"bell_hit","label":"bell_hit","kind":20,"channels":1,"frames":31207,"seconds":0.6501,"peak":0.92543,"rms":0.16562,"bpm":0,"seed":"0x5efd0d2e"},
+    {"file":"sfx_jump.wav","type":"sfx","id":"jump","label":"jump","kind":18,"channels":1,"frames":15368,"seconds":0.3202,"peak":0.71965,"rms":0.18998,"bpm":0,"seed":"0x5efea647"},
+    {"file":"sfx_win.wav","type":"sfx","id":"win","label":"win","kind":12,"channels":1,"frames":76808,"seconds":1.6002,"peak":0.90913,"rms":0.31604,"bpm":0,"seed":"0x5f003f60"},
+    {"file":"sfx_wrong.wav","type":"sfx","id":"wrong","label":"wrong","kind":11,"channels":1,"frames":38408,"seconds":0.8002,"peak":0.93186,"rms":0.24479,"bpm":0,"seed":"0x5f01d879"},
+    {"file":"sfx_tick.wav","type":"sfx","id":"tick","label":"tick","kind":17,"channels":1,"frames":4328,"seconds":0.0902,"peak":0.74942,"rms":0.10038,"bpm":0,"seed":"0x5f037192"}
+  ]
+}
