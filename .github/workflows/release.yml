@@ -116,10 +116,12 @@ jobs:
       # GDScript fallback). The official templates already ship the dlink
       # variants; the preset enables them via variant/extensions_support=true.
       # Rebuilding here keeps the committed .wasm in sync with the C sources.
+      # PINNED 4.0.20 = the emsdk the official 4.7 web templates are built
+      # with; a mismatched emsdk gives "function signature mismatch" at boot.
       - name: Set up Emscripten (for wasm32 GDExtensions)
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: 3.1.64
+          version: 4.0.20
           actions-cache-folder: emsdk-cache
 
       - name: Build wasm32 GDExtension side modules
