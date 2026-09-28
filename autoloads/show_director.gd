@@ -14,6 +14,7 @@ extends Node
 ## under seeded impulses and whatever face lands front-most is the word.
 
 const ShowStageScript := preload("res://scenes/show_stage/show_stage.gd")
+const AuroraBodyScript := preload("res://scenes/show_stage/aurora_modular_body.gd")
 
 const ROLL_BASE := 0.5    # a fair coin at zero edge (odds display only)
 const ROLL_STEP := 0.16   # each +/-1 of combined edge moves the odds this much
@@ -376,63 +377,59 @@ func set_aurora_expression(emotion: String, fresh := false) -> void:
 		st.apply_body_mods(body_mods())
 
 
+var _transparent_actor_texture: ImageTexture = null
+
+
+func _blank_actor_texture() -> ImageTexture:
+	if _transparent_actor_texture == null:
+		var image := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+		image.fill(Color.TRANSPARENT)
+		_transparent_actor_texture = ImageTexture.create_from_image(image)
+	return _transparent_actor_texture
+
+
 func _spawn_actor(alias: String, tex_key: String, at: Vector3, height: float) -> void:
 	var motion := _motion()
 	var balloon := _balloon()
 	var st := stage()
 	if motion == null or balloon == null or st == null:
 		return
+	if alias == "aurora":
+		# The host is still a Sprite3DQuad so StageDirector movement, shake and
+		# replacement semantics stay intact. Its own pixel is transparent; the
+		# only visible art comes from nine direct-drawn child part layers.
+		var host: Sprite3DQuad = motion.spawn_quad(
+			alias, _blank_actor_texture(), st.characters_parent(), height, true, at
+		)
+		host.alpha_scissor = 0.5
+		var body: AuroraModularBody = AuroraBodyScript.new()
+		body.name = "AuroraModularBody"
+		body.world_height = height
+		body.expression = tex_key
+		host.add_child(body)
+		var gs := _gs()
+		if gs != null:
+			body.apply_mods(gs.show_body_mods)
+		st.set_actor(alias, host)
+		return
 	var tex: Texture2D = balloon.sprites.get(tex_key)
 	if tex == null:
 		push_warning("ShowDirector: no portrait key '%s'" % tex_key)
 		return
-	# Keep Aurora's expression, face and original silhouette while wearing
-	# the body-shift sprite. Only the existing portrait quad changes texture.
-	var gs := _gs()
-	if alias == "aurora" and gs != null:
-		tex = _modded_aurora_texture(tex_key, tex, gs.show_body_mods)
 	var quad: Node3D = motion.spawn_quad(alias, tex, st.characters_parent(), height, true, at)
 	st.set_actor(alias, quad)
-
-
-## Full-body transformation sprites are generated from Aurora's real VN
-## expressions by tools/generate_aurora_mod_sprites.py. No second character,
-## icon card or opaque JPEG is ever drawn in the shot.
-const AURORA_MOD_SPRITES := "res://assets/characters/mods/"
-
-
-func _modded_aurora_texture(key: String, original: Texture2D, mods: Dictionary) -> Texture2D:
-	if original == null or not key.begins_with("aurora_") or mods.is_empty():
-		return original
-	var mod := ""
-	var gs := _gs()
-	if gs != null and mods.has(str(gs.show_part)):
-		mod = str(mods[str(gs.show_part)])
-	else:
-		# The current roll has not been applied yet: keep the last shift
-		# Aurora earned, rather than showing a future word before its cue.
-		var parts: Array = mods.keys()
-		mod = str(mods[parts[parts.size() - 1]])
-	var path := AURORA_MOD_SPRITES + key + "_" + mod.to_lower() + ".webp"
-	if not ResourceLoader.exists(path):
-		return original
-	var variant := load(path) as Texture2D
-	return variant if variant != null else original
 
 
 func _refresh_aurora_sprite() -> void:
 	var gs := _gs()
 	var st := stage()
-	var balloon := _balloon()
-	if gs == null or st == null or balloon == null:
+	if gs == null or st == null or not is_instance_valid(st.aurora_quad):
 		return
-	var quad := st.aurora_quad as Sprite3DQuad
-	if quad == null:
+	var body := st.aurora_quad.get_node_or_null("AuroraModularBody") as AuroraModularBody
+	if body == null:
 		return
-	var key := str(gs.show_aurora_key)
-	var base: Texture2D = balloon.sprites.get(key)
-	if base != null:
-		quad.texture = _modded_aurora_texture(key, base, gs.show_body_mods)
+	body.set_expression(str(gs.show_aurora_key))
+	body.apply_mods(gs.show_body_mods)
 
 
 # ------------------------------------------------------------ gem ceremony

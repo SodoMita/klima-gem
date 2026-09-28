@@ -195,6 +195,12 @@ func set_actor(alias: String, quad: Node3D) -> void:
 		aurora_quad = quad
 
 
+func aurora_body() -> AuroraModularBody:
+	if not is_instance_valid(aurora_quad):
+		return null
+	return aurora_quad.get_node_or_null("AuroraModularBody") as AuroraModularBody
+
+
 ## Parent for standing portraits (the StageDirector's quads, or anything else
 ## that wants to stand on the stage floor).
 func characters_parent() -> Node3D:
@@ -902,47 +908,32 @@ func apply_aurora_fx(part: String, mod: String) -> void:
 
 
 ## Every modification Aurora has picked up this show, applied together: a
-## body keeps what the gems gave it from trial to trial.
+## body keeps what the gems gave it from trial to trial. Each entry is sent to
+## its own semantic layer; HANDS GIANT never scales her eyes, for example.
 func apply_body_mods(mods: Dictionary) -> void:
 	if not is_instance_valid(aurora_quad):
 		return
+	var body := aurora_body()
+	if body != null:
+		_clear_aurora_bob()
+		body.apply_mods(mods)
+		return
+	# Compatibility for isolated scenes that deliberately spawn an old plain
+	# Sprite3DQuad instead of the show's modular body.
 	var target := AURORA_BASE_HEIGHT
-	var tint := Color(1, 1, 1, 1)
-	var bouncy := false
+	var tint := Color.WHITE
 	for part in mods:
 		var mod := str(mods[part])
-		var giant_body: bool = str(part) in ["LEGS", "BACK", "HEART", "SKIN", "MILK"]
-		if giant_body and (mod == "GIANT" or mod == "MEGA"):
-			target *= 1.22 if mod == "GIANT" else 1.12
-		elif giant_body and mod == "TINY":
-			target *= 0.78
-		match mod:
-			"GLASS": tint *= Color(1.1, 1.3, 1.6, 0.55)
-			"GLOWING": tint *= Color(1.25, 1.45, 1.75, 1.0)
-			"HEAVY": tint *= Color(0.6, 0.58, 0.7, 1.0)
-			"MAGNET": tint *= Color(1.12, 0.85, 1.3, 1.0)
-			"STICKY": tint *= Color(0.82, 1.15, 0.88, 1.0)
-			"TINY": tint *= Color(0.85, 0.95, 1.1, 1.0)
-			"MEGA": tint *= Color(1.3, 0.95, 0.9, 1.0)
-		if mod == "BOUNCY":
-			bouncy = true
-	target = clampf(target, 1.1, 2.4)
+		if mod in ["GIANT", "MEGA"]:
+			target *= 1.1
+		elif mod == "TINY":
+			target *= 0.9
+		if mod == "GLASS":
+			tint *= Color(0.8, 1.1, 1.3, 0.6)
 	if "world_height" in aurora_quad:
-		aurora_quad.set("world_height", target)
+		aurora_quad.set("world_height", clampf(target, 1.1, 2.4))
 	if "modulate" in aurora_quad:
 		aurora_quad.set("modulate", tint)
-	if _aurora_bob != null and _aurora_bob.is_valid():
-		_aurora_bob.kill()
-		_aurora_bob = null
-	if bouncy and is_instance_valid(aurora_quad):
-		var home_y: float = AURORA_MARK.y
-		(aurora_quad as Node3D).position.y = home_y
-		_aurora_bob = create_tween()
-		_aurora_bob.tween_property(aurora_quad, "position:y", home_y + 0.22, 0.42)
-		_aurora_bob.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		_aurora_bob.tween_property(aurora_quad, "position:y", home_y, 0.42)
-		_aurora_bob.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-		_aurora_bob.set_loops(0)
 
 
 func _clear_aurora_bob() -> void:
@@ -955,9 +946,13 @@ func _clear_aurora_bob() -> void:
 
 func reset_aurora_fx() -> void:
 	_clear_aurora_bob()
+	var body := aurora_body()
+	if body != null:
+		body.world_height = AURORA_BASE_HEIGHT
+		body.reset_mods()
 	if is_instance_valid(aurora_quad) and "world_height" in aurora_quad:
 		aurora_quad.set("world_height", AURORA_BASE_HEIGHT)
-		aurora_quad.set("modulate", Color(1, 1, 1, 1))
+		aurora_quad.set("modulate", Color.WHITE)
 
 
 # -------------------------------------------------------------- challenges
