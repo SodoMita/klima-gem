@@ -278,6 +278,40 @@ var dub_sfx_rendered: int = 0       ## one-shots pulled out of the C generator
 var _dub_cache: Dictionary = {}     ## key|energy bucket -> AudioStreamWAV
 var _push := PackedVector2Array()  ## reused generator buffer
 
+## ---- GDScript dubstep fallback (web build has no GDExtension) --------------
+## The C dubstep engine only exists for native builds. The web export cannot
+## load the .so/.dylib/.dll, so when `_dub == null` and a stage scene asks for
+## dubstep we drive a small live synth here instead. The old behaviour was to
+## fall back to the rift pad/bass score, which sounds nothing like dubstep and
+## runs a heavy GDScript voice scheduler every frame -- the GitHub Pages build
+## played wrong music and slowed the whole game down. This synth mimics the C
+## engine well enough: wobble bass (LFO-modulated sine + sub), halftime kick,
+## snare/clap noise, hat ticks, and a handful of per-event one-shots.
+var _dub_fallback: bool = false          ## true when the C engine is absent
+var _dub_phase: float = 0.0              ## beat phase, seconds within current beat
+var _dub_beat_dur: float = 60.0 / 140.0  ## beat length from current BPM
+var _dub_bpm_cur: float = 140.0          ## running BPM (drift applied)
+var _dub_sample_t: float = 0.0           ## continuous render clock (seconds)
+var _dub_bass_ph: float = 0.0            ## bass sine phase (radians)
+var _dub_sub_ph: float = 0.0             ## sub-bass phase
+var _dub_lfo_ph: float = 0.0             ## wobble LFO phase
+var _dub_root_hz: float = 55.0           ## bass root (~A1)
+var _dub_intensity_target: float = 0.55  ## intensity fade target
+var _dub_intensity_cur: float = 0.0      ## smoothed intensity (0..1)
+var _dub_drum_t: float = 0.0             ## drum pattern clock
+var _dub_kick_env: float = 0.0           ## current kick envelope 0..1
+var _dub_snare_env: float = 0.0          ## current snare envelope
+var _dub_hat_env: float = 0.0            ## current hat envelope
+var _dub_noise_state: int = 0            ## xorshift PRNG for cheap noise
+var _dub_misc_buf := PackedVector2Array() ## reused slice for event rendering
+var _dub_active: bool = false            ## true while fallback engine is up
+var _dub_event_kind: int = -1            ## -1 = none; otherwise AgDubEvent code
+var _dub_event_dur: float = 0.0          ## seconds remaining on current event
+var _dub_event_env: float = 0.0          ## total event duration (for env curve)
+var _dub_event_gain: float = 0.0         ## 0..1 mix for current event
+var _dub_event_ph: float = 0.0           ## primary osc phase for event
+var _dub_event_ph2: float = 0.0          ## secondary osc phase for event
+
 
 func _ready() -> void:
 	_ensure_audio_buses()
@@ -666,8 +700,41 @@ func play_dubstep(scene_key: String = "stage", mood: String = "") -> void:
 		play_music_loop(_scene_loop_path(scene_key, mood), true)
 		return
 	if _dub == null:
-		# No extension: the pad/pluck mixer plays the most driving score we have.
-		_begin_score(StringName(scene_key), (SCENE_THEMES["rift"] as Dictionary).duplicate(true))
+		# Web build / extension not loaded: drive the GDScript dubstep synth
+		# directly instead of falling back to the rift pad score (which sounds
+		# nothing like dubstep and tanks perf via the heavy pad/pluck mixer).
+		_fade_out_loops()
+		_gain_target = 0.0
+		dub_scene = scene_key
+		music_source = "dubstep"
+		current_theme = StringName(scene_key)
+		_auto_loop = false
+		dub_intensity = 0.55
+		match mood:
+			"calm": dub_intensity = 0.3
+			"night": dub_intensity = 0.35
+			"tense": dub_intensity = 0.9
+			"warm": dub_intensity = 0.5
+		_dub_fallback = true
+		_dub_active = true
+		_dub_bpm_cur = clampf(bpm, 80.0, 180.0)
+		_dub_beat_dur = 60.0 / _dub_bpm_cur
+		_dub_phase = 0.0
+		_dub_drum_t = 0.0
+		_dub_kick_env = 0.0
+		_dub_snare_env = 0.0
+		_dub_hat_env = 0.0
+		_dub_bass_ph = 0.0
+		_dub_sub_ph = 0.0
+		_dub_lfo_ph = 0.0
+		_dub_intensity_target = dub_intensity
+		_dub_intensity_cur = dub_intensity
+		_dub_root_hz = _dub_root_for_variant(variant)
+		_dub_event_kind = -1
+		_dub_event_dur = 0.0
+		_dub_event_gain = 0.0
+		_dub_noise_state = int(music_seed) | 1
+		_ensure_playback()
 		return
 	if _engine != null:
 		_engine.call("release")
@@ -696,14 +763,35 @@ func set_music_intensity(intensity: float, fade: float = 0.6) -> void:
 	dub_intensity = clampf(intensity, 0.0, 1.0)
 	if _dub != null:
 		_dub.call("dub_set_intensity", dub_intensity, fade)
+		return
+	if _dub_fallback and _dub_active:
+		_dub_intensity_target = dub_intensity
 
 
 ## riser | drop | impact | fill | stab | break
 func music_event(name: String) -> void:
-	if _dub == null or not DUB_EVENTS.has(name):
+	if not DUB_EVENTS.has(name):
 		return
-	dub_events_sent += 1
-	_dub.call("dub_event", int(DUB_EVENTS[name]))
+	if _dub != null:
+		dub_events_sent += 1
+		_dub.call("dub_event", int(DUB_EVENTS[name]))
+		return
+	if not _dub_fallback or not _dub_active:
+		return
+	_dub_event_kind = int(DUB_EVENTS[name])
+	match name:
+		"riser": _dub_event_dur = 0.55
+		"drop": _dub_event_dur = 0.30
+		"impact": _dub_event_dur = 0.18
+		"fill": _dub_event_dur = 0.25
+		"stab": _dub_event_dur = 0.20
+		"break": _dub_event_dur = 0.45
+		"build": _dub_event_dur = 0.55
+		_: _dub_event_dur = 0.25
+	_dub_event_env = _dub_event_dur
+	_dub_event_gain = clampf(0.6 + dub_intensity * 0.4, 0.0, 1.0)
+	_dub_event_ph = 0.0
+	_dub_event_ph2 = 0.0
 
 
 
@@ -747,6 +835,8 @@ func switch_dubstep(scene_key: String, target_intensity: float = -1.0, fade: flo
 		dub_intensity = wanted
 		if _dub != null:
 			_dub.call("dub_set_intensity", dub_intensity, fade)
+		elif _dub_fallback and _dub_active:
+			_dub_intensity_target = dub_intensity
 		return
 	dub_scene = scene_key
 	current_theme = StringName(scene_key)
@@ -761,14 +851,43 @@ func _stop_dubstep(fade: float = 0.8) -> void:
 	dub_scene = ""
 	if _dub != null:
 		_dub.call("dub_release", maxf(0.05, fade))
+	if _dub_fallback:
+		_dub_intensity_target = 0.0
+		_dub_intensity_cur = 0.0
+		_dub_active = false
+		_dub_event_kind = -1
+		_dub_event_dur = 0.0
+		_dub_fallback = false
 	if music_source == "dubstep":
 		music_source = ""
 
 
 func _pump_dubstep() -> void:
-	if _dub == null:
+	if _dub != null:
+		_ensure_playback()
+		if _playback == null:
+			return
+		var frames: int = mini(_playback.get_frames_available(), MAX_PUSH_PER_FRAME)
+		if frames <= 0:
+			return
+		if _push.size() != frames:
+			_push.resize(frames)
+		_dub.call("dub_render", _push)
+		_playback.push_buffer(_push)
+		frames_pushed += frames
+		return
+	if not _dub_fallback:
 		music_source = ""
 		return
+	_pump_dubstep_fallback()
+
+
+## --------------------------------------------------------------- dubstep fx --
+## Live GDScript dubstep score: the C engine cannot load in a web export, so
+## when `_dub == null` and a stage scene is active this synth fills in. It is
+## written to be cheap: integer counters, a single reused render slice, a
+## xorshift PRNG for noise, and no allocations in the inner loop.
+func _pump_dubstep_fallback() -> void:
 	_ensure_playback()
 	if _playback == null:
 		return
@@ -777,9 +896,280 @@ func _pump_dubstep() -> void:
 		return
 	if _push.size() != frames:
 		_push.resize(frames)
-	_dub.call("dub_render", _push)
+	var sr: float = float(SAMPLE_RATE)
+	# Smooth intensity (~120 ms time constant). Pure GDScript per-frame; cheap.
+	var k: float = clampf(1.0 - exp(-frames / (0.12 * sr)), 0.0, 1.0)
+	_dub_intensity_cur = lerpf(_dub_intensity_cur, _dub_intensity_target, k)
+	if _dub_intensity_cur < 0.001 and _dub_intensity_target < 0.001:
+		# Faded out: emit silence and bail to stop the per-frame cost.
+		for i: int in frames:
+			_push[i] = Vector2.ZERO
+		_playback.push_buffer(_push)
+		return
+	var lvl: float = clampf(_dub_intensity_cur, 0.0, 1.0)
+	# Per-scene vibe: chill scenes lean sub + soft hats, groove/suspense add
+	# the wobble, victory/defeat collapse the wobble and lean on the impact.
+	var variant: int = int(DUB_SCENES.get(dub_scene, 0))
+	var wobble_amt: float = clampf(0.30 + lvl * 0.85, 0.0, 1.2)
+	var drum_amt: float = clampf(0.20 + lvl * 0.95, 0.0, 1.2)
+	var arp_amt: float = clampf(0.10 + lvl * 0.55, 0.0, 0.9)
+	if variant == 2:
+		wobble_amt *= 0.45
+		drum_amt *= 0.55
+	elif variant == 5:
+		wobble_amt *= 0.7
+		drum_amt *= 1.05
+	elif variant == 6:
+		wobble_amt *= 0.4
+		drum_amt *= 0.7
+	elif variant == 3:
+		wobble_amt *= 0.85
+	elif variant == 4:
+		wobble_amt *= 1.05
+	elif variant == 1:
+		wobble_amt *= 1.0
+		drum_amt *= 1.1
+	var beat_dur: float = _dub_beat_dur
+	var beat_step: float = 1.0 / sr
+	var bass_hz: float = _dub_root_hz
+	var sub_hz: float = bass_hz * 0.5
+	var bass_step: float = TAU * bass_hz / sr
+	var sub_step: float = TAU * sub_hz / sr
+	var lfo_hz: float = 2.0 + lvl * 3.0
+	var lfo_step: float = TAU * lfo_hz / sr
+	for i: int in frames:
+		_dub_sample_t += beat_step
+		_dub_phase += beat_step
+		_dub_drum_t += beat_step
+		if _dub_phase >= beat_dur:
+			_dub_phase -= beat_dur
+		var step: int = int(_dub_drum_t / (beat_dur * 0.5)) & 3
+		var prev_pos: float = (_dub_drum_t - beat_step) / (beat_dur * 0.5)
+		var prev_step: int = int(prev_pos) & 3
+		if step != prev_step:
+			if step == 0 or step == 2:
+				_dub_kick_env = 1.0
+			else:
+				_dub_snare_env = 1.0
+			_dub_hat_env = 1.0
+		var lfo: float = sin(_dub_lfo_ph)
+		_dub_lfo_ph += lfo_step
+		if _dub_lfo_ph > TAU:
+			_dub_lfo_ph -= TAU
+		var bass_mod: float = bass_hz * (1.0 + 0.35 * lfo * wobble_amt)
+		var bass_step_mod: float = TAU * bass_mod / sr
+		_dub_bass_ph += bass_step_mod
+		if _dub_bass_ph > TAU:
+			_dub_bass_ph -= TAU
+		_dub_sub_ph += sub_step
+		if _dub_sub_ph > TAU:
+			_dub_sub_ph -= TAU
+		var bass: float = (sin(_dub_bass_ph) * 0.55 + sin(_dub_sub_ph) * 0.45)
+		var growl: float = bass
+		if growl > 0.7: growl = 0.7
+		elif growl < -0.7: growl = -0.7
+		growl = bass + (growl - bass) * 0.6 * wobble_amt
+		var bass_out: float = growl * wobble_amt * 0.55
+		var kick_pitch: float = 110.0 * (1.0 - 0.85 * (1.0 - _dub_kick_env))
+		var kick_ph_step: float = TAU * kick_pitch / sr
+		_dub_kick_env *= 0.0008
+		var kick: float = sin(_dub_sample_t * kick_pitch * TAU) * _dub_kick_env * drum_amt * 0.9
+		_dub_noise_state = (_dub_noise_state * 1103515245 + 12345) & 0x7fffffff
+		var noise: float = (float(_dub_noise_state) / 134217728.0) - 1.0
+		_dub_snare_env *= 0.0012
+		var snare: float = (noise * 0.6 + sin(_dub_drum_t * 220.0 * TAU) * 0.4) * _dub_snare_env * drum_amt * 0.55
+		_dub_noise_state = (_dub_noise_state * 1103515245 + 12345) & 0x7fffffff
+		var hat_n: float = (float(_dub_noise_state) / 134217728.0) - 1.0
+		_dub_hat_env *= 0.0025
+		var hat: float = hat_n * _dub_hat_env * (0.18 + 0.30 * lvl) * drum_amt
+		var arp: float = 0.0
+		if arp_amt > 0.05 and fposmod(_dub_drum_t, beat_dur * 0.5) < 0.01:
+			arp = sin(_dub_drum_t * bass_hz * 4.0 * TAU) * arp_amt * 0.12
+		var sample: float = bass_out + kick + snare + hat + arp
+		if sample > 0.95: sample = 0.95
+		elif sample < -0.95: sample = -0.95
+		if _dub_event_kind >= 0 and _dub_event_dur > 0.0:
+			sample += _render_dub_event_frame()
+		_push[i] = Vector2(sample, sample)
 	_playback.push_buffer(_push)
 	frames_pushed += frames
+
+
+func _dub_root_for_variant(variant: int) -> float:
+	match variant:
+		0: return 55.0
+		1: return 49.0
+		2: return 41.2
+		3: return 46.25
+		4: return 58.27
+		5: return 65.41
+		6: return 36.71
+		_: return 55.0
+
+
+func _render_dub_event_frame() -> float:
+	_dub_event_dur -= 1.0 / float(SAMPLE_RATE)
+	if _dub_event_dur <= 0.0:
+		_dub_event_kind = -1
+		return 0.0
+	var dur_total: float = maxf(0.001, _dub_event_env)
+	var t: float = 1.0 - clampf(_dub_event_dur / dur_total, 0.0, 1.0)
+	var kind: int = _dub_event_kind
+	var sr: float = float(SAMPLE_RATE)
+	_dub_event_ph += TAU / sr
+	_dub_event_ph2 += TAU * 3.0 / sr
+	_dub_noise_state = (_dub_noise_state * 1103515245 + 12345) & 0x7fffffff
+	var noise: float = (float(_dub_noise_state) / 134217728.0) - 1.0
+	var out: float = 0.0
+	match kind:
+		0:  # riser
+			var f: float = 200.0 + 1800.0 * t
+			var ph: float = fmod(_dub_event_ph * f, TAU)
+			out = (sin(ph) * 0.4 + noise * 0.6) * t * _dub_event_gain
+		1:  # drop
+			out = (sin(_dub_event_ph * 60.0) * 0.7 + noise * (1.0 - t) * 0.5) * (1.0 - t * 0.6) * _dub_event_gain
+		2:  # impact
+			out = (sin(_dub_event_ph * 80.0) * 0.6 + noise * 0.4) * (1.0 - t) * _dub_event_gain
+		3:  # fill
+			var hi: float = (sin(_dub_event_ph2 * 8000.0) * 0.5 + noise * 0.5) * (1.0 - t * 0.4)
+			out = hi * _dub_event_gain * 0.8
+		4:  # stab
+			var ch: float = sin(_dub_event_ph * 220.0) + sin(_dub_event_ph * 330.0) * 0.7 + sin(_dub_event_ph * 440.0) * 0.6
+			out = (ch / 2.3) * (1.0 - t * 0.5) * _dub_event_gain
+		5:  # break
+			out = (noise * 0.15) * (1.0 - t) * _dub_event_gain
+	if out > 0.9: out = 0.9
+	elif out < -0.9: out = -0.9
+	return out
+
+
+func _dub_stream_fallback(key: String, energy: float) -> AudioStream:
+	var e: float = clampf(energy, 0.05, 1.0)
+	var dur: float = 0.18
+	match key:
+		"gem_hit": dur = 0.08
+		"gem_land": dur = 0.14
+		"gem_spawn": dur = 0.12
+		"throw": dur = 0.10
+		"catch": dur = 0.10
+		"wobble_blip": dur = 0.06
+		"sub_drop": dur = 0.45
+		"impact": dur = 0.18
+		"riser": dur = 0.55
+		"stab": dur = 0.20
+		"correct": dur = 0.30
+		"wrong": dur = 0.30
+		"win": dur = 0.55
+		"lose": dur = 0.55
+		"airhorn": dur = 0.30
+		"scratch": dur = 0.15
+		"reveal": dur = 0.18
+		"tick": dur = 0.04
+		"jump": dur = 0.10
+		"shoot": dur = 0.10
+		"bell_hit": dur = 0.30
+		"pad_note": dur = 0.25
+		"plaque_place": dur = 0.10
+		_: dur = 0.12
+	var n: int = int(dur * float(SAMPLE_RATE))
+	if n <= 0:
+		return null
+	var mono := PackedFloat32Array()
+	mono.resize(n)
+	var sr: float = float(SAMPLE_RATE)
+	var ph: float = 0.0
+	var ph2: float = 0.0
+	var noise_state: int = int(music_seed) ^ hash(key) | 1
+	for i in n:
+		var t: float = float(i) / sr
+		var env: float = exp(-t * (3.0 + (1.0 - e) * 4.0))
+		noise_state = (noise_state * 1103515245 + 12345) & 0x7fffffff
+		var noise: float = (float(noise_state) / 134217728.0) - 1.0
+		var f0: float = 220.0
+		var f1: float = 220.0
+		match key:
+			"gem_hit":
+				f0 = 380.0; f1 = 220.0
+				ph += TAU * lerpf(f0, f1, t / dur) / sr
+				mono[i] = (sin(ph) * 0.6 + noise * 0.4) * env * e
+			"gem_land", "plaque_place":
+				f0 = 180.0; f1 = 90.0
+				ph += TAU * lerpf(f0, f1, t / dur) / sr
+				mono[i] = (sin(ph) * 0.7 + noise * 0.3) * env * e
+			"gem_spawn":
+				f0 = 320.0; f1 = 720.0
+				ph += TAU * lerpf(f0, f1, t / dur) / sr
+				mono[i] = (sin(ph) * 0.5 + noise * 0.3) * env * e
+			"throw":
+				f0 = 260.0; f1 = 560.0
+				ph += TAU * lerpf(f0, f1, t / dur) / sr
+				mono[i] = (sin(ph) * 0.4 + noise * 0.5) * env * e
+			"catch":
+				f0 = 560.0; f1 = 320.0
+				ph += TAU * lerpf(f0, f1, t / dur) / sr
+				mono[i] = (sin(ph) * 0.5 + noise * 0.3) * env * e
+			"wobble_blip":
+				mono[i] = sin(ph + TAU * 110.0 * t) * env * e * 0.8
+				ph += TAU * 110.0 / sr
+			"sub_drop":
+				ph += TAU * 55.0 / sr
+				mono[i] = sin(ph) * env * e
+			"impact":
+				ph += TAU * 90.0 / sr
+				mono[i] = (sin(ph) * 0.7 + noise * 0.3) * env * e
+			"riser":
+				ph += TAU * lerpf(220.0, 2400.0, t / dur) / sr
+				mono[i] = (sin(ph) * 0.4 + noise * 0.5) * env * e
+			"stab":
+				ph += TAU * 220.0 / sr
+				ph2 += TAU * 330.0 / sr
+				mono[i] = (sin(ph) + sin(ph2) * 0.6) / 1.6 * env * e
+			"correct":
+				ph += TAU * 660.0 / sr
+				ph2 += TAU * 880.0 / sr
+				mono[i] = (sin(ph) + sin(ph2) * 0.6) / 1.6 * env * e
+			"wrong":
+				ph += TAU * 160.0 / sr
+				mono[i] = (sin(ph) * 0.5 + noise * 0.5) * env * e
+			"win":
+				ph += TAU * 523.0 / sr
+				ph2 += TAU * 659.0 / sr
+				mono[i] = (sin(ph) + sin(ph2) * 0.7) / 1.7 * env * e
+			"lose":
+				ph += TAU * lerpf(220.0, 90.0, t / dur) / sr
+				mono[i] = (sin(ph) * 0.6 + noise * 0.4) * env * e
+			"airhorn":
+				ph += TAU * 480.0 / sr
+				ph2 += TAU * 720.0 / sr
+				mono[i] = (sin(ph) * 0.5 + sin(ph2) * 0.4 + noise * 0.1) * env * e
+			"scratch":
+				mono[i] = noise * env * e * 0.7
+			"reveal":
+				ph += TAU * lerpf(440.0, 880.0, t / dur) / sr
+				mono[i] = sin(ph) * env * e
+			"tick":
+				mono[i] = sin(TAU * 1200.0 * t) * env * e * 0.6
+			"jump":
+				ph += TAU * lerpf(330.0, 880.0, t / dur) / sr
+				mono[i] = sin(ph) * env * e
+			"shoot":
+				ph += TAU * lerpf(880.0, 220.0, t / dur) / sr
+				mono[i] = (sin(ph) * 0.6 + noise * 0.4) * env * e
+			"bell_hit":
+				ph += TAU * 880.0 / sr
+				ph2 += TAU * 1320.0 / sr
+				mono[i] = (sin(ph) + sin(ph2) * 0.5) / 1.5 * env * e
+			"pad_note":
+				ph += TAU * 220.0 / sr
+				ph2 += TAU * 330.0 / sr
+				mono[i] = (sin(ph) + sin(ph2) * 0.5) / 1.5 * env * e * 0.5
+			_:
+				ph += TAU * 440.0 / sr
+				mono[i] = sin(ph) * env * e * 0.5
+		if mono[i] > 0.95: mono[i] = 0.95
+		elif mono[i] < -0.95: mono[i] = -0.95
+	dub_sfx_rendered += 1
+	return _to_wav(mono)
 
 
 ## ------------------------------------------------------------ event sounds --
@@ -792,20 +1182,37 @@ func play_event(key: String, energy: float = 0.8, pitch: float = 1.0) -> void:
 	sfx_played += 1
 	last_sfx = key
 	last_sfx_pitch = pitch
-	last_sfx_source = "dubstep" if _dub != null else "synth"
-	var stream := _dub_stream(key, energy)
-	if stream == null:
+	if _dub != null:
+		last_sfx_source = "dubstep"
+		var stream := _dub_stream(key, energy)
+		if stream == null:
+			last_sfx_source = "synth"
+			_play_stream(_synth_stream(key), pitch)
+			return
+		_play_stream(stream, pitch + _rng.randf_range(-0.08, 0.08))
+		return
+	last_sfx_source = "dubstep_fallback"
+	var fstream := _dub_stream_fallback(key, energy)
+	if fstream == null:
 		last_sfx_source = "synth"
 		_play_stream(_synth_stream(key), pitch)
 		return
-	_play_stream(stream, pitch + _rng.randf_range(-0.08, 0.08))
+	_play_stream(fstream, pitch + _rng.randf_range(-0.08, 0.08))
 
 
 ## Cheap ducking hook: a loud collision also nudges the score.
 func play_collision(key: String, energy: float = 0.8) -> void:
 	play_event(key, energy, 1.0 + (0.5 - energy) * 0.25)
-	if energy > 0.75 and _dub != null and music_source == "dubstep":
-		_dub.call("dub_event", int(DUB_EVENTS["stab"]))
+	if energy > 0.75 and music_source == "dubstep":
+		if _dub != null:
+			_dub.call("dub_event", int(DUB_EVENTS["stab"]))
+		elif _dub_fallback and _dub_active:
+			_dub_event_kind = int(DUB_EVENTS["stab"])
+			_dub_event_dur = 0.20
+			_dub_event_env = 0.20
+			_dub_event_gain = clampf(0.6 + dub_intensity * 0.4, 0.0, 1.0)
+			_dub_event_ph = 0.0
+			_dub_event_ph2 = 0.0
 
 
 func _dub_stream(key: String, energy: float) -> AudioStream:

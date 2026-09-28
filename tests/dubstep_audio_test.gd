@@ -24,6 +24,7 @@ func _ready() -> void:
 	_test_music_picker()
 	_test_event_sounds()
 	_test_victory_loss_hooks()
+	_test_fallback_dubstep()
 	await _test_gem_collision()
 	print("checks=%d fails=%d" % [checks, fails])
 	if fails == 0:
@@ -241,3 +242,88 @@ func _test_gem_collision() -> void:
 	if not hits.is_empty():
 		ok(hits[0] > 0.0 and hits[0] <= 1.0, "impact energy is normalised (%.2f)" % hits[0])
 	root.queue_free()
+
+## Regression for GitHub Pages (web build, no GDExtension): stage scenes must
+## produce real dubstep-like audio out of the GDScript fallback, not the rift
+## pad/pluck score. Also covers the new event one-shot fallback path.
+func _test_fallback_dubstep() -> void:
+	var a := AudioDirector
+	a.procedural_enabled = true
+	# Pretend the C engine is not loaded.
+	var saved_dub: Object = a._dub
+	a._dub = null
+	# Stage scene should start the fallback engine, NOT the rift pad score.
+	a.play_dubstep("stage")
+	ok(a._dub_fallback, "fallback flag is on when the C engine is absent")
+	ok(a.music_source == "dubstep", "stage still routes through dubstep source")
+	ok(a.dub_scene == "stage", "stage scene recorded under fallback")
+	ok(a._dub_active, "fallback engine marked active")
+	# Push a few frames of audio and confirm it actually contains signal.
+	var astream := AudioStreamGenerator.new()
+	astream.mix_rate = a.SAMPLE_RATE
+	astream.buffer_length = 0.25
+	# Drive the pump directly: pick_best_music and friends expect the
+	# autoload's own generator, so re-use it.
+	var frames: int = 2048
+	if a._push.size() != frames:
+		a._push.resize(frames)
+	a._pump_dubstep_fallback()
+	var peak := 0.0
+	var energy := 0.0
+	for i: int in a._push.size():
+		var v: float = absf(a._push[i].x)
+		peak = maxf(peak, v)
+		energy += v
+	ok(peak > 0.02, "fallback renders non-silent dubstep (peak %.3f)" % peak)
+	ok(energy / float(frames) > 0.001, "fallback has audible body (avg %.4f)" % (energy / float(frames)))
+
+	# Variant differences: chill is calmer than groove.
+	a.play_dubstep("stage_chill")
+	var quiet_peak := 0.0
+	var quiet_energy := 0.0
+	for _i in 4:
+		a._pump_dubstep_fallback()
+	for i: int in a._push.size():
+		var v: float = absf(a._push[i].x)
+		quiet_peak = maxf(quiet_peak, v)
+		quiet_energy += v
+	a.play_dubstep("stage_groove")
+	var hot_peak := 0.0
+	var hot_energy := 0.0
+	for _i in 4:
+		a._pump_dubstep_fallback()
+	for i: int in a._push.size():
+		var v: float = absf(a._push[i].x)
+		hot_peak = maxf(hot_peak, v)
+		hot_energy += v
+	ok(hot_peak + 0.0001 >= quiet_peak or hot_energy >= quiet_energy, "groove is at least as loud as chill (hot=%.3f quiet=%.3f)" % [hot_peak, quiet_peak])
+
+	# music_event arms the fallback layer.
+	a.music_event("drop")
+	ok(a._dub_event_kind == a.DUB_EVENTS["drop"], "drop arms the fallback event layer")
+	ok(a._dub_event_dur > 0.0, "drop event has positive duration")
+	a._pump_dubstep_fallback()
+	a.music_event("not_an_event")
+	ok(a._dub_event_kind == a.DUB_EVENTS["drop"], "unknown events do not arm the fallback")
+
+	# set_music_intensity updates the target under fallback.
+	a.set_music_intensity(0.2, 0.1)
+	ok(is_equal_approx(a._dub_intensity_target, 0.2), "intensity target updated under fallback")
+
+	# play_event under fallback produces a stream and counts it.
+	var before_sfx: int = a.sfx_played
+	a.play_event("gem_hit", 0.9)
+	ok(a.sfx_played == before_sfx + 1, "fallback play_event counts")
+	ok(a.last_sfx_source == "dubstep_fallback", "fallback reports its source (got %s)" % a.last_sfx_source)
+	ok(a.last_sfx == "gem_hit", "fallback recorded the last event")
+
+	# play_collision also nudges the stab layer.
+	a.play_collision("gem_hit", 0.95)
+	ok(a._dub_event_kind == a.DUB_EVENTS["stab"], "loud collision arms stab under fallback")
+
+	# Cleanup: stop, restore the saved engine reference.
+	a._stop_dubstep(0.05)
+	ok(not a._dub_fallback, "fallback flag cleared on stop")
+	ok(a.music_source != "dubstep", "music source cleared on stop")
+	a._dub = saved_dub
+
