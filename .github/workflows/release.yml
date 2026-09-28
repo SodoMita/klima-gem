@@ -168,6 +168,13 @@ jobs:
           path: build/web
           retention-days: 14
 
+      - name: Upload web threads bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-threads-build
+          path: build/web_threads
+          retention-days: 14
+
       - name: Upload linux bundle
         uses: actions/upload-artifact@v4
         with:
@@ -203,6 +210,15 @@ jobs:
         with:
           name: web-build
           path: site
+
+      # Threads A/B build (chat msg 156): SharedArrayBuffer via
+      # coi-serviceworker at /klima-gem/threads/; root stays nothreads so
+      # browsers without SAB keep working.
+      - name: Download web threads bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: web-threads-build
+          path: site/threads
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

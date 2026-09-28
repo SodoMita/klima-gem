@@ -26,7 +26,9 @@ SS="$ROOT/native/scene_score"
 AG_SRCS="$(printf '%s ' "$AG"/src/*.c) $AG/gdext/audio_gen_gde.c"
 SS_SRCS="$SS/gde.c $SS/mix.c"
 
-CFLAGS_COMMON="-std=c11 -O2 -fvisibility=hidden -sSIDE_MODULE=1 -sSUPPORT_LONGJMP=wasm"
+# -O3 -ffast-math: measurable win for the filter/reverb inner loops on
+# slow phones; the DSP has no NaN/Inf semantics worth preserving.
+CFLAGS_COMMON="-std=c11 -O3 -ffast-math -fvisibility=hidden -sSIDE_MODULE=1 -sSUPPORT_LONGJMP=wasm"
 
 build() { # build <out.wasm> <extra-cflags> <includes...> -- <srcs>
 	local out="$1"; shift

@@ -40,6 +40,18 @@ export_web() {
 	grep -q "libscene_score.web.wasm32" "$BUILD_DIR/web/index.html" || {
 		echo "ERROR: web export has no SceneScore wasm in gdextensionLibs" >&2; exit 1; }
 	ls -l "$BUILD_DIR/web"
+
+	echo ""
+	echo "--- Web Threads (A/B at /threads/, needs coi-serviceworker) ---"
+	mkdir -p "$BUILD_DIR/web_threads"
+	"$GODOT_BIN" --headless --export-release "Web Threads" "$BUILD_DIR/web_threads/index.html"
+	test -f "$BUILD_DIR/web_threads/index.html" || { echo "ERROR: threads export produced no index.html" >&2; exit 1; }
+	cp scripts/web/coi-serviceworker.js "$BUILD_DIR/web_threads/"
+	grep -q "coi-serviceworker.js" "$BUILD_DIR/web_threads/index.html" || {
+		echo "ERROR: threads index.html lacks the coi-serviceworker script tag" >&2; exit 1; }
+	grep -q "libaudio_gen.web.wasm32" "$BUILD_DIR/web_threads/index.html" || {
+		echo "ERROR: threads export has no AudioGen wasm in gdextensionLibs" >&2; exit 1; }
+	ls -l "$BUILD_DIR/web_threads"
 }
 
 export_desktop() {
