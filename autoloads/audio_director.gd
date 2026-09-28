@@ -264,9 +264,13 @@ func _ready() -> void:
 	apply_saved_volumes()
 	_gen = AudioStreamGenerator.new()
 	_gen.mix_rate = SAMPLE_RATE
-	_gen.buffer_length = 0.25
+	# Web Sample playback cannot play AudioStreamGenerator (Godot 4.3+).
+	# That is why Pages dubstep sounded wrong and stalled the frame even when
+	# the C engine was linked. Stream playback consumes the wasm engine at mix_rate.
+	_gen.buffer_length = 0.5 if OS.has_feature("web") else 0.25
 	_gen_player = AudioStreamPlayer.new()
 	_gen_player.stream = _gen
+	_gen_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	_gen_player.bus = &"Music"
 	_gen_player.name = "ProceduralMusic"
 	add_child(_gen_player)
@@ -604,11 +608,11 @@ func reroll(new_seed: int = 0) -> void:
 
 func _attach_dubstep() -> void:
 	if not ClassDB.class_exists("AudioGen"):
-		push_warning("AudioDirector: AudioGen extension is not loaded; dubstep falls back to the GDScript synth.")
+		push_warning("AudioDirector: AudioGen extension is not loaded; dubstep stays silent (no GDScript synth).")
 		return
 	_dub = ClassDB.instantiate("AudioGen")
 	if _dub == null:
-		push_warning("AudioDirector: AudioGen failed to construct; dubstep falls back to the GDScript synth.")
+		push_warning("AudioDirector: AudioGen failed to construct; dubstep stays silent (no GDScript synth).")
 		return
 	# Teach the engine our stream rate (one-shots are cut at this rate too),
 	# then park it silent until a stage scene asks for it.
@@ -808,11 +812,11 @@ func _dub_stream(key: String, energy: float) -> AudioStream:
 
 func _attach_engine() -> void:
 	if not ClassDB.class_exists("SceneScore"):
-		push_warning("AudioDirector: SceneScore extension is not loaded; using the GDScript mixer.")
+		push_warning("AudioDirector: SceneScore extension is not loaded; scene score stays silent (no GDScript mixer).")
 		return
 	_engine = ClassDB.instantiate("SceneScore")
 	if _engine == null:
-		push_warning("AudioDirector: SceneScore failed to construct; using the GDScript mixer.")
+		push_warning("AudioDirector: SceneScore failed to construct; scene score stays silent (no GDScript mixer).")
 
 
 ## Flat score blob. Layout matches native/scene_score/mix.h.

@@ -102,6 +102,9 @@ func _test_one_shots() -> void:
 
 func _test_director_music() -> void:
 	var a := AudioDirector
+	ok(a.SAMPLE_RATE == 48000, "stream rate is 48000")
+	ok(a._gen_player.playback_type == AudioServer.PLAYBACK_TYPE_STREAM, "generator uses Stream playback")
+	ok(a._gen.mix_rate == 48000, "generator mix rate is 48000")
 	a.procedural_enabled = true
 	# festival is the calm one and must stay on the pad/pluck score
 	a.play_scene("festival")
