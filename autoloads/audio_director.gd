@@ -264,8 +264,13 @@ func _ready() -> void:
 	apply_saved_volumes()
 	_gen = AudioStreamGenerator.new()
 	_gen.mix_rate = SAMPLE_RATE
-	_gen.buffer_length = 0.25
+	# Web nothreads renders on the main thread: a longer buffer rides out GC
+	# and raycast spikes that underrun a 0.25 s one.
+	_gen.buffer_length = 0.5 if OS.has_feature("web") else 0.25
 	_gen_player = AudioStreamPlayer.new()
+	# Godot 4.3+ defaults WEB playback to "Sample"; a generator stream cannot
+	# be sampled, so the C engines would be silent on Pages without this.
+	_gen_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	_gen_player.stream = _gen
 	_gen_player.bus = &"Music"
 	_gen_player.name = "ProceduralMusic"
