@@ -276,7 +276,10 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
-          ./butler push bundles/web-build "${ITCH_TARGET}:html5" --userversion "${VERSION}"
+          # itch supports SharedArrayBuffer (chat msg 158: enable the SAB
+          # checkbox on the embed) -> the html5 channel ships the THREADS
+          # build; coi-serviceworker rides along as belt-and-braces.
+          ./butler push bundles/web-threads-build "${ITCH_TARGET}:html5" --userversion "${VERSION}"
           ./butler push bundles/linux-build "${ITCH_TARGET}:linux" --userversion "${VERSION}"
           ./butler push bundles/windows-build "${ITCH_TARGET}:windows" --userversion "${VERSION}"
           echo "itch.io: https://delatel.itch.io/klima-gem (version ${VERSION})"
