@@ -55,3 +55,10 @@ android.editor.arm32.single = "res://addons/scene_score/bin/libscene_score.andro
 ios.debug.arm64.single = "res://addons/scene_score/bin/libscene_score.ios.arm64.dylib"
 ios.release.arm64.single = "res://addons/scene_score/bin/libscene_score.ios.arm64.dylib"
 ios.editor.arm64.single = "res://addons/scene_score/bin/libscene_score.ios.arm64.dylib"
+
+; Web (chat msg 138): wasm32 side module from native/build_wasm.sh; loads with
+; variant/extensions_support=true (dlink template). nothreads = deployed Pages build.
+web.debug.wasm32.nothreads = "res://addons/scene_score/bin/libscene_score.web.wasm32.nothreads.wasm"
+web.release.wasm32.nothreads = "res://addons/scene_score/bin/libscene_score.web.wasm32.nothreads.wasm"
+web.debug.wasm32 = "res://addons/scene_score/bin/libscene_score.web.wasm32.wasm"
+web.release.wasm32 = "res://addons/scene_score/bin/libscene_score.web.wasm32.wasm"

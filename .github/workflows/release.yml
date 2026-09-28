@@ -111,6 +111,23 @@ jobs:
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Klima Gem release version: $VERSION"
 
+      # GDExtensions must exist as wasm32 side modules for the Web export
+      # (chat msg 138: C audio engines run as WASM in the browser, never a
+      # GDScript fallback). The official templates already ship the dlink
+      # variants; the preset enables them via variant/extensions_support=true.
+      # Rebuilding here keeps the committed .wasm in sync with the C sources.
+      - name: Set up Emscripten (for wasm32 GDExtensions)
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
+          actions-cache-folder: emsdk-cache
+
+      - name: Build wasm32 GDExtension side modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash native/build_wasm.sh
+
       # tests/run_headless.sh is deliberately NOT part of this workflow: on a
       # GitHub runner it does not terminate (a child keeps the log pipe open),
       # which stalled two earlier runs even under `timeout`. It stays in Godot

@@ -8,7 +8,7 @@
  * bars, and reseed only affects notes that have not been scheduled yet.
  */
 
-#define SCENE_SCORE_RATE 22050
+#define SCENE_SCORE_RATE 48000
 #define SCENE_SCORE_VOICES 48
 #define SCENE_SCORE_LAYERS 2
 #define SCENE_SCORE_QUEUE 128

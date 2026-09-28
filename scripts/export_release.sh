@@ -33,6 +33,12 @@ export_web() {
 	"$GODOT_BIN" --headless --export-release "Web" "$BUILD_DIR/web/index.html"
 	test -f "$BUILD_DIR/web/index.html" || { echo "ERROR: web export produced no index.html" >&2; exit 1; }
 	test -f "$BUILD_DIR/web/index.wasm" || { echo "ERROR: web export produced no index.wasm" >&2; exit 1; }
+	# The C audio engines MUST ship as wasm side modules (chat msgs 136-139:
+	# an export with gdextensionLibs:[] plays the wrong music). Fail loudly.
+	grep -q "libaudio_gen.web.wasm32" "$BUILD_DIR/web/index.html" || {
+		echo "ERROR: web export has no AudioGen wasm in gdextensionLibs — extensions_support off or wasm missing" >&2; exit 1; }
+	grep -q "libscene_score.web.wasm32" "$BUILD_DIR/web/index.html" || {
+		echo "ERROR: web export has no SceneScore wasm in gdextensionLibs" >&2; exit 1; }
 	ls -l "$BUILD_DIR/web"
 }
 

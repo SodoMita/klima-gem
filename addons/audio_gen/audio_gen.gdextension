@@ -16,3 +16,12 @@ macos.editor.x86_64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.x86_
 macos.debug.arm64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.arm64.dylib"
 macos.release.arm64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.arm64.dylib"
 macos.editor.arm64.single = "res://addons/audio_gen/bin/libaudio_gen.macos.arm64.dylib"
+
+; Web (chat msg 138): the same C library compiled to a wasm32 side module by
+; native/build_wasm.sh. Needs the dlink export template — i.e. the Web preset
+; exports with variant/extensions_support=true. nothreads matches the deployed
+; GitHub Pages / itch build (no COOP/COEP headers there).
+web.debug.wasm32.nothreads = "res://addons/audio_gen/bin/libaudio_gen.web.wasm32.nothreads.wasm"
+web.release.wasm32.nothreads = "res://addons/audio_gen/bin/libaudio_gen.web.wasm32.nothreads.wasm"
+web.debug.wasm32 = "res://addons/audio_gen/bin/libaudio_gen.web.wasm32.wasm"
+web.release.wasm32 = "res://addons/audio_gen/bin/libaudio_gen.web.wasm32.wasm"
